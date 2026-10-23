@@ -26,6 +26,7 @@ BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build   # the GP 0
 RUN=${RUN:-$ROOT/out/$NET}; SPEC=${SPEC:-$RUN/spec.json}; RPC_PORT=42950; RPC=ws://127.0.0.1:$RPC_PORT
 GENESIS_PORT=40000; BUILDER_BASE=42100                               # lasair i's CE-133 port: 42100+i
 rpc() { "$JB" rpc --url "$RPC" --chain-spec "$SPEC" "$@"; }
+. "$HERE/ctl.sh"
 sid() { python3 -c "import json;print(json.load(open('$ROOT/out/state/$1.json'))['service_id'])"; }
 case "$NET" in
   jb-pj6)     PJN=6; LZN=0 ;;
@@ -128,16 +129,7 @@ case "${1:-}" in
       NET_NAME=$NET nohup python3 "$ROOT/indexer/indexer.py" > "$RUN/indexer.log" 2>&1 & echo $! > "$RUN/indexer.pid"
     for _ in $(seq 1 30); do curl -sf localhost:19700/state >/dev/null 2>&1 && break; sleep 1; done
     curl -s localhost:19700/state | python3 -c "import json,sys; d=json.load(sys.stdin); print('indexer up on $NET: slot', d.get('slot'), 'leaves', d.get('leaf_count'), 'transfers', d.get('transfers'))" ;;
-  ctl)  # as nets/jamctl.py: submit <sid> <payload-hex> | read <sid> <key> | head
-    shift
-    case "$1" in
-      head) rpc head ;;
-      read) k=$3; [[ "$k" =~ ^[0-9a-fA-F]+$ && ${#k} -gt 8 && $(( ${#k} % 2 )) -eq 0 ]] && k=0x$k; rpc read "$2" "$k" ;;
-      submit) out=$(rpc submit "$2" "0x$3" --wait --timeout "${WAIT:-240}" 2>&1) || true
-        echo "$out" | head -1 | sed 's/^/submitted /'
-        echo "$out" | sed -n 's/^{"status":\(.*\)}$/status \1/p' ;;
-      *) echo "ctl: submit | read | head" >&2; exit 2 ;;
-    esac ;;
+  ctl) shift; ctl "$@" ;;
   names) echo "$NET: jamboree $JB, PolkaJam $PJ ($PJN), lasair $LZ ($LZN), rpc $RPC, spec $SPEC" ;;
   *) sed -n 2,14p "$0"; exit 1 ;;
 esac

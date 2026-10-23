@@ -20,7 +20,7 @@ hex32() { printf '%064x' "$1"; }
 le64() { python3 -c "import struct;print(struct.pack('<Q',$1).hex())"; }
 le32() { python3 -c "import struct;print(struct.pack('<I',$1).hex())"; }
 ctl() { "$L" ctl "$@" 2>&1 | tail -1; }
-submit() { WAIT=${WAIT:-300} "$L" ctl submit "$@" 2>&1 | grep -E "^status .*(Ready|Failed)|timeout" | tail -1 | cut -c1-40; }
+submit() { WAIT=${WAIT:-300} "$L" ctl submit "$@" 2>&1 | grep -E "^status .*(Ready|Reported|Failed)|timeout" | tail -1 | cut -c1-40; }
 # submit_until <sid> <payload> <read-sid> <key> <expected> <name>: send the payload and wait for
 # the state it must produce; a package that goes Ready but never accumulates (lasair#93) is
 # sent again, which is safe: public-balance skips a nonce it has seen (a mint's random nonce,
@@ -56,7 +56,9 @@ sync_client() { # the client's tree from the indexer (one request), or from the 
 case "${1:-}" in
   up)
     "$L" up
-    for _ in $(seq 1 60); do "$L" ctl head >/dev/null 2>&1 && break; sleep 3; done   # the reader answers
+    # ready once finality has left genesis: a package anchored before that is refused (a dev
+    # genesis is at slot 0, PolkaJam's first block at today's wall slot)
+    for _ in $(seq 1 100); do "$L" ctl head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 3; done
     "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
     "$L" indexer; "$0" wallet ;;

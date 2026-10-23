@@ -14,16 +14,16 @@ view of the chain plus a relay for submissions (CORS open, so a browser wallet u
   POST /submit/<service_id>       body: payload hex; ?core=N pins the core; returns the receipt
   GET  /status?package=<hex>&anchor=<hex>   JIP-2 workPackageStatus of a submission
 
-Two backends. On a jamboree net (JAMBOREE set to the `jamboree` binary) it reads through its
-own JIP-2 client (indexer/jip2.py) and submits with `jamboree rpc submit`: nothing of jamswap.
-Otherwise (the Docker nets) it uses jamswap's offchain modules, in a container on the net.
+It reads through its own JIP-2 client (indexer/jip2.py, stdlib only) and submits with
+`jamboree rpc submit` (our jamboree fork builds the work-package): on every net, Docker or
+native, the same path, and nothing of jamswap.
 
 Env: CHAIN_RPC (ws://reader:19800), CHAIN_SPEC (/shared/spec.json), PRIVACY_ID, PUBLIC_ID,
-PORT (19700), POLL (3 s), JAMBOREE (a jamboree binary: the jamboree backend), SUBMIT_VIA_BUILDER
-(jamswap backend only: a lasair jamnp-builder URL, to submit over CE-133 to the core's
-guarantors instead of JIP-2 submitWorkPackage; lasair#93).
+PORT (19700), POLL (3 s), JAMBOREE (the jamboree binary; default `jamboree` on PATH),
+SUBMIT_VIA_BUILDER (a lasair jamnp-builder URL: submit over CE-133 to the core's guarantors
+instead of JIP-2 submitWorkPackage).
 """
-import json, os, struct, subprocess, sys, threading, time
+import json, os, struct, subprocess, sys, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -31,7 +31,8 @@ from urllib.parse import urlparse, parse_qs
 RPC = os.environ.get("CHAIN_RPC", "ws://reader:19800"); SPEC = os.environ.get("CHAIN_SPEC", "/shared/spec.json")
 PRIVACY = int(os.environ["PRIVACY_ID"]); PUBLIC = int(os.environ["PUBLIC_ID"])
 PORT = int(os.environ.get("PORT", "19700")); POLL = float(os.environ.get("POLL", "3"))
-JAMBOREE = os.environ.get("JAMBOREE", "")
+JAMBOREE = os.environ.get("JAMBOREE", "jamboree")
+BUILDER = os.environ.get("SUBMIT_VIA_BUILDER", "").rstrip("/")
 LOCK = threading.Lock()
 STATE = {"ok": False}
 
@@ -40,8 +41,9 @@ def u64(b):
     return struct.unpack("<Q", b[:8])[0] if b else 0
 
 
-class JamboreeBackend:
-    """Our JIP-2 reader, and jamboree's Rust work-package builder for submissions."""
+class Backend:
+    """Reads over our own JIP-2 client; submissions through jamboree's Rust work-package builder
+    (or, with SUBMIT_VIA_BUILDER, lasair's jamnp-builder over CE-133)."""
     def __init__(self):
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import jip2
@@ -66,6 +68,18 @@ class JamboreeBackend:
         return self._c().package_status(package, anchor)
 
     def submit(self, service, payload, core):
+        if BUILDER:
+            req = {"service_id": service, "payload_hex": payload.hex()}
+            if core is not None:
+                req["cores"] = [core]
+            r = urllib.request.Request(BUILDER + "/submit", data=json.dumps(req).encode(),
+                                       headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                out = json.loads(resp.read())
+            if out.get("accepted") is False:
+                raise RuntimeError(out.get("error") or "every guarantor refused")
+            out.setdefault("via", "builder")
+            return out
         args = [JAMBOREE, "rpc", "--url", RPC, "--chain-spec", SPEC, "submit", str(service), "0x" + payload.hex()]
         if core is not None:
             args += ["--core", str(core)]
@@ -75,47 +89,7 @@ class JamboreeBackend:
         return json.loads(r.stdout.strip().splitlines()[0])
 
 
-class JamswapBackend:
-    """jamswap's offchain modules (the Docker nets), optionally through lasair's builder."""
-    def __init__(self):
-        sys.path.insert(0, os.environ.get("OFFCHAIN", "/offchain"))
-        import chain
-        self.chain = chain
-        self.builder = os.environ.get("SUBMIT_VIA_BUILDER", "").rstrip("/")
-
-    def _c(self, service=None):
-        return self.chain.Jip2Chain(service, RPC, chain_spec=SPEC)
-
-    def head(self):
-        b = self._c().head()
-        return b.slot, b.hash
-
-    def finalized(self):
-        return self._c().finalized().slot
-
-    def read(self, service, key, at=None):
-        return self._c(service).read(key, at or "best")
-
-    def status(self, package, anchor):
-        return self._c(PRIVACY).package_status({"package_hash": package, "anchor": anchor})
-
-    def submit(self, service, payload, core):
-        if self.builder:
-            req = {"service_id": service, "payload_hex": payload.hex()}
-            if core is not None:
-                req["cores"] = [core]
-            r = self.chain._http_json(self.builder + "/submit", req)
-            if r.get("accepted") is False:
-                raise RuntimeError(r.get("error") or "every guarantor refused")
-            r.setdefault("via", "builder")
-            return r
-        ch = self._c(service)
-        if core is not None:
-            ch.cores = [core]                        # a chain of dependent packages stays on one core
-        return ch.submit(payload)
-
-
-B = JamboreeBackend() if JAMBOREE else JamswapBackend()
+B = Backend()
 
 
 def refresh():
@@ -208,6 +182,6 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     threading.Thread(target=refresh, daemon=True).start()
-    print(f"indexer: privacy {PRIVACY}, public-balance {PUBLIC}, JIP-2 {RPC}, http :{PORT}, backend "
-          f"{'jamboree (' + JAMBOREE + ')' if JAMBOREE else 'jamswap' + (' via ' + B.builder if B.builder else '')}", flush=True)
+    print(f"indexer: privacy {PRIVACY}, public-balance {PUBLIC}, JIP-2 {RPC}, http :{PORT}, submit via "
+          f"{BUILDER or JAMBOREE + ' rpc'}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
