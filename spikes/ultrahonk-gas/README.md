@@ -1,0 +1,14 @@
+# Spike: UltraHonk verifier gas on the PVM
+
+The gate in `docs/PLAN.md`, step 0. Not yet run.
+
+1. Take a `no_std` Rust UltraHonk verifier (`ultrahonk_soroban_verifier`, BN254, Keccak
+   transcript; pin the Noir and Barretenberg versions it targets).
+2. Make one proof with `bb` of a small Noir circuit (the Noir `hello_world` is enough),
+   with the Keccak oracle, and export its verification key.
+3. Wrap verifier, key and proof in a refine the way `zk-jam-service/spikes/groth16-gas`
+   does; build with `cargo jam-build`; run under the gas meter; confirm polkavm agrees.
+4. Record: gas, blob size, stack needed, wall time on lasair. Write the decision row.
+
+Comparison point: Groth16/BN254 verify, 246,884,255 gas under GP 0.8.0 (lasair,
+2026-09-24, polkavm identical).
