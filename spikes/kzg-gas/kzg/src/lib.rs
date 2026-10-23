@@ -147,20 +147,87 @@ fn evaluate(poly: &[Scalar], z: Scalar, roots: &[Scalar]) -> Scalar {
     sum * (zn - Scalar::ONE) * n.invert().unwrap()
 }
 
-/// c-kzg-4844's verify_blob_kzg_proof: the blob's polynomial opens at the Fiat-Shamir point
-/// to what C commits to.
-pub fn verify_blob_kzg_proof(blob: &[u8], c: &[u8; 48], pi: &[u8; 48]) -> Result<bool, Error> {
+/// A blob's Fiat-Shamir point z and its polynomial's value y there (c-kzg-4844's
+/// compute_challenge and evaluate_polynomial_in_evaluation_form), after checking C and the blob.
+fn blob_opening(blob: &[u8], c: &[u8; 48], roots: &[Scalar]) -> Result<(Scalar, Scalar), Error> {
     if blob.len() != BYTES_PER_BLOB {
         return Err(Error::BadLength);
     }
     let poly: Vec<Scalar> = blob.chunks_exact(32).map(|b| scalar(b.try_into().unwrap())).collect::<Result<_, _>>()?;
     point(c)?;
-    point(pi)?;
     let z = challenge(blob, c);
-    let y = evaluate(&poly, z, &roots_brp());
-    let mut zb = z.to_bytes();
-    zb.reverse();
-    let mut yb = y.to_bytes();
-    yb.reverse();
-    verify_kzg_proof(c, &zb, &yb, pi)
+    Ok((z, evaluate(&poly, z, roots)))
+}
+
+fn be(x: Scalar) -> [u8; 32] {
+    let mut b = x.to_bytes();
+    b.reverse();
+    b
+}
+
+/// c-kzg-4844's verify_blob_kzg_proof: the blob's polynomial opens at the Fiat-Shamir point
+/// to what C commits to.
+pub fn verify_blob_kzg_proof(blob: &[u8], c: &[u8; 48], pi: &[u8; 48]) -> Result<bool, Error> {
+    let (z, y) = blob_opening(blob, c, &roots_brp())?;
+    point(pi)?;
+    verify_kzg_proof(c, &be(z), &be(y), pi)
+}
+
+/// c-kzg-4844's verify_blob_kzg_proof_batch: every blob opens to its commitment, checked with one
+/// pairing over a random linear combination, r = hash_to_bls_field(sha256("RCKZGBATCH___V1_" ||
+/// degree || n || (C_i || z_i || y_i || pi_i)...)):
+///   e(sum r^i pi_i, [s]G2) == e(sum r^i (C_i - [y_i]G1) + sum r^i z_i pi_i, G2)
+/// Each blob's hashing and evaluation remain; the pairing is paid once.
+pub fn verify_blob_kzg_proof_batch(blobs: &[&[u8]], cs: &[[u8; 48]], pis: &[[u8; 48]]) -> Result<bool, Error> {
+    let n = blobs.len();
+    if cs.len() != n || pis.len() != n {
+        return Err(Error::BadLength);
+    }
+    match n {
+        0 => return Ok(true),
+        1 => return verify_blob_kzg_proof(blobs[0], &cs[0], &pis[0]),
+        _ => {}
+    }
+    let roots = roots_brp();
+    let mut zs = Vec::with_capacity(n);
+    let mut ys = Vec::with_capacity(n);
+    let mut cps = Vec::with_capacity(n);
+    let mut pps = Vec::with_capacity(n);
+    for i in 0..n {
+        let (z, y) = blob_opening(blobs[i], &cs[i], &roots)?;
+        zs.push(z);
+        ys.push(y);
+        cps.push(point(&cs[i])?);
+        pps.push(point(&pis[i])?);
+    }
+    let mut h = Sha256::new()
+        .chain_update(b"RCKZGBATCH___V1_")
+        .chain_update((FIELD_ELEMENTS_PER_BLOB as u64).to_be_bytes())
+        .chain_update((n as u64).to_be_bytes());
+    for i in 0..n {
+        h = h.chain_update(cs[i]).chain_update(be(zs[i])).chain_update(be(ys[i])).chain_update(pis[i]);
+    }
+    let rb: [u8; 32] = h.finalize().into();
+    let mut wide = [0u8; 64];
+    for i in 0..32 {
+        wide[i] = rb[31 - i];
+    }
+    let r = Scalar::from_bytes_wide(&wide);
+    let mut proof_lincomb = G1Projective::identity();
+    let mut rhs = G1Projective::identity();
+    let mut ri = Scalar::ONE;
+    for i in 0..n {
+        let c_minus_y = G1Projective::from(cps[i]) - G1Affine::generator() * ys[i];
+        proof_lincomb += pps[i] * ri;
+        rhs += c_minus_y * ri + pps[i] * (ri * zs[i]);
+        ri *= r;
+    }
+    // e(proof_lincomb, [s]G2) * e(rhs, -G2) == 1
+    let s = G2Affine::from_compressed(&SETUP_G2_S).unwrap();
+    let g2_neg = -G2Affine::generator();
+    let ml = multi_miller_loop(&[
+        (&G1Affine::from(proof_lincomb), &G2Prepared::from(s)),
+        (&G1Affine::from(rhs), &G2Prepared::from(g2_neg)),
+    ]);
+    Ok(ml.final_exponentiation() == Gt::identity())
 }

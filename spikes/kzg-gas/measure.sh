@@ -70,6 +70,16 @@ def ext(t, names, export):
         proofs += f["commitment"] + f["proof"]
     open(f"{out}/p{t}.bin", "wb").write(bytes([t, 3, len(names), export]) + proofs)
 ext(10, correct[:1], 0); ext(11, correct[:1], 1); ext(12, correct[:3], 1); ext(13, (correct * 2)[:4], 0)
+# kind 4: the batch check over extrinsic blobs; 15 has a wrong proof in the middle
+def batch(t, names, bad=None):
+    proofs = b""
+    for i, n in enumerate(names):
+        f = fields(f"{vec}/blob/{n}.yaml", ("blob", "commitment", "proof"))
+        open(f"{out}/x{t}_{i}.bin", "wb").write(f["blob"])
+        pi = f["proof"] if i != bad else fields(f"{vec}/blob/{wrong[0]}.yaml", ("proof",))["proof"]
+        proofs += f["commitment"] + pi
+    open(f"{out}/p{t}.bin", "wb").write(bytes([t, 4, len(names)]) + proofs)
+batch(14, correct[:3]); batch(15, correct[:3], bad=1); batch(16, correct[:2]); batch(17, correct[:6])
 PY
 
 echo "== 2. on a PolkaJam testnet ($("$PJD/polkajam" --version | head -1))"
@@ -82,6 +92,10 @@ pj_send 10 "$O/p10.bin" $(xargs_for 10)
 pj_send 11 "$O/p11.bin" $(xargs_for 11) --exports 32
 pj_send 12 "$O/p12.bin" $(xargs_for 12) --exports 96
 pj_send 13 "$O/p13.bin" $(xargs_for 13)
+pj_send 14 "$O/p14.bin" $(xargs_for 14)
+pj_send 15 "$O/p15.bin" $(xargs_for 15)
+pj_send 16 "$O/p16.bin" $(xargs_for 16)
+pj_send 17 "$O/p17.bin" $(xargs_for 17)
 sleep 12
 echo
 echo "| case | refine gas | of a tiny package (1e9) | PolkaJam refine ($(pj_backend), $(uname -sm)) | accumulate's verdict |"
@@ -90,8 +104,10 @@ names=("" "point evaluation: geth pointEvaluation1" "point evaluation: c-kzg cor
        "point evaluation: c-kzg correct_proof_6_5" "point evaluation: geth's, y altered (must fail)" "point evaluation: c-kzg incorrect_proof_2_3 (must fail)"
        "blob: c-kzg correct_proof, first" "blob: c-kzg correct_proof, fourth" "blob: c-kzg incorrect_proof (must fail)"
        "1 blob as an extrinsic" "1 blob as an extrinsic, exported (32 segments)" "3 blobs as extrinsics, exported (96 segments)"
-       "4 blobs as extrinsics (past a tiny package's gas)")
-for t in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+       "4 blobs as extrinsics (past a tiny package's gas)" "3 blobs as extrinsics, batch-checked"
+       "3 blobs, batch-checked, one wrong proof (must fail)" "2 blobs as extrinsics, batch-checked"
+       "6 blobs (an Aztec checkpoint) as extrinsics, batch-checked")
+for t in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17; do
   rows=$(pj_refines "$t" || true)
   if [ -z "$rows" ]; then
     printf '| %s | refused (#36) | | | %s |\n' "${names[$t]}" "$(pj_read "763a$(printf '%02x' "$t")")"; continue

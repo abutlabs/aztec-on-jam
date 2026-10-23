@@ -1124,3 +1124,21 @@ Consequence: exporting is cheap (about 3,700 gas a segment), and gas limits blob
 to 3 tiny or 19 full. An Aztec checkpoint's 6 blobs fit one full package; an epoch's 192 take
 about 10 (`docs/aztec/BLOBS.md`).
 Next: #37's import path (a later package importing a blob's segments) and batch verification.
+
+## 2026-10-23 37 — #37: batch-checked, an Aztec checkpoint's 6 blobs fit one tiny package (967,993,405 gas)
+Why this issue: it is still unblocked and first in order. Batching is the cost lever for an
+epoch's 192 blobs, and it is self-contained code with Ethereum's own vectors.
+Did: c-kzg-4844's `verify_blob_kzg_proof_batch` added to `spikes/kzg-gas/kzg`: the
+"RCKZGBATCH___V1_" challenge over (C, z, y, pi) for every blob, then one pairing over a random
+linear combination. Each blob's opening is shared with the single check (`blob_opening`). The
+service gained kind 4, a batch over extrinsic blobs.
+Evidence: `spikes/kzg-gas/measure.sh` →
+- host: "verify_blob_kzg_proof_batch vectors: 24 agree, 0 differ", with 29 and 122 for the
+  others;
+- PolkaJam: 2 blobs 404,223,059; 3 blobs 545,169,223 (01), and 00 with one wrong proof; 6
+  blobs 967,993,405 (96.8% of a tiny package, 0.93 s, 01). The line from 2 and 3 (122,330,731
+  + 140,946,164 a blob) predicted 968,007,715 for 6.
+Consequence: a checkpoint's 6 blobs fit a tiny package; an epoch's 192 cost about 27.2B gas
+(5.4 full packages) against 50.4B one by one.
+Next: #37's import path (a later package importing a blob's 32 segments), the last item
+before #37 closes.

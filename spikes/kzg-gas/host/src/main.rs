@@ -49,6 +49,37 @@ fn main() {
         if got == want { bpass += 1 } else { bfail += 1; println!("MISMATCH {}: want {want}, got {got}", p.display()) }
     }
     println!("c-kzg verify_blob_kzg_proof vectors: {bpass} agree, {bfail} differ");
+    // c-kzg-4844's verify_blob_kzg_proof_batch vectors (batch/*.yaml): lists of blobs,
+    // commitments and proofs, one per line under each key
+    let (mut tpass, mut tfail) = (0, 0);
+    let mut batches: Vec<_> = fs::read_dir(format!("{dir}/batch")).unwrap().map(|e| e.unwrap().path()).collect();
+    batches.sort();
+    for p in batches {
+        let y = fs::read_to_string(&p).unwrap();
+        let want = field(&y, "output");
+        let list = |k: &str| -> Vec<String> {
+            let mut on = false; let mut out = vec![];
+            for l in y.lines() {
+                let t = l.trim();
+                if t == format!("{k}:") || t == format!("{k}: []") { on = t.ends_with(':'); continue; }
+                if on { if let Some(v) = t.strip_prefix("- ") { out.push(v.trim_matches('\'').trim_start_matches("0x").to_string()) } else if !t.is_empty() { on = false } }
+            }
+            out
+        };
+        let unhex = |h: &str| -> Option<Vec<u8>> { (h.len() % 2 == 0).then(|| (0..h.len() / 2).map(|i| u8::from_str_radix(&h[2 * i..2 * i + 2], 16).ok()).collect::<Option<Vec<u8>>>()).flatten() };
+        let blobs: Option<Vec<Vec<u8>>> = list("blobs").iter().map(|h| unhex(h)).collect();
+        let cs: Option<Vec<[u8; 48]>> = list("commitments").iter().map(|h| hex::<48>(h)).collect();
+        let pis: Option<Vec<[u8; 48]>> = list("proofs").iter().map(|h| hex::<48>(h)).collect();
+        let got = match (blobs, cs, pis) {
+            (Some(b), Some(c), Some(pi)) => {
+                let bs: Vec<&[u8]> = b.iter().map(|x| x.as_slice()).collect();
+                match kzg_verify::verify_blob_kzg_proof_batch(&bs, &c, &pi) { Ok(true) => "true", Ok(false) => "false", Err(_) => "null" }
+            }
+            _ => "null",
+        };
+        if got == want { tpass += 1 } else { tfail += 1; println!("MISMATCH {}: want {want}, got {got}", p.display()) }
+    }
+    println!("c-kzg verify_blob_kzg_proof_batch vectors: {tpass} agree, {tfail} differ");
     let g = fs::read_to_string(format!("{dir}/geth-pointEvaluation.json")).unwrap();
     let input = g.split("\"Input\": \"").nth(1).unwrap().split('"').next().unwrap();
     let bytes: Vec<u8> = (0..input.len() / 2).map(|i| u8::from_str_radix(&input[2 * i..2 * i + 2], 16).unwrap()).collect();
@@ -57,5 +88,5 @@ fn main() {
     let geth_bad = kzg_verify::point_evaluation(&bad);
     println!("c-kzg verify_kzg_proof vectors: {pass} agree, {fail} differ");
     println!("geth pointEvaluation1: {geth:?}; with y altered: {geth_bad:?}");
-    if fail > 0 || bfail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
+    if fail > 0 || bfail > 0 || tfail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
 }

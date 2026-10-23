@@ -62,6 +62,23 @@ work-item's extrinsic (`jamboree rpc submit --extrinsic`), and optionally export
 | 3 blobs, exported (96 segments) | 666 B | 393,216 B | 786,027,114 | 78.6% | 0.727 s | 01 |
 | 4 blobs | 798 B | 524,288 B | 999,999,331, out of gas | 100% | 0.950 s | none |
 
+**Batch-checked** (c-kzg's `verify_blob_kzg_proof_batch`, all 24 of its vectors agreeing on the
+host): one pairing over a random linear combination, the blobs as extrinsics.
+
+| blobs | refine gas | of a tiny package | PolkaJam refine | verdict |
+|---|---|---|---|---|
+| 2 | 404,223,059 | 40.4% | 0.408 s | 01 |
+| 3 | 545,169,223 | 54.5% | 0.525 s | 01 |
+| 3, one wrong proof | 545,169,223 | 54.5% | 0.525 s | 00 |
+| 6 (an Aztec checkpoint) | 967,993,405 | 96.8% | 0.934 s | 01 |
+
+From the 2- and 3-blob runs: 122,330,731 fixed (the pairing and the challenge) plus
+140,946,164 a blob (hashing, evaluating, three G1 multiplications), which predicts
+968,007,715 for six. Six measured 967,993,405, 0.0015% off. So batched, **a checkpoint's 6
+blobs fit one tiny package**, 34 fit a full one, and an epoch's 192 cost about 27.2B gas
+(5.4 full packages), against 50.4B (10.1) checked one by one. The G1 multiplications are a
+naive sum; a multi-scalar multiplication would cut the per-blob part further.
+
 Exporting 32 segments adds 117,483 gas (about 3,700 a segment): binding a blob costs the
 check, not the export. Per package, gas is the limit, not size: three blobs fit a tiny
 package's 1e9 and four run out, so a full package (5e9) holds 19.

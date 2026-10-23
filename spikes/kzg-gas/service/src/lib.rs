@@ -5,12 +5,16 @@
 //!   kind 3: [n][export 0|1][n × (C 48 || pi 48)], blob i in the work-item's extrinsic i (JAM-NP
 //!           caps the package, payloads included, at 200 KiB; extrinsics travel beside it);
 //!           with export 1, each checked blob is exported as 32 segments (28 days in the DA)
+//!   kind 4: [n][n × (C 48 || pi 48)], blob i in extrinsic i, all checked at once
+//!           (verify_blob_kzg_proof_batch: one pairing for the n)
 //! Refine outputs [tag][1 all valid | 0 otherwise]; accumulate stores it at "v:" ++ tag.
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
+extern crate alloc as alloc_crate;
+use alloc_crate::vec::Vec;
 use jam_pvm_common::accumulate::{accumulate_items, set_storage};
 use jam_pvm_common::refine;
 use jam_pvm_common::jam_types::SEGMENT_LEN;
@@ -59,6 +63,19 @@ fn extrinsic_blobs(d: &[u8]) -> Option<bool> {
     Some(true)
 }
 
+fn extrinsic_batch(d: &[u8]) -> Option<bool> {
+    let n = *d.first()? as usize;
+    let proofs = d.get(1..)?;
+    if proofs.len() != n * 96 {
+        return None;
+    }
+    let blobs: Vec<Vec<u8>> = (0..n).map(refine::extrinsic).collect::<Option<_>>()?;
+    let refs: Vec<&[u8]> = blobs.iter().map(|b| b.as_slice()).collect();
+    let cs: Vec<[u8; 48]> = proofs.chunks_exact(96).map(|c| c[..48].try_into().unwrap()).collect();
+    let pis: Vec<[u8; 48]> = proofs.chunks_exact(96).map(|c| c[48..].try_into().unwrap()).collect();
+    Some(kzg_verify::verify_blob_kzg_proof_batch(&refs, &cs, &pis) == Ok(true))
+}
+
 impl Service for Spike {
     fn refine(_core: CoreIndex, _item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
@@ -67,6 +84,7 @@ impl Service for Spike {
             (Some(0), Some(input)) => kzg_verify::point_evaluation(input) == Ok(true),
             (Some(1), Some(d)) => blobs(d).unwrap_or(false),
             (Some(3), Some(d)) => extrinsic_blobs(d).unwrap_or(false),
+            (Some(4), Some(d)) => extrinsic_batch(d).unwrap_or(false),
             _ => false,
         };
         alloc::vec![tag, ok as u8].into()

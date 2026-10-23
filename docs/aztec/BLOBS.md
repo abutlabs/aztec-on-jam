@@ -35,15 +35,16 @@ for #30, not taken.
 
 Blobs travel as extrinsics, beside a package of a few hundred bytes. Refine checks each one
 (262M gas) and exports it as 32 segments (+117,483 gas for all 32). Gas sets the count: 3
-blobs a tiny package (786M, 0.73 s on PolkaJam), 19 a full one. An Aztec checkpoint's 6 blobs
-fit one full package; an epoch's 192 take about 10.
+blobs a tiny package (786M, 0.73 s on PolkaJam), 19 a full one. Batch-checked (one pairing
+for many, c-kzg's `verify_blob_kzg_proof_batch`), 122.3M fixed plus 140.9M a blob: **a
+checkpoint's 6 blobs fit one tiny package** (967,993,405 gas measured), 34 fit a full one, and
+an epoch's 192 cost about 27.2B gas, 5.4 full packages, against 10.1 checked one by one.
 
 ## Open (#37)
 
 - [x] **The export path, measured on PolkaJam** (above).
 - [ ] **The import path:** a later package importing a blob's 32 segments and re-checking it.
-- [ ] **Batch verification** (c-kzg `verify_blob_kzg_proof_batch`): one pairing for many blobs.
-  The 63M a blob for hashing and evaluation stays.
+- [x] **Batch verification**, measured above.
 - [x] **Blobs as extrinsics, not payloads** (measured above). JAM-NP limits the work-package message (CE-133,
   CE-146) to 200 KiB, payloads included, so that a guarantor can check authorization before
   downloading more (`simple.md`, jam-np e0b7d29). PolkaJam refuses a payload above 204,533
