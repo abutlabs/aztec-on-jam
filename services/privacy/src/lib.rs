@@ -19,6 +19,7 @@ use alloc::vec::Vec;
 use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
+use service_util::{key, le_u64};
 use ultrahonk_no_std::{verify, ProofType};
 
 // BN254 pairings overflow polkavm's default stack (spikes/ultrahonk-gas).
@@ -47,19 +48,7 @@ fn invalid() -> WorkOutput {
     vec![0u8].into()
 }
 
-fn key(prefix: &[u8], hash: &[u8]) -> Vec<u8> {
-    let mut k = Vec::with_capacity(prefix.len() + hash.len());
-    k.extend_from_slice(prefix);
-    k.extend_from_slice(hash);
-    k
-}
 
-fn le_u64(b: &[u8]) -> u64 {
-    let mut x = [0u8; 8];
-    let n = core::cmp::min(8, b.len());
-    x[..n].copy_from_slice(&b[..n]);
-    u64::from_le_bytes(x)
-}
 
 impl Service for Privacy {
     fn refine(

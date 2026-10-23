@@ -660,6 +660,7 @@ version = "0.0.1"
 dependencies = [
  "jam-pvm-common",
  "polkavm-derive",
+ "service-util",
  "ultrahonk-no-std",
 ]
 
@@ -679,6 +680,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "public-balance-service"
+version = "0.0.1"
+dependencies = [
+ "jam-pvm-common",
+ "polkavm-derive",
+ "service-util",
 ]
 
 [[package]]
@@ -767,6 +777,10 @@ dependencies = [
  "quote",
  "syn 3.0.9",
 ]
+
+[[package]]
+name = "service-util"
+version = "0.0.1"
 
 [[package]]
 name = "sha3"

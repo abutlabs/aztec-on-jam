@@ -53,3 +53,31 @@ jamswap's lasair6 with `offchain/deploy.py`; one work-item through JIP-2 `submit
 package with the same proof must be dropped (double spend), which the in-process rig
 cannot show.
 Blockers: none.
+
+## 2026-10-22 3 — step 1, part two: both services live on lasair6, double spend dropped
+Did: a shared `crates/service-util` (keys, little-endian reads); `services/public-balance`
+(`[op][account 32][amount u64]`, mint and burn, `bal:<account>`); `nets/lasair6.sh`
+(up, build, deploy, ctl, down) and `nets/jamctl.py` (submit, read, head over JIP-2, run in
+a python container on the compose network because the reader publishes no host port);
+started jamswap's lasair6 (six lasair 2.1.3 validators, reader, builder; services at
+genesis: 0 Bootstrap, 100 jamswap); deployed both services through the Bootstrap service
+with jamswap's deploy.py (the 1.2 MB privacy blob as a preimage); sent the stub-transfer
+proof, read the state, sent the same proof again, minted on public-balance.
+Evidence: `deploy.py` → `service 1 ready (created #19, balance 1000012094) SERVICE_ID=1`
+(public-balance), `service 2 ready (created #32, balance 1001196483) SERVICE_ID=2` (privacy).
+`nets/lasair6.sh ctl submit 2 <8898-byte payload>` → `Reportable` at slot 39, `Reported`
+slot 41, `Ready` slot 42; reads: `root:note = …03e9`, `root:null = …07d2`,
+`transfers = 0100000000000000`, `nf:<nullifier 0> = 01`. Same payload again → `Ready` at
+slot 46 (refine accepts a valid proof), then `root:note = …03e9`, `transfers = 0100000000000000`
+unchanged: accumulate dropped the double spend. `ctl submit 1 00<a×32><100 LE>` → `Ready`
+slot 52; `bal:<account> = 6400000000000000` (100).
+Issues: #6 (step 1 done, closed), #2 (milestone 2 progress: send works; shield and unshield
+as transfers remain), #10 (nets: lasair6 path exists).
+Next: step 1, part three (#6 follow-up, under #2): shield and unshield as deferred
+transfers: public-balance burns and sends `transfer(privacy, amount, memo = note
+commitment ++ asset)`; the privacy service's accumulate receives the transfer item and
+records the pending deposit; unshield the other way from a proof's public inputs. Needs
+the `transfer` host call from jam-pvm-common's accumulate module and a public-input slot
+naming a receiver and amount in the stub circuit. Then `nets/demo.sh check`'s first
+version against lasair6.
+Blockers: none. The net is left running.

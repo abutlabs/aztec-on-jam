@@ -1,0 +1,6 @@
+[package]
+name = "service-util"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "What both services share: storage keys and little-endian helpers, no_std"
