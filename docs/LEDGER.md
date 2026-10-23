@@ -1556,3 +1556,5 @@ Left open as research for later phases, not Phase 3 rows: #46 (CHONK with an amo
 #47 (the instruction-level alternative), and #48 (field-wise hooks in the services, which change
 soaked code and so need a re-soak).
 Nothing was submitted or posted outside this repository's issues.
+- **CI, recorded:** run 40027377792 on 32745d9 passed (the ci workflow). The commit adding this
+  line touches only this file, and its run is checked before the phase is called done.
