@@ -9,7 +9,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 JAMSWAP=$SUB/jamswap; COMPOSE="docker compose -f $JAMSWAP/docker-compose.lasair6.yml"
 BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build
-PY="docker run --rm -i --network jamswap_lasnet -v $JAMSWAP/offchain:/offchain:ro -v jamswap_shared:/shared:ro -v $ROOT/out:/work -v $HERE/jamctl.py:/jamctl.py:ro python:3.11-slim"
+PY="docker run --rm -i --network jamswap_lasnet -v $JAMSWAP/offchain:/offchain:ro -v jamswap_lasair6_shared:/shared:ro -v $ROOT/out:/work -v $HERE/jamctl.py:/jamctl.py:ro python:3.11-slim"
 case "${1:-}" in
   up)   (cd "$JAMSWAP" && $COMPOSE up -d spec-init lm0 lm1 lm2 lm3 lm4 lm5 reader builder) ;;
   down) (cd "$JAMSWAP" && $COMPOSE down -v) ;;

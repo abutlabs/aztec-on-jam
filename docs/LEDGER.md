@@ -144,3 +144,23 @@ page over the client (the demo-wallet fork needs the Aztec PXE, which this circu
 speak; decision to record). Also: the privacy blob is 1.2 MB against the spike's 264 KB
 with the same verifier (look into it), and the refine gas of the real proof vs the spike.
 Blockers: none. The net is left running.
+
+## 2026-10-23 6 — step 3, part one: up from a clean machine in one command
+Did: `nets/demo.sh up` now starts the net, waits for the JIP-2 reader, clears old ids and
+client state, builds and deploys both services and prints their ids; `nets/demo.sh down`
+wipes the chain. Fixed `nets/lasair6.sh` to mount the lasair6 compose's own volume
+(`jamswap_lasair6_shared`; it had been reading `spec.json` from another net's stale volume,
+which worked only because the dev genesis shares its authorizer). Ran down, up, check.
+Evidence: `nets/demo.sh down` → containers gone in 11 s. `time nets/demo.sh up` →
+`services: public-balance 1, privacy 2`, **1 min 40 s** (images cached; a first-ever run
+also builds `jamswap-pj-mixed:local`, which downloads a PolkaJam nightly). `time
+nets/demo.sh check` on the fresh chain → `chain before: 0 leaves, 0 transfers …`, 20 `ok`
+lines, `PASS`, **2 min 08 s**. Leaves 0 and 1 are B's 40 and A's 60; after tx2 `bal:B = 40`,
+`unshielded = 40`, `shielded = 100`; the replay changed nothing.
+Issues: #10 (nets), #8 (step 3 opened for real).
+Next: step 3, part two: an indexer, one long-running process that follows the chain over
+JIP-2 and serves HTTP: `/state` (roots, leaves, counts), `/leaves`, `/nullifier/<hex>`,
+`/balance/<account>`; the client's `sync` reads it instead of looping over `ctl read`,
+and the wallet (#9) reads it too. Python, stdlib, in the same container pattern as jamctl,
+published on a host port. Then the wallet page.
+Blockers: none. The net is left running (services 1 and 2).

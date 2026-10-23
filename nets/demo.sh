@@ -31,7 +31,11 @@ sync_client() { # the client's tree from the chain: leaves count, each leaf, the
   "$CLIENT" sync "$ROOT/out/leaves.json"
 }
 case "${1:-}" in
-  up) "$L" up; sleep 30; "$L" deploy ;;
+  up)
+    "$L" up
+    for _ in $(seq 1 60); do "$L" ctl head >/dev/null 2>&1 && break; sleep 3; done   # the reader answers
+    "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE"
+    "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)" ;;
   down) "$L" down ;;
   check)
     PB=$(sid public-balance); PV=$(sid privacy); echo "public-balance = service $PB, privacy = service $PV"
