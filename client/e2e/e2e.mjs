@@ -6,13 +6,18 @@
 // Exit 0 only if every assertion holds.
 //   node client/e2e/e2e.mjs            (WALLET=http://localhost:19710, CHROME=system Chrome)
 import puppeteer from "puppeteer-core";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const WALLET = process.env.WALLET || "http://localhost:19710";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const IMAGES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs/images");
+// RECORD=1: screencast both browsers, then ffmpeg puts them side by side (docs/images/demo.mp4,
+// demo.gif). Needs ffmpeg on PATH.
+const RECORD = process.env.RECORD === "1";
+const recorders = [];
 mkdirSync(IMAGES, { recursive: true });
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, defaultViewport: { width: 900, height: 1300 } });
@@ -24,6 +29,7 @@ async function open(user) {
   const ctx = await browser.createBrowserContext();               // a second browser, in effect
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log(`  [${user}] pageerror: ${String(e).slice(0, 200)}`));
+  if (RECORD) recorders.push({ user, rec: await page.screencast({ path: path.join(IMAGES, `rec-${user}.webm`) }) });
   await page.goto(`${WALLET}/?user=${user}`);
   // ready: keys made, address published on chain, balances shown
   await page.waitForFunction(() => document.body.dataset.ready === "1" || document.getElementById("status").textContent.startsWith("error"), { timeout: 240000 });
@@ -100,4 +106,17 @@ await shot(b, "06-b-unshielded.png");
 const steps = await b.$$eval("#steps li", (els) => els.map((e) => e.textContent));
 if (!steps.some((t) => t.includes("made in this browser"))) await fail("B's unshield was not proved in the browser");
 console.log(`PASS: ${pass} assertions, 6 screenshots; every proof made in its own browser`);
+if (RECORD) {
+  for (const r of recorders) await r.rec.stop();
+  const [ra, rb] = ["A", "B"].map((u) => path.join(IMAGES, `rec-${u}.webm`));
+  const both = "[0:v]scale=640:-2,pad=650:ih:0:0:white[a];[1:v]scale=640:-2[b];[a][b]hstack=inputs=2";
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", ra, "-i", rb, "-filter_complex", both, "-r", "15",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", path.join(IMAGES, "demo.mp4")]);
+  // a GIF for the README: 4x speed, 8 frames a second, 900 px wide, its own palette
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", path.join(IMAGES, "demo.mp4"), "-vf",
+    "setpts=PTS/4,fps=8,scale=900:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer",
+    path.join(IMAGES, "demo.gif")]);
+  rmSync(ra); rmSync(rb);
+  console.log("  recording docs/images/demo.mp4 and demo.gif (both browsers side by side)");
+}
 await browser.close();
