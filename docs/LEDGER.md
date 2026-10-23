@@ -1264,3 +1264,23 @@ production-sized calldata"; sources for the gas limit listed in LESSONS.md.
 Issues: #40 filed and added to RALPH's table; #29 stays open until #40's row lands in
 LESSONS.md.
 Next: #23's 2^24 result; #40 in Foundry after it (memory); then #26's skeleton.
+
+## 2026-10-23 44 — #31 closed: a JIP is warranted, for one limit (no cryptographic host functions)
+Why this issue: #23's 2^24 is still proving (the machine is in swap), and #31 is reading and
+deciding on evidence that is already measured. #32, #33 and #34 wait on it.
+Did: `docs/privacy/LIMITS.md`. Six candidate limits, each marked spec-level or not, with its
+evidence and a verdict. The Gray Paper 0.8.0 host-call list (`pvm_invocations.tex`) has no
+hash, curve or pairing call. zk.money's history was checked against sources: Aztec announced
+the Aztec Connect sunset on 13 March 2023 (deposits off 31 March 2023, blocks stopped 31 March
+2024) as a focus on its general-purpose network. Neither source names an L1 wall, so the file
+does not claim one, and narrows the parallel to what the evidence supports.
+Decision: a JIP for cryptographic host functions (BN254 and BLS12-381 pairings and MSM, KZG
+point evaluation, secp256k1 recovery, and a hash if #41 shows accumulate needs it), priced
+from benchmarks. No privacy-specific protocol features.
+Evidence: 199,473,075 (KZG, #24), 13,119,449 (ecrecover, #39), 170–180M (UltraHonk, #23),
+about 48–52× Ethereum's share of the budget at a 60M block (LESSONS.md); the host-call list
+from `grep -oE "\\texttt\{[a-z_]+\} = [0-9]+" pvm_invocations.tex`.
+Issues: #31 closed. #41 filed (Poseidon2 in the PVM, for one tree shared by many packages) and
+added to RALPH's table.
+Next: #23's 2^24 when it finishes; then #40, #41 and #26 on PolkaJam, one testnet at a time;
+#32 (the JIP draft) can start meanwhile: its first step is researching the JIP format.
