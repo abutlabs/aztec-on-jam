@@ -523,3 +523,51 @@ Next: #4, part two: the hour's soak on pj6: `nets/soak.sh` sends one privacy pac
 root change, package status and finalized slot, and ends with a verdict: zero dropped roots,
 finality advancing. Then close #4.
 Blockers: none. lasair6 left running.
+
+## 2026-10-23 15 — #17, part one: `jamboree rpc`, a Rust JIP-2 client in our jamboree fork
+(While the soak ran; RALPH's long-run exception: code-only, nothing the soak used.)
+Did: forked jamixir/jamboree (abutlabs/jamboree, branch `lasair`, submodule in Aiden) and
+added `jamboree rpc`: head, authorizer, params, services, service, read, submit [--core]
+[--wait], status, deploy, a port of jamswap's offchain/jip2.py, workpackage.py, chain.py,
+chainspec.py and deploy.py (src/rpc: codec, wp, spec, client, mod); dispatched before
+jamboree's own CLI parsing so nothing of jamboree changes; a README section.
+Evidence: `cargo test rpc` → 6 passed, including the work-package bytes against the hex
+jamswap's workpackage.py produces for the same package. On the live pj6 net (read-only):
+`jamboree rpc --url ws://127.0.0.1:42150 head` → `best 9500281 … finalized 9500280 …`;
+`services` → `0 1 2`; `read 2 transfers` → `6000…` (96, the indexer's count); `read 2 root:note`
+→ the indexer's root; `--chain-spec pj6 authorizer` → `0:f8d86b97…  cores 0,1`, the same as
+chainspec.py's. Not yet run live: submit and deploy (after the soak).
+Next for #17: submit/deploy live, then jamboree recipes for native lasair and PolkaJam nets.
+
+## 2026-10-23 16 — #18, part one: sealed notes in the protocol, scanning, the directory; a void soak
+Did: the circuit gained `logs_hash` (13 public inputs); refine checks blake2b(the two sealed
+notes) against it and accumulate stores each as `enc:<leaf>`; the client seals both outputs
+(client/notecrypt.py: X25519 + HKDF-SHA256 + AES-256-GCM via `cryptography`, RFC 7748
+vectors, a WebCrypto cross-check; #20 opened and closed when the homebrew first draft was
+replaced before use); public-balance op 3 publishes a 64-byte directory entry (encryption
+key || spend key); the indexer serves `/notes`, `/key`, sealed notes in `/state`; the client
+`scan`s; `check` runs A and B as separate clients sharing only the chain. Poseidon2 moved
+in-process (client/poseidon2.py, Noir rc.5's constants; the solver's 5 vectors, hash_cli's
+outputs and the empty root match): 0.55 s a transfer, a 1,200-leaf tree in 0.34 s.
+The void soak: my circuit change reached the first hour-long soak through the shared
+`circuits/transfer` directory at 636 s (`prove_error … Expected argument logs_hash`) and it
+starved; I stopped it. Two defects it showed, both fixed: every client process now proves
+in its own circuit snapshot (two run in parallel cleanly; the snapshot is removed at exit),
+and the soak's verdict fails on prove errors, starved slots or a pace under 90%.
+Evidence: `services/privacy/check.sh` → `PASS: 8 assertions` (a swapped sealed note is
+refused), refine 166,237,540 gas; offline scan: B finds 40, a fresh A finds 60, C nothing, a
+note swapped to another leaf is refused; rig: `key:<B>` holds the 64-byte entry.
+Not yet run live: the new `check` (after the soak).
+
+## 2026-10-23 17 — #19, part one: the browser can prove, seal and scan by itself
+Did: in the demo-wallet fork's `jam/`: noir_js 1.0.0-rc.5 and bb.js 5.0.0; lib/poseidon2.js
+(the same constants and vectors), lib/blake2b.js (RFC 7693; Python's hashlib at 12 lengths),
+lib/notecrypt.js (WebCrypto, byte-compatible with the Python), lib/core.js (identity from a
+random secret: spend key, encryption key, account; notes, tree, transfer inputs, payload, scan).
+Evidence: `node test-bbjs.mjs` → witness 72 ms, `proof 8000 bytes, 13 public inputs, in 728
+ms`, bb.js's vk byte-identical to the service's; the service on the rig → `VALID`, 166,168,063
+gas. `node test-core.mjs` (a JS wallet with its own secret claims 100 and pays the Python
+client's B 40 through B's directory entry) → proof in 355 ms; rig `VALID`; the JS wallet
+scans and finds its 60 at leaf 1; B's Python client scans and finds `B 40 at leaf 0`.
+Next for #19: the page itself on lib/core.js (bundled), proving in the browser, and the
+two-browser run with no wallet backend.
