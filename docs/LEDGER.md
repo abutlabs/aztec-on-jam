@@ -785,3 +785,27 @@ B holds 40 privately … B holds 0 privately, 80 publicly"; `node client/e2e/e2e
 Issues: #17 closed; jamixir/jamboree#49 opened.
 Next: #14 (the comparison table), the README, #18 (the Aztec kernel spike), then the final
 verification on every net.
+
+## 2026-10-23 25 — #18 closed: Aztec's own kernels measured; the port is roadmap #21
+Did: the rest of #18 (the demo-visible reductions went in ledger 16 to 18: sealed notes, the
+indexed nullifier tree, depth 40). `spikes/chonk/measure.sh`, from scratch: Aztec CI's pinned
+benchmark stacks (aztec-packages v6.0.0, chonk-inputs afe8389cb7f21295) proved with bb 6.0.0;
+one proof verified and timed on one thread against ours; the kernels compiled from Aztec's
+v6.0.0 source (sparse checkout, Aztec's workspace generator) with nargo 1.0.0-rc.3.
+Evidence: `spikes/chonk/measure.sh` → exit 0 (49 s):
+```
+11 flows proved: 6 to 12 circuits each, 2.16 to 8.19 s on 10 threads, 80,096 or 128,192 bytes
+the ecdsar1+transfer_0_recursions+sponsored_fpc proof verifies (a flipped byte fails at Merge reduction)
+UltraHonk (ours, 8,768-byte proof): 2.3 ms CPU; CHONK (Aztec's, 80,096 bytes): 164 ms; ratio 70x
+estimated CHONK verifier in refine: 11.8 billion gas (a full package holds 5, a tiny one 1)
+private_kernel_init_3      29,146 opcodes, 78,019 gates   (Aztec's stack: 29,131 / 78,007)
+private_kernel_reset_tail  89,717 opcodes, 312,773 gates  (the stack's is a sized variant)
+hiding_kernel_to_rollup    1,420 opcodes, 40,502 gates    (identical bytecode)
+```
+Two earlier runs gave ratios of 72 and 75 to 79: about 12 billion gas (11.8 to 13.4).
+The verdict (spikes/chonk/RESULTS.md): a kernel-based port needs a builder that wraps each
+CHONK proof (Aztec's prover, relocated), Aztec's trees in accumulate, and the PXE; beyond a
+loop, so it is roadmap issue #21, the only issue left open under RALPH's #18 rule.
+Issues: #18 closed; #21 opened (`roadmap`).
+Next: #14's table into the README (and close #14), the README rewrite, DEMO.md and
+ANNOUNCE.md final, then the final verification on every net.
