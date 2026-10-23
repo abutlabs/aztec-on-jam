@@ -19,7 +19,7 @@ at 3dad3d5). Longer-term copies are kept by Aztec's own nodes and archives.
 ## Decision
 
 Blob data enters JAM in the work-package that carries a checkpoint. Refine checks each blob
-against the KZG commitment Aztec's circuits use (262,430,040 gas a blob, `spikes/kzg-gas`;
+against the KZG commitment Aztec's circuits use (262,626,180 gas a blob, `spikes/kzg-gas`;
 batching to come) and **exports the blob as segments**. The work-report's segments root
 binds them, and validators keep their erasure-coded shards for 28 days. That is longer than
 Ethereum's 18.2-day blob window, so Aztec nodes and archives get the same or a better window
@@ -37,7 +37,7 @@ Blobs travel as extrinsics, beside a package of a few hundred bytes. Refine chec
 (262M gas) and exports it as 32 segments (+117,483 gas for all 32). Gas sets the count: 3
 blobs a tiny package (786M, 0.73 s on PolkaJam), 19 a full one. Batch-checked (one pairing
 for many, c-kzg's `verify_blob_kzg_proof_batch`), 122.3M fixed plus 140.9M a blob: **a
-checkpoint's 6 blobs fit one tiny package** (967,993,405 gas measured), 34 fit a full one, and
+checkpoint's 6 blobs fit one tiny package** (967,993,490 gas measured), 34 fit a full one, and
 an epoch's 192 cost about 27.2B gas, 5.4 full packages, against 10.1 checked one by one.
 
 ## Open (#37)

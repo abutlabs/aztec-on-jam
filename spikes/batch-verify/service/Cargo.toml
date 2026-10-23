@@ -1,0 +1,20 @@
+[package]
+name = "batch-verify-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "#30: one refine verifying n UltraHonk proofs, how many users' proofs a core checks a slot"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]

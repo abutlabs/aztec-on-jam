@@ -28,8 +28,8 @@ script):
 | Check | PVM gas in refine | Share of a full package (5e9) | Ethereum (precompile) | Share of a 60M block |
 |---|---|---|---|---|
 | UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^24 gates, every gate type in use; 2^24 is Aztec's epoch proof's size) | 170,364,998 – 180,791,299 | 3.4–3.6% | 618,779 – 721,239 (bb's optimized Solidity verifier, using the 0x06–0x08 precompiles) | 1.0–1.2% |
-| EIP-4844 KZG point evaluation | 199,473,075 | 4.0% | 50,000 | 0.083% |
-| One blob checked against its commitment | 262,430,040 | 5.2% | free to contracts (consensus) | |
+| EIP-4844 KZG point evaluation | 199,453,527 | 4.0% | 50,000 | 0.083% |
+| One blob checked against its commitment | 262,626,180 | 5.2% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |
 | Poseidon2 (BN254, t = 4), one hash | 428,839 | 0.009% (4.3% of accumulate's 10M) | none (circuits only) | |
 | A depth-40 tree insertion (40 hashes) | 17.1M | 171% of accumulate's 10M | | |
@@ -180,34 +180,46 @@ reference machine, R is the PVM's gas throughput there (gas per nanosecond for o
 under a recompiler), and m ≥ 1 is a safety margin for worst-case inputs and slower clients.
 
 The constants are to be set from a benchmark suite this JIP will carry. Every client runs it,
-and the maximum across clients and hardware is taken. Today's measurements, for scale:
-- PolkaJam's interpreter on Apple M-series ran 199.5M gas of pairing code in 0.19 s, about 1
-  gas a nanosecond.
-- Its recompiler on a 4-vCPU x86-64 runner ran 169M gas of UltraHonk verification in 8–24 ms
-  in 15 of 30 runs (about 7–21 gas a nanosecond) and 0.41–0.56 s in 12, a variance whose cause
-  is not yet known (jam-privacy-service#14).
+and the maximum across clients and hardware is taken. This draft's constants come from one
+machine: GitHub's 4-vCPU x86-64 runner (AMD EPYC 7763), PolkaJam v0.8.0's recompiler, and the
+same runner's native timings, one thread, median of 25 (`spikes/jip-bench`, CI run 40020001416,
+jam-privacy-service#42).
 
-Native timings, one thread, Apple M-series (`spikes/jip-bench`):
+**R, measured.** The same Rust ran as PVM code in refine and natively:
 
-| Call | Library | Native |
-|---|---|---|
-| `bn254_pairing_check`, 2 / 4 pairs | arkworks | 796 / 1,161 µs |
-| `bn254_g1_msm`, 1 / 16 / 128 points | arkworks | 93 / 478 / 2,116 µs |
-| `bls12_381_pairing_check`, 2 pairs | blst | 772 µs |
-| `bls12_381_g1_msm`, 1 / 16 / 128 points | blst | 135 / 337 / 423 µs |
-| `kzg_point_evaluation` | zkcrypto (blst expected about 3× faster) | 2,990 µs |
-| `secp256k1_recover` | k256 | 137 µs |
-| `poseidon2_bn254_permute` | arkworks fields (`p2`) | 9.5 µs |
+| Code | PVM gas | Recompiled refine, median | Native | R (gas / ns) | f (PVM time / native) |
+|---|---|---|---|---|---|
+| KZG point evaluation | 199,453,527 | 25.3 ms | 4.24 ms | 7.9 | 6.0 |
+| secp256k1 recovery × 33 | 432,756,815 | 62.4 ms | 6.63 ms | 6.9 | 9.4 |
+| Poseidon2 × 100 | 42,892,428 | 6.13 ms | 1.29 ms | 7.0 | 4.7 |
+
+A single recovery (13.1M gas in 8.4 ms) is left out: its time is mostly the package's fixed
+cost, not the recovery. This draft takes **R = 8** (7.9 rounded up) and, provisionally,
+**m = 2**, so G = ⌈t_native × 16 gas/ns⌉:
+
+| Call | Library | Native (x86) | G | As PVM code | Saving |
+|---|---|---|---|---|---|
+| `bn254_pairing_check`, k pairs | arkworks | 1,280 / 1,892 µs at 2 / 4 | 10,667,200 + 4,902,400 k | | |
+| `bn254_g1_msm`, n points | arkworks | 131 / 633 / 2,911 µs at 1 / 16 / 128 | interpolated (below) | | |
+| `bls12_381_pairing_check`, 2 pairs | blst | 974 µs | 15,590,400 | | |
+| `bls12_381_g1_msm`, n points | blst | 168 / 972 / 1,491 µs at 1 / 16 / 128 | interpolated (below) | | |
+| `kzg_point_evaluation` | zkcrypto | 4,243 µs | 67,888,000 | 199,453,527 | 2.9× |
+| `secp256k1_recover` | k256 | 201 µs | 3,216,000 | 13,119,449 | 4.1× |
+| `poseidon2_bn254_permute` | arkworks fields (`p2`) | 12.9 µs | 206,400 | 428,839 | 2.1× |
+
+MSM gas is 16 gas/ns times the native time interpolated linearly between the measured sizes
+(1, 16 and 128 points), and extrapolated past 128 from the last segment. A single slope
+overcharges a one-point call by 2.5× on BN254 and 5× on BLS12-381, because the libraries switch
+algorithms. The pairing checks and MSMs have no PVM baseline here: the services call them inside
+whole verifiers, not alone.
 
 **What this means for the gain.** Ethereum prices its precompiles far below the cost of EVM
 bytecode, because the EVM interprets 256-bit arithmetic slowly. The PVM's recompiler runs
-64-bit arithmetic close to native. So a host call priced consistently with PVM code saves only
-the recompiler's slowdown on this code (f ≈ 3.5–10 from CI's x86 runner, to be measured
-properly), times any library gain (blst's assembly against pure-Rust PVM code). That is
-roughly **2–10×** per call, not the 50× that Ethereum's precompile prices suggest. For
-example, Poseidon2 drops from 428,839 to about 200,000 gas, which brings a depth-40 tree
-insertion (about 8M) inside accumulate's 10M. The constants G_* are set from R measured on x86
-(jam-privacy-service#42).
+64-bit arithmetic close to native: f, its slowdown on this code, is 4.7–9.4. A host call priced
+consistently with PVM code saves f / m, times any library gain (blst's assembly against the
+pure-Rust code services run). At m = 2 that is **about 2–4× per call**, not the 50× that
+Ethereum's precompile prices suggest. Poseidon2 drops from 428,839 to 206,400 gas, which brings
+a depth-40 tree insertion (8.3M) inside accumulate's 10M, with little room to spare.
 
 ## Determinism and consensus
 
@@ -252,9 +264,12 @@ Native implementations: blst (BLS12-381), arkworks (BN254), k256 (secp256k1), c-
 
 ## Open questions
 
-1. R and m: one reference throughput for all clients, or the slowest client's?
+1. R and m: one reference throughput for all clients, or the slowest client's? This draft's R
+   is one x86 runner's, and m = 2 is a placeholder; at m = 1 every saving doubles, and Poseidon2's
+   depth-40 insertion would cost 4.1M.
 2. Poseidon2 is included (call 7) because accumulate cannot afford a tree insertion in PVM
    code (#41). Should other proof-system hashes join it (Poseidon over BN254 as in circom,
    Rescue)? This draft says no, until a measured case asks.
 3. Should Grumpkin and the BN254 G2 MSM be included, for IPA-based (CHONK) and other verifiers?
 4. A separate index per curve operation, or one call with a curve and operation selector?
+5. The BLS12-381 pairing check was timed at 2 pairs only; its per-pair term needs a second size.

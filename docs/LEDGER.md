@@ -1403,3 +1403,29 @@ Next: #42's CI result; #22's invalid-inner fixtures with the unchecked bb.
 time (`barretenberg/cpp/CMakeLists.txt` → `protocol/constants-codegen`), and the sparse checkout
 lacked it. `build_bb_unchecked.sh` (ultrahonk_verifier) now checks out the codegen and generates
 the header (274 constants). The build is resumed.
+
+## 2026-10-23 52 — #30 closed: JAM can check users' proofs directly, 29 a full package; #42 closed: R ≈ 7–8 gas/ns, f 4.7–9.4 on x86; #32 closed with its constants
+Why these issues: #30 lacked only its "proving inside JAM" measurement, which the free testnet
+could run while CI measured #42. #32 lacked only #42's constants. #33's reviews wait on #32.
+Did:
+- `spikes/batch-verify`: n UltraHonk proofs in one refine. `docs/privacy/ARCHITECTURES.md`:
+  five candidates. The recommendation is Aztec as it is with JAM as settlement (#28), and for a
+  JAM-native service, candidate 3: users' proofs verified in parallel across cores, nullifiers in
+  accumulate's storage, one tree package a slot. It says where 3 does not apply: Aztec's CHONK,
+  about 12B gas, estimated. Filed #43 for the batch append, which is reasoning so far.
+- #42: the jip-pricing workflow passed on x86 (run 40020001416). The JIP's *Gas pricing* now has
+  R = 8 and a provisional m = 2. It gives every call's constant, piecewise MSM pricing because a
+  single slope overcharges a one-point call 2.5× and 5×, and the saving: 2–4× a call.
+  LIMITS.md and jip-bench's RESULTS follow.
+- **Correction:** the KZG gas in the docs (199,473,075 for a point evaluation, 262,430,040 for a
+  blob, and the extrinsic, export and batch rows) came from an earlier build of the kzg service.
+  CI ran the current code from clean: 199,453,527, 262,626,180, …, 967,993,490 for 6 blobs, at
+  most 0.1% off. Every file but this ledger now carries the current figures, and kzg-gas's
+  RESULTS says where they come from. A local out/ had failed rows (11–15, 17) and was not used.
+- The unchecked bb (#22) builds: `ipc-runtime/cpp` was missing from the sparse checkout
+  (BB_LITE leaves out the IPC server that `bb`'s entry point links). `bin/bb` runs.
+Evidence: batch-verify → 1 proof 170,404,578 (01); 4 → 681,095,607 (01); 8 and 12 out of gas on
+tiny (999,999,97x); 4 with the 4th altered 519,006,957 (00). CI: KZG R 7.9, f 6.0; ecrecover
+×33 R 6.9, f 9.4; Poseidon2 ×100 R 7.0, f 4.7.
+Issues: #30, #42, #32 closed; #43 filed.
+Next: #22's invalid-inner fixtures with the unchecked bb; then #33's reviews.

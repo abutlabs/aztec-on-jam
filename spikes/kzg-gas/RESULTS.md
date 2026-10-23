@@ -3,6 +3,11 @@
 `spikes/kzg-gas/measure.sh`, 2026-10-23, Apple M-series Mac, polkajam-testnet v0.8.0 (six
 validators, dummy finality, the PVM interpreter), via `spikes/lib/polkajam.sh`.
 
+**Gas is the current code's,** from CI run 40020001416 (the jip-pricing workflow, x86-64,
+PolkaJam's recompiler), which ran this script from clean. Gas does not depend on the machine or
+the PVM backend. The refine times are the Mac interpreter's, from an earlier build of the
+service whose gas differed by at most 0.1% (ledger 52).
+
 **What it checks.** Aztec's epoch proof commits to the epoch's transaction data as EIP-4844
 blobs, batched into one KZG opening (`FinalBlobAccumulator {blob_commitments_hash, z, y, C}`).
 Ethereum's Rollup contract checks it once per epoch proof with the 0x0a point-evaluation
@@ -20,15 +25,15 @@ Vectors from pinned commits (c-kzg a751e2d, geth 2006f08).
 
 | case | refine gas | of a tiny package (1e9) | of a full one (5e9) | PolkaJam refine (3 guarantors) | accumulate's verdict |
 |---|---|---|---|---|---|
-| point evaluation: geth pointEvaluation1 | 199,473,075 | 19.9% | 4.0% | 0.193 s | 01 |
-| point evaluation: c-kzg correct_proof_1_2 | 199,473,075 | 19.9% | 4.0% | 0.193 s | 01 |
-| point evaluation: c-kzg correct_proof_4_4 | 199,473,075 | 19.9% | 4.0% | 0.219 s | 01 |
-| point evaluation: c-kzg correct_proof_6_5 | 199,473,075 | 19.9% | 4.0% | 0.343 s | 01 |
-| point evaluation: geth's, y altered | 199,473,075 | 19.9% | 4.0% | 0.197 s | 00 |
-| point evaluation: c-kzg incorrect_proof_2_3 | 199,473,075 | 19.9% | 4.0% | 0.190 s | 00 |
-| blob (131,072 B) against its commitment: correct_proof, first | 262,430,040 | 26.2% | 5.2% | 0.256 s | 01 |
-| blob: correct_proof, fourth | 262,430,040 | 26.2% | 5.2% | 0.262 s | 01 |
-| blob: incorrect_proof | 262,430,001 | 26.2% | 5.2% | 0.257 s | 00 |
+| point evaluation: geth pointEvaluation1 | 199,453,527 | 19.9% | 4.0% | 0.193 s | 01 |
+| point evaluation: c-kzg correct_proof_1_2 | 199,453,527 | 19.9% | 4.0% | 0.193 s | 01 |
+| point evaluation: c-kzg correct_proof_4_4 | 199,453,527 | 19.9% | 4.0% | 0.219 s | 01 |
+| point evaluation: c-kzg correct_proof_6_5 | 199,453,527 | 19.9% | 4.0% | 0.343 s | 01 |
+| point evaluation: geth's, y altered | 199,453,527 | 19.9% | 4.0% | 0.197 s | 00 |
+| point evaluation: c-kzg incorrect_proof_2_3 | 199,453,527 | 19.9% | 4.0% | 0.190 s | 00 |
+| blob (131,072 B) against its commitment: correct_proof, first | 262,626,180 | 26.3% | 5.3% | 0.256 s | 01 |
+| blob: correct_proof, fourth | 262,626,180 | 26.3% | 5.3% | 0.262 s | 01 |
+| blob: incorrect_proof | 262,626,175 | 26.3% | 5.3% | 0.257 s | 00 |
 
 The gas barely varies: the crate is constant-time. A blob check is the pairing check plus about
 63M gas for hashing the blob (the Fiat-Shamir challenge) and evaluating its polynomial over
@@ -57,24 +62,24 @@ work-item's extrinsic (`jamboree rpc submit --extrinsic`), and optionally export
 
 | case | package | extrinsics | refine gas | of a tiny package | PolkaJam refine | verdict |
 |---|---|---|---|---|---|---|
-| 1 blob | 401 B | 131,072 B | 261,895,733 | 26.2% | 0.251 s | 01 |
-| 1 blob, exported (32 segments) | 401 B | 131,072 B | 262,013,216 | 26.2% | 0.250 s | 01 |
-| 3 blobs, exported (96 segments) | 666 B | 393,216 B | 786,027,114 | 78.6% | 0.727 s | 01 |
-| 4 blobs | 798 B | 524,288 B | 999,999,331, out of gas | 100% | 0.950 s | none |
+| 1 blob | 401 B | 131,072 B | 262,157,756 | 26.2% | 0.251 s | 01 |
+| 1 blob, exported (32 segments) | 401 B | 131,072 B | 262,275,221 | 26.2% | 0.250 s | 01 |
+| 3 blobs, exported (96 segments) | 666 B | 393,216 B | 786,812,809 | 78.7% | 0.727 s | 01 |
+| 4 blobs | 798 B | 524,288 B | 999,999,440, out of gas | 100% | 0.950 s | none |
 
 **Batch-checked** (c-kzg's `verify_blob_kzg_proof_batch`, all 24 of its vectors agreeing on the
 host): one pairing over a random linear combination, the blobs as extrinsics.
 
 | blobs | refine gas | of a tiny package | PolkaJam refine | verdict |
 |---|---|---|---|---|
-| 2 | 404,223,059 | 40.4% | 0.408 s | 01 |
-| 3 | 545,169,223 | 54.5% | 0.525 s | 01 |
-| 3, one wrong proof | 545,169,223 | 54.5% | 0.525 s | 00 |
-| 6 (an Aztec checkpoint) | 967,993,405 | 96.8% | 0.934 s | 01 |
+| 2 | 404,223,089 | 40.4% | 0.408 s | 01 |
+| 3 | 545,169,253 | 54.5% | 0.525 s | 01 |
+| 3, one wrong proof | 545,169,253 | 54.5% | 0.525 s | 00 |
+| 6 (an Aztec checkpoint) | 967,993,490 | 96.8% | 0.934 s | 01 |
 
-From the 2- and 3-blob runs: 122,330,731 fixed (the pairing and the challenge) plus
+From the 2- and 3-blob runs: 122,330,761 fixed (the pairing and the challenge) plus
 140,946,164 a blob (hashing, evaluating, three G1 multiplications), which predicts
-968,007,715 for six. Six measured 967,993,405, 0.0015% off. So batched, **a checkpoint's 6
+968,007,745 for six. Six measured 967,993,490, 0.0015% off. So batched, **a checkpoint's 6
 blobs fit one tiny package**, 34 fit a full one, and an epoch's 192 cost about 27.2B gas
 (5.4 full packages), against 50.4B (10.1) checked one by one. The G1 multiplications are a
 naive sum; a multi-scalar multiplication would cut the per-blob part further.

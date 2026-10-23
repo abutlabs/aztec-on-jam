@@ -41,11 +41,11 @@ fn main() {
     let x = ark_bn254::Fr::from(7u64);
     row("poseidon2 hash (one permutation), p2", median_ns(|| { black_box(p2::hash(&[black_box(x), x])); }), Some(428_839.0));
 
-    // KZG point evaluation: geth's precompile vector, PVM 199,473,075 (#24, kind 0)
+    // KZG point evaluation: geth's precompile vector, PVM 199,453,527 (#24, kind 0)
     let g = fs::read_to_string(format!("{}/geth-pointEvaluation.json", a[1])).unwrap();
     let input = unhex(g.split("\"Input\": \"").nth(1).unwrap().split('"').next().unwrap());
     assert_eq!(kzg_verify::point_evaluation(&input), Ok(true));
-    row("kzg_point_evaluation, kzg-verify (zkcrypto bls12_381)", median_ns(|| { black_box(kzg_verify::point_evaluation(black_box(&input))).ok(); }), Some(199_473_075.0));
+    row("kzg_point_evaluation, kzg-verify (zkcrypto bls12_381)", median_ns(|| { black_box(kzg_verify::point_evaluation(black_box(&input))).ok(); }), Some(199_453_527.0));
 
     // ecrecover: the first generated signature, PVM 13,119,449 for one (#39)
     let line = fs::read_to_string(&a[2]).unwrap().lines().next().unwrap().to_string();

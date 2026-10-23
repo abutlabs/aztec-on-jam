@@ -27,7 +27,7 @@ proofs, the proposer's signature and attestations. Extrinsics: the blobs (up to 
   - header fields that map to field elements are in range;
   - the coinbase is non-zero and the mana used is within the limit;
   - the DA fee is zero;
-  - the blobs check against their commitments, batched (`spikes/kzg-gas`: 967,993,405 gas for 6);
+  - the blobs check against their commitments, batched (`spikes/kzg-gas`: 967,993,490 gas for 6);
   - the blobs hash matches the header;
   - the proposer's signature is valid (#39);
   - the blobs are exported as segments (`docs/aztec/BLOBS.md`).
@@ -49,7 +49,7 @@ attestations.
 - *Refine*:
   - verify the UltraHonk proof against `cfg`'s key: 180,791,299 gas at 2^24, measured on PolkaJam
     (#23);
-  - verify the batched blob point evaluation (199,473,075 gas);
+  - verify the batched blob point evaluation (199,453,527 gas);
   - verify the attestations (#39).
 
   Output: the public inputs. Refine cannot read state, so it does not build the public

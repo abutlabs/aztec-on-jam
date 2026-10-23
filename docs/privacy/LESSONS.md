@@ -26,7 +26,7 @@ v0.8.0 testnet with PolkaJam's own telemetry. Each one names its source.
 | Private state is kept correctly and cheaply | Accumulate writes a transfer for 103,089 gas, 1% of a report's 10M (README); a replayed or stale proof changes nothing (`nets/demo.sh check`, 37 assertions) |
 | It runs for an hour without losing anything | 600 of 600 packages, one a slot, median 13.4 s from submission to state, finality never stalled (#4, ledger 28) |
 | Aztec's own proofs can be checked: its epoch (root rollup) proof | Aztec's proof shape (plain UltraHonk, Keccak, 113 public inputs) verified in refine; with every gate type in use, 170,364,998 gas at 2^16 to 180,791,299 at Aztec's 2^24, proof of 331 fields as Aztec's (#23) |
-| Aztec's data can be kept: its blobs | EIP-4844 point evaluation 199,473,075 gas; one blob against its commitment 262M; an Aztec checkpoint's 6 blobs batch-checked in one tiny package (967,993,405); exported as segments, kept 28 days, re-read and re-checked by a later package (#24, #37) |
+| Aztec's data can be kept: its blobs | EIP-4844 point evaluation 199,453,527 gas; one blob against its commitment 262M; an Aztec checkpoint's 6 blobs batch-checked in one tiny package (967,993,490); exported as segments, kept 28 days, re-read and re-checked by a later package (#24, #37) |
 | Aztec's software needs few changes | The PXE runs unchanged; the node's Ethereum code (about 11k lines) sits mostly behind interfaces; 4 seams would make a JAM backend a plug-in (#25); one Aztec release moved that boundary little (#27) |
 
 ## 2. Quality: where JAM is stronger than Aztec's model
@@ -51,7 +51,7 @@ the mainnet limit since Fusaka's EIP-7935):
 
 | Check | On JAM (refine, PolkaJam) | Share of a full package | On Ethereum | Share of a block (60M) | JAM's share over Ethereum's |
 |---|---|---|---|---|---|
-| One KZG point evaluation | 199,473,075 (#24) | 4.0% | 50,000 (EIP-4844 precompile) | 0.083% | about 48× |
+| One KZG point evaluation | 199,453,527 (#24) | 4.0% | 50,000 (EIP-4844 precompile) | 0.083% | about 48× |
 | One ECDSA recovery | 13,119,449 (#39) | 0.26% | 3,000 (precompile 0x01) | 0.005% | about 52× |
 | 33 ECDSA recoveries (an epoch's attestations) | 432,756,815 (#39) | 8.7% | 99,000 | 0.17% | about 52× |
 | One UltraHonk verification (Aztec's epoch proof, 2^24) | 180,791,299 (#23) | 3.6% | 721,239 (bb's optimized Solidity verifier, as Aztec builds it, #40) | 1.2% | about 3× |
