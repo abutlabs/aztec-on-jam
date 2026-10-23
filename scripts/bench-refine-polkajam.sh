@@ -34,4 +34,5 @@ if not rows:
 t = sorted(r[1] for r in rows)
 print(f"{version} ({backend}, {host}): {len(rows)} refines of one privacy proof "
       f"({rows[0][0]:,} gas): median {st.median(t):.3f} s, min {t[0]:.3f}, max {t[-1]:.3f}")
+print("  each, in order:", " ".join(f"{r[1]:.3f}" for r in rows))
 PY
