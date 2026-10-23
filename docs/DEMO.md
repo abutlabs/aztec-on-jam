@@ -65,7 +65,7 @@ transfer itself with noir_js and bb.js. The server behind it only serves files.
 - **One tree takes one package a slot.** Each proof names the old root, so packages on one
   tree must land in order. The builder sends the next package once the previous is reported
   (a core holds one pending report), which sustains one a slot on PolkaJam: 600 of 600 in an
-  hour, 13.5 s median from submission to state. More throughput means more trees (more cores)
+  hour, 13.4 s median from submission to state. More throughput means more trees (more cores)
   or folding many transfers into one proof.
 - **Aztec's own kernels would not fit refine.** Their proofs verify at about 70 times the cost
   of ours: about 12 billion gas, more than a full package. Running them means a builder that

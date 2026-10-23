@@ -900,3 +900,44 @@ Issues: #14 closed.
    on abcd6f9, and on this entry's commit (checked before the promise).
 Other repos, all pushed: demo-wallet `jam` 9db6880; jamboree `lasair` b64d5d4 (offered upstream
 as jamixir/jamboree#49); lasair main 592fb8f (#95, #96).
+
+## 2026-10-23 28 — #4 reopened: the hour fails on the shipped code; the client's quadratic tree, fixed; the hour passes
+**Correction to ledger 27.** Condition 1 counted #4 closed on ledger 19's hour, which loaded its
+client at 76aac7c (about 02:02). The indexed nullifier tree (5cd5539, 02:22) and depth 40
+(1213a57, 02:25) were committed during that hour, so it never ran them, and nothing re-ran it
+after. The README, DEMO.md and ANNOUNCE.md presented its 600 of 600 as the shipped code's. #4
+and #12 are reopened (#12: `scripts/bootstrap.sh` was verified from nothing at 3799fce, before
+it gained PolkaJam, jamboree, the CRS and the rig; only `--check` since); #14 has a correction.
+Did, in order:
+- `NET=pj6 nets/demo.sh up`: the first start's GRANDPA voters broadcast before their peers
+  connected and never finalized; `up` waited 300 s, then deployed anyway into "invalid epoch"
+  refusals. `up` now stops with a message (937d933). The second start finalized normally.
+- A 120 s trial (`--out out/soak-trial`): PASS, 20 of 20, prove p50 1.5 s.
+- The hour at 1bbd96e (`out/soak-hour-2`): **FAIL**, 137 submitted, 137 landed, 0 dropped,
+  finality's longest stall 10.6 s, but prove p50 22.3 s, 453 starved slots, pace 0.228. The
+  client rebuilt the indexed tree per proof, each insert rehashing the whole tree twice:
+  50, 100, 200, 400 nullifiers took 2.5, 7.6, 26.5, 95.7 s (Poseidon2 in Python, 0.28 ms a hash).
+  The wallet page's `IndexedTree` was the same code (100 nullifiers: 4.3 s in Node).
+- Fixed (97f5c8e; demo-wallet 8f6ded8): the list is linked first (low leaf by bisection) and
+  hashed once, then each insert rehashes only its two leaves' paths (`Tree.set`); a long-lived
+  prover keeps both trees between proofs and hashes only what the chain added, rebuilding when
+  the chain's list diverges. Leaves, roots, witnesses and duplicate refusals equal the old
+  code's on random and small values, in Python and JS; 2,000 nullifiers build in 1.1 s
+  (Python) and 0.66 s (JS), the same root. `client/tree_check.py` (in CI) checks every
+  witness opens the roots the circuit checks, the kept trees, the JS root, and the build time.
+- The hour again, pj6 from clean, client at 97f5c8e (`out/soak-hour-3`): `soak exit 0`
+```
+| submitted | 600 |  | landed | 600 |  | dropped | 0 |  | resends | 0 |
+| latency_s | {'p50': 13.43, 'p90': 14.98, 'p99': 15.78, 'max': 16.31} |
+| prove_s_p50 | 0.744 |  | packages_per_minute | 9.96 |  | pace_vs_one_a_slot | 1.0 |
+| prove_errors | 0 |  | starved_slots | 0 |
+| best | [9505409, 9506011] |  | finalized | [9505408, 9506010] |  | finality_longest_stall_s | 10.1 |
+| verdict | PASS |
+```
+- On the net it left (1,200 notes, 1,200 nullifiers): `NET=pj6 nets/demo.sh check` PASS twice
+  (37 ok each, 2 min 07 s), `shield`, `send`, `unshield` each ok, `client/e2e/e2e.mjs` "PASS: 5
+  assertions, 6 screenshots; every proof made in its own browser".
+README, DEMO.md and docs/soak-pj6.md now carry this run (13.4 s median, 0.74 s a proof).
+Issues: #4 closed on this entry; #14 corrected; #12 open until `scripts/bootstrap.sh` runs from
+nothing again. Still to rerun on the fix: lasair6's 20 minutes (its prover was never starved,
+0 starved slots, so its pace is the chain's, but it ran the quadratic client).

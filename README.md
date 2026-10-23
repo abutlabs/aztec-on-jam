@@ -59,8 +59,8 @@ encryption key and a spend key) on chain; its secret never leaves the browser.
 | How many fit a package | 5 on tiny (1e9), 29 on full (5e9) | |
 | Accumulate, one transfer (two nullifiers into the indexed tree, two leaves, two sealed notes, both roots) | 103,089 gas, 1% of a report's 10 million | lasair's in-process rig |
 | A proof in the browser (Chrome, Apple M-series, 10 threads) | 1.0 s; loading the provers first takes 2.3 s, once | the wallet's own log; `client/e2e/e2e.mjs` |
-| A proof with bb natively | 0.66 s (median of 600) | `client/soak.py` |
-| A transfer, submitted to accumulated (PolkaJam, one a slot for an hour) | 13.5 s median, 15.9 s p99, 600 of 600 | `client/soak.py`, [docs/soak-pj6.md](docs/soak-pj6.md) |
+| A proof with bb natively | 0.74 s (median of 600) | `client/soak.py` |
+| A transfer, submitted to accumulated (PolkaJam, one a slot for an hour) | 13.4 s median, 15.8 s p99, 600 of 600 | `client/soak.py`, [docs/soak-pj6.md](docs/soak-pj6.md) |
 | Note tree and nullifier tree depth | 40 each; depth 16 to 40 costs refine under 1% | `spikes/depth/measure.py` |
 | Built for size instead of speed | 1.8x the gas: the PVM meters instructions, so the services build at opt-level 3 with LTO | [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
 
@@ -76,7 +76,7 @@ PolkaJam is Parity's.
 | The same, interpreted, macOS native | 0.65 s (main, a dev build) | 0.172 s (v0.8.0) |
 | The same, PolkaJam's recompiler (x86-64 only; a 4-vCPU GitHub runner, 30 refines) | no recompiler | 8 to 24 ms in 15; 0.41 to 0.56 s in 12, on the same nodes, cause not yet known |
 | An auditor re-executing a privacy report | 1.0 to 1.9 s | not in its telemetry |
-| One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.385 of a slot, median 21.2 s, 5 of 77 expired and resent | 1.0 of a slot, median 13.5 s, 0 of 600 |
+| One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.385 of a slot, median 21.2 s, 5 of 77 expired and resent | 1.0 of a slot, median 13.4 s, 0 of 600 |
 | A shield, then a private send, in the wallet (Docker nets) | 81.3 s, 17.5 s | 25.8 s, 11.2 s |
 | `nets/demo.sh check` (37 assertions), and resends in it and the three stages | 3 min 09 s, 2 resent | 1 min 51 s, none |
 
