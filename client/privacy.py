@@ -84,63 +84,20 @@ def hexf(x):
 
 
 def h(*vals):
-    """Poseidon2 of 1 to 3 fields, by the circuit's own code (circuits/hash_cli)."""
+    """Poseidon2 of 1 to 3 fields: noir-lang/poseidon's `Poseidon2::hash`, the circuit's own
+    hash, computed in-process (client/poseidon2.py; tested against circuits/hash_cli)."""
     assert 1 <= len(vals) <= 3
-    key = ",".join(str(field(v)) for v in vals)
-    cache = _hash_cache()
-    if key in cache:
-        return cache[key]
-    vals3 = list(vals) + [0] * (3 - len(vals))
-    prover = circuit("hash_cli") / "Prover.toml"
-    prover.write_text(f'a = "{field(vals3[0])}"\nb = "{field(vals3[1])}"\nc = "{field(vals3[2])}"\nn = "{len(vals)}"\n')
-    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=circuit("hash_cli"),
-                         capture_output=True, text=True, env=ENV)
-    m = re.search(r"Circuit output: (0x[0-9a-fA-F]+)", out.stdout + out.stderr)
-    if not m:
-        raise ClientError(f"hash_cli failed:\n{out.stdout}\n{out.stderr}")
-    v = int(m.group(1), 16)
-    cache[key] = v
-    _save_hash_cache(cache)
-    return v
-
-
-_HC = None
-def _hash_cache():
-    global _HC
-    if _HC is None:
-        f = HERE / "hashes.json"
-        _HC = json.loads(f.read_text()) if f.exists() else {}
-    return _HC
-
-
-def _save_hash_cache(c):
-    # atomically: other clients read and write the same cache (every entry is a pure function
-    # of its key, so a lost update costs only a recomputation)
-    tmp = HERE / f"hashes.json.{os.getpid()}"
-    tmp.write_text(json.dumps(c))
-    os.replace(tmp, HERE / "hashes.json")
+    import poseidon2
+    return poseidon2.hash([field(v) for v in vals])
 
 
 def seed_path(n0, n1, index1, siblings):
-    """Put the nodes a two-leaf insertion creates into the hash cache, from one execution of
-    circuits/path_cli; returns the new root. Saves one `nargo execute` per tree level."""
-    prover = circuit("path_cli") / "Prover.toml"
-    prover.write_text(f'n0 = "{field(n0)}"\nn1 = "{field(n1)}"\nindex1 = "{int(index1)}"\n'
-                      f'siblings = {json.dumps([str(field(x)) for x in siblings])}\n')
-    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=circuit("path_cli"),
-                         capture_output=True, text=True, env=ENV)
-    m = re.search(r"Circuit output: \[([^\]]*)\]", out.stdout + out.stderr)
-    if not m:
-        raise ClientError(f"path_cli failed:\n{out.stdout}\n{out.stderr}")
-    nodes = [int(x.strip(), 16) for x in m.group(1).split(",")]
-    cache = _hash_cache()
-    cache[f"{field(n0)},{field(n1)}"] = nodes[0]
+    """The new root when two leaves fill the level-1 slot `index1` with these siblings: the
+    same computation as circuits/path_cli, in-process."""
+    node = h(n0, n1)
     for i, sib in enumerate(siblings):
-        left_is_node = not ((int(index1) >> i) & 1)
-        l, r = (nodes[i], sib) if left_is_node else (sib, nodes[i])
-        cache[f"{field(l)},{field(r)}"] = nodes[i + 1]
-    _save_hash_cache(cache)
-    return nodes[-1]
+        node = h(sib, node) if (int(index1) >> i) & 1 else h(node, sib)
+    return node
 
 
 def zeros():
@@ -178,6 +135,7 @@ class Tree:
     def __init__(self, leaves):
         self.leaves = list(leaves)
         self.z = zeros()
+        self.memo = {}
 
     def node(self, level, index):
         if level == 0:
@@ -185,7 +143,9 @@ class Tree:
         # a subtree with no leaves is the zero hash of its height
         if index * (1 << level) >= len(self.leaves):
             return self.z[level]
-        return h(self.node(level - 1, 2 * index), self.node(level - 1, 2 * index + 1))
+        if (level, index) not in self.memo:
+            self.memo[(level, index)] = h(self.node(level - 1, 2 * index), self.node(level - 1, 2 * index + 1))
+        return self.memo[(level, index)]
 
     def root(self):
         return self.node(DEPTH, 0)
