@@ -44,6 +44,6 @@ jobs:
         run: |
           set -o pipefail
           cd jam-privacy-service/spikes/jip-bench
-          cargo run -q --release -- ../kzg-gas/vectors ../ecdsa-gas/vectors/inputs.txt 2> native.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          cargo run -q --release --bin jip-bench -- ../kzg-gas/vectors ../ecdsa-gas/vectors/inputs.txt 2> native.txt | tee -a "$GITHUB_STEP_SUMMARY"
           echo "### R and f, $(nproc) vCPU, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" | tee -a "$GITHUB_STEP_SUMMARY"
           ./pricing.py .. "$(sed 's/PVM backend: //' ../../../backend.txt)" < native.txt | tee -a "$GITHUB_STEP_SUMMARY"
