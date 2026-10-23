@@ -31,6 +31,24 @@ fn main() {
         };
         if got == want { pass += 1 } else { fail += 1; println!("MISMATCH {}: want {want}, got {got}", p.display()) }
     }
+    // c-kzg-4844's verify_blob_kzg_proof vectors (blob/*.yaml)
+    let (mut bpass, mut bfail) = (0, 0);
+    let mut blobs: Vec<_> = fs::read_dir(format!("{dir}/blob")).unwrap().map(|e| e.unwrap().path()).collect();
+    blobs.sort();
+    for p in blobs {
+        let y = fs::read_to_string(&p).unwrap();
+        let want = field(&y, "output");
+        let blob_hex = field(&y, "blob").trim_matches('\'').trim_start_matches("0x");
+        let blob: Option<Vec<u8>> = (blob_hex.len() % 2 == 0).then(|| (0..blob_hex.len() / 2).map(|i| u8::from_str_radix(&blob_hex[2 * i..2 * i + 2], 16).ok()).collect::<Option<Vec<u8>>>()).flatten();
+        let got = match (blob, hex::<48>(field(&y, "commitment")), hex::<48>(field(&y, "proof"))) {
+            (Some(b), Some(c), Some(pi)) => match kzg_verify::verify_blob_kzg_proof(&b, &c, &pi) {
+                Ok(true) => "true", Ok(false) => "false", Err(_) => "null",
+            },
+            _ => "null",
+        };
+        if got == want { bpass += 1 } else { bfail += 1; println!("MISMATCH {}: want {want}, got {got}", p.display()) }
+    }
+    println!("c-kzg verify_blob_kzg_proof vectors: {bpass} agree, {bfail} differ");
     let g = fs::read_to_string(format!("{dir}/geth-pointEvaluation.json")).unwrap();
     let input = g.split("\"Input\": \"").nth(1).unwrap().split('"').next().unwrap();
     let bytes: Vec<u8> = (0..input.len() / 2).map(|i| u8::from_str_radix(&input[2 * i..2 * i + 2], 16).unwrap()).collect();
@@ -39,5 +57,5 @@ fn main() {
     let geth_bad = kzg_verify::point_evaluation(&bad);
     println!("c-kzg verify_kzg_proof vectors: {pass} agree, {fail} differ");
     println!("geth pointEvaluation1: {geth:?}; with y altered: {geth_bad:?}");
-    if fail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
+    if fail > 0 || bfail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
 }

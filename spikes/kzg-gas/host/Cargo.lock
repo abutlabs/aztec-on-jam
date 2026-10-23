@@ -102,6 +102,7 @@ name = "kzg-verify"
 version = "0.0.1"
 dependencies = [
  "bls12_381",
+ "ff",
  "sha2",
 ]
 

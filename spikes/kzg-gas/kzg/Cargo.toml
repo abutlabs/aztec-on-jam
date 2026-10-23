@@ -3,8 +3,9 @@ name = "kzg-verify"
 version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"
-description = "EIP-4844's KZG point evaluation (the 0x0a precompile) in no_std Rust, on zkcrypto's bls12_381, for the PVM"
+description = "EIP-4844's KZG checks in no_std Rust on zkcrypto's bls12_381, for the PVM: the 0x0a point evaluation and c-kzg-4844's verify_blob_kzg_proof"
 
 [dependencies]
 bls12_381 = { version = "0.8", default-features = false, features = ["groups", "pairings", "alloc"] }
 sha2 = { version = "0.10", default-features = false }
+ff = { version = "0.13", default-features = false }

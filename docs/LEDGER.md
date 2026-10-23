@@ -1040,3 +1040,23 @@ and #22 as a lead.
 Next: #24's second half, `verify_blob_kzg_proof` per blob (binding the data to its
 commitment, which Ethereum's consensus does for free), and where blob data lives on JAM.
 Blockers: none.
+
+## 2026-10-23 33 — #24: binding a blob to its commitment costs 262,430,040 gas; PolkaJam caps packages near 256 KiB (#36)
+Why this issue: it continues #24, still first in dependency order. The per-blob check is the
+half of Aztec's blob handling that Ethereum's consensus does for free.
+Did: c-kzg-4844's `verify_blob_kzg_proof` added to `spikes/kzg-gas/kzg`: the Fiat-Shamir
+challenge, barycentric evaluation over the bit-reversed 4,096th roots of unity (7^((r-1)/4096))
+with one batched inversion, then the pairing check. The service gained a kind byte, so one
+blob covers both checks; `spikes/lib/polkajam.sh` sends raw payloads as @file.
+Evidence: `spikes/kzg-gas/measure.sh` → host "verify_blob_kzg_proof vectors: 29 agree, 0
+differ", "verify_kzg_proof vectors: 122 agree"; on PolkaJam, blob checks 262,430,040 gas
+(26.2% of a tiny package), 0.26 s, verdicts 01, 01 and 00 for the incorrect proof; point
+evaluation 199,473,075 (+3,698 for the dispatch byte).
+Found: packages of 262,339 bytes or more are refused by every core ("Failed to submit
+work-package to even a single proxy/guarantor"), while 131,171 bytes passes. That is under
+the Gray Paper's W_B of 13,791,360 (definitions.tex:285). Filed as #36.
+Arithmetic (not measured): an Aztec epoch's 192 blobs, checked one by one, would cost about
+50B gas (ten full packages), so data binding is the expensive part of settlement.
+Next: #24's last part (where blob data lives on JAM, and batch verification), or #36's
+threshold. #24 first.
+Blockers: none.
