@@ -1,0 +1,22 @@
+[package]
+name = "epoch-proof-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "Spike: verify any bb 6.0.0 UltraHonk (Keccak) proof carried in the payload, as Aztec's epoch proof would be checked in refine; accumulate records each verdict"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+# zkVerify's verifier ported to bb 6.0.0 (our fork, branch bb-v6)
+ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }
+
+[profile.release]
+# as the services: opt-level 3 + LTO, the cheapest in gas (#13)
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]

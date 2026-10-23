@@ -179,3 +179,65 @@ evidence in the ledger:
    commands and the e2e run, on lasair6 and on pj6, from a clean state, all passing.
 4. `docs/DEMO.md`, `docs/ANNOUNCE.md`, the recording and the CI workflow exist, and the CI
    run on the last commit is green.
+
+---
+
+# Phase 3: Aztec on JAM, privacy on JAM, and a JIP
+
+Phase 2 ended with `CHANNEL READY` (ledger 27, corrected in 28; the demo's checks still hold
+and must keep holding). Phase 3's goal, from Aodh (2026-10-23): run Aztec's own software on
+JAM with JAM as its settlement layer (#28), and answer his privacy brief (#35): what this
+work teaches about privacy on JAM, whether another architecture suits JAM better, and, if
+the current specs have a fundamental limit, a JIP, reviewed and finished, ready for him to
+submit later.
+
+## Every iteration
+
+1. Read the ledger's last entry, then `gh issue list -R abutlabs/jam-privacy-service`.
+2. Review the open issues: pick the next unblocked one by the order below (a dependency
+   first; then the one whose result most changes the others). Say in the ledger why that
+   one.
+3. Do one step on it, verified with a real run or a cited source; commit, push, comment on
+   the issue with the command and output; close it only when its row below holds, on
+   evidence from the code as it now is (re-run anything a later change touched).
+4. A new question or direction found on the way gets its own issue before work on it starts.
+
+## Rules for this phase
+
+- **Measure Aztec and ZK work on PolkaJam**, never lasair (Aodh): the native
+  `polkajam-testnet` v0.8.0 as `spikes/epoch-proof/measure.sh` runs it, gas and time from
+  PolkaJam's JIP-3 telemetry, verdicts read back from service storage.
+- **This machine has 16 GB.** A 2^24 proof does not fit (#23); don't retry what swapped.
+  Prefer a smaller circuit made of heavy opcodes, or say what bigger machine it needs.
+- **Personas are simulated.** The JIP reviewers write as personas of Gavin Wood and Zac
+  Williamson for review quality; every review file says at its top that it is not the
+  person's view. Never attribute a statement to the real people.
+- **Nothing is submitted or posted**: no JIP submission, no upstream issue or PR to Aztec,
+  zkVerify or the JAM repos, unless Aodh asks in a later message. Drafts live in this repo.
+- **Sources for every claim** about the Gray Paper (0.8.0 text, section), Aztec (code path
+  at a pinned commit) or history (zk.money): cited inline.
+
+## The issues, and what closes each
+
+| Issue | Closed when |
+| --- | --- |
+| #22 verifier for bb 6.0.0 | All crate tests pass, including invalid-inner fixtures made with a bb 6.0.0 built without its self-check (or a recorded reason they cannot be made); the `bb-v6` branch pushed; the services that use it pinned to its commit. |
+| #23 epoch proof in refine, on PolkaJam | The cost at 2^24 is measured (a heavy-opcode circuit, or a real root rollup proof with its key), or the largest feasible size plus a recorded reason; the table in `spikes/epoch-proof/RESULTS.md`. |
+| #24 blob commitments | The gas of one EIP-4844 KZG point evaluation in refine on PolkaJam, measured; where blob data lives on JAM, decided with reasons. |
+| #25 the node's Ethereum boundary | `docs/aztec/BOUNDARY.md`: every touchpoint with its interface status, the seams Aztec would need (as a drafted, unsent upstream proposal), and sizes. |
+| #26 the settlement service | `docs/aztec/SERVICE.md`: refine/accumulate split, proposals and signers, the Ethereum-supplied values and JAM's answers; a skeleton service that checks a proof and keeps a tip, deployed on PolkaJam. |
+| #27 tracking Aztec's releases | `docs/aztec/RELEASES.md`: the v5 → v6 diff across the four boundary items. |
+| #21 the per-transaction kernel port | Closed as superseded by #28 once #23 and #26 hold, with a comment saying which of its parts survive. |
+| #29 lessons | `docs/privacy/LESSONS.md` committed, each claim linked to evidence. |
+| #30 architectures | `docs/privacy/ARCHITECTURES.md` committed with a recommendation; claims measured or marked as reasoning; at least the "proving inside JAM" candidate measured (fold or verify N proofs in refine). |
+| #31 limits and the JIP decision | `docs/privacy/LIMITS.md` committed and the decision recorded on the issue. |
+| #32 JIP draft | `docs/jip/FORMAT.md` (the JIP process, sourced) and a complete `docs/jip/jip-draft.md` in that format; skipped (closed with the reason) only if #31 decides no JIP. |
+| #33 JIP reviews | `docs/jip/reviews/`: both personas' numbered comments, each's responses to the other's, and a synthesis table. |
+| #34 JIP final | `docs/jip/jip-final.md` with a change log citing review comments, numbers reproducible from this repo, and a submission note for Aodh. |
+| #28, #35 tracking | Stay open as `roadmap`; each carries a status comment listing what is done and what remains. |
+
+## Phase 3 done
+
+`<promise>PHASE 3 DONE</promise>` may be written only when every row above holds with its
+evidence in the ledger and on its issue, the demo's checks still pass (`NET=pj6
+nets/demo.sh up`, `check`, from clean), and CI is green on the last commit.

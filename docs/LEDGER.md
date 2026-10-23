@@ -992,3 +992,27 @@ than ledger 22's one pair suggested: expiries 14 and 9 without it, 5 and 7 with 
 and 0.325 against 0.385 and 0.375. README, DEMO.md, ANNOUNCE.md and the tutor's JAM beside
 Aztec page now give both pairs, or "about 0.38 of a slot".
 Issues: #14 commented.
+
+## 2026-10-23 31 — Aztec on JAM: refine checks Aztec's epoch-proof shape on PolkaJam for 153–166M gas; the verifier ported to bb 6.0.0; Phase 3 begins
+Did:
+- **Direction (#28).** JAM as Aztec's settlement layer: refine checks Aztec's one epoch
+  proof, as Ethereum's Rollup contract does, and Aztec's kernels, PXE, node and prover run
+  unchanged. This replaces #21's per-transaction CHONK check (about 12B gas). Aztec's node
+  and contracts were mapped (#25, #26); the PXE needs no change; the sequencer publisher
+  and `RollupContract` have no interface; blobs are EIP-4844 KZG (#24).
+- **The verifier (#22).** Ported to bb 6.0.0 on abutlabs/ultrahonk_verifier `bb-v6`
+  (2ae44db): the challenge derivation and the new ROM-LogUp relation, taken from bb's own
+  Solidity diff. Fixtures were regenerated (`scripts/generate_test_fixtures.sh`), 44 of 46
+  tests pass, and the invalid-inner pair waits on a bb without its self-check.
+- **The epoch proof on PolkaJam (#23).** Aztec's flags, 113 public inputs, synthetic circuits
+  2^12 to 2^22, on a six-validator polkajam-testnet v0.8.0 (Aodh: Aztec work on PolkaJam,
+  not lasair).
+Evidence: `spikes/epoch-proof/measure.sh` → refine gas 153,250,436 (2^12), 155,653,349,
+158,581,383, 161,085,556, 163,676,071, 166,433,017 (2^22); PolkaJam refine 0.157–0.181 s
+(interpreter, Darwin arm64); accumulate's verdicts 01; a public input altered → 00 at
+9,456,761 gas. The 2^24 attempt swapped for 50 minutes in `nargo execute` and was stopped.
+- **Issues.** #22–#28 (`aztec-on-jam`); Aodh's privacy brief as #29–#35
+  (`privacy-research`, `jip`).
+- **The loop.** `docs/RALPH.md` Phase 3: what closes each issue, and the rules (PolkaJam;
+  simulated personas; nothing submitted).
+Next: the loop reviews the open issues and starts by dependency order.

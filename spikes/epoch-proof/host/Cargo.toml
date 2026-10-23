@@ -1,0 +1,11 @@
+[package]
+name = "epoch-proof-host"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Does the PVM's UltraHonk verifier (zkVerify's, ported to bb 6.0.0 on our fork's bb-v6 branch) accept a bb 6.0.0 proof? Run on the host, before any PVM build."
+
+[dependencies]
+uh6 = { package = "ultrahonk-no-std", git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }  # bb-v6
+
+[workspace]
