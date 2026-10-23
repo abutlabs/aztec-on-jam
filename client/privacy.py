@@ -26,7 +26,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 CIRCUITS = ROOT / "circuits"
 STATE = Path(os.environ.get("CLIENT_STATE", HERE / "state.json"))
-DEPTH = 16
+DEPTH = 16          # the note tree
+NULL_DEPTH = 16     # the indexed nullifier tree
 P = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 ENV = dict(os.environ, PATH=f"{Path.home()}/.nargo/bin:{Path.home()}/.bb:{os.environ.get('PATH', '')}")
 # the pinned toolchain (docs/TOOLS.md; scripts/bootstrap.sh installs it), overridable
@@ -100,10 +101,10 @@ def seed_path(n0, n1, index1, siblings):
     return node
 
 
-def zeros():
-    """Z[0] = 0 (an empty leaf), Z[i] = H(Z[i-1], Z[i-1]); Z[DEPTH] is the empty tree's root."""
+def zeros(depth=DEPTH):
+    """Z[0] = 0 (an empty leaf), Z[i] = H(Z[i-1], Z[i-1]); Z[depth] is the empty tree's root."""
     z = [0]
-    for _ in range(DEPTH):
+    for _ in range(depth):
         z.append(h(z[-1], z[-1]))
     return z
 
@@ -131,10 +132,11 @@ def note_hash(n):
 
 
 class Tree:
-    """An append-only Merkle tree of depth DEPTH over the known leaves; empty leaves are 0."""
-    def __init__(self, leaves):
+    """An append-only Merkle tree over the known leaves; empty leaves are 0."""
+    def __init__(self, leaves, depth=DEPTH):
         self.leaves = list(leaves)
-        self.z = zeros()
+        self.depth = depth
+        self.z = zeros(depth)
         self.memo = {}
 
     def node(self, level, index):
@@ -148,16 +150,56 @@ class Tree:
         return self.memo[(level, index)]
 
     def root(self):
-        return self.node(DEPTH, 0)
+        return self.node(self.depth, 0)
 
     def path(self, index, from_level=0):
         """Siblings of the node at (from_level, index >> from_level) up to the root."""
         sib = []
         i = index >> from_level
-        for level in range(from_level, DEPTH):
+        for level in range(from_level, self.depth):
             sib.append(self.node(level, i ^ 1))
             i >>= 1
         return sib
+
+
+class IndexedTree:
+    """Aztec's indexed Merkle tree of nullifiers: leaf i = (value, next_index, next_value), a
+    linked list sorted by value; leaf 0 is the zero leaf. Rebuilt from the chain's nullifiers
+    in insertion order (the service records them as nfl:<index>)."""
+    def __init__(self, nullifiers=()):
+        self.leaves = [(0, 0, 0)]
+        for nf in nullifiers:
+            self.insert(nf)
+
+    def low(self, nf):
+        """The index of the leaf that brackets nf (its value the largest below nf)."""
+        best = 0
+        for i, (v, _, _) in enumerate(self.leaves):
+            if v < nf and v >= self.leaves[best][0]:
+                best = i
+        v, ni, nv = self.leaves[best]
+        if v == nf or (nv != 0 and not nf < nv):
+            raise ClientError(f"nullifier {nf:#x} is already in the tree")
+        return best
+
+    def tree(self):
+        return Tree([h(*leaf) for leaf in self.leaves], NULL_DEPTH)
+
+    def root(self):
+        return self.tree().root()
+
+    def insert(self, nf):
+        """Insert nf; returns the circuit's witness for it: the low leaf, its path, and the
+        new slot's path after the low leaf is rewritten."""
+        lo = self.low(nf)
+        v, ni, nv = self.leaves[lo]
+        low = {"value": str(v), "next_index": str(ni), "next_value": str(nv), "index": str(lo),
+               "path": [str(x) for x in self.tree().path(lo)]}
+        new = len(self.leaves)
+        self.leaves[lo] = (v, new, nf)
+        slot = [str(x) for x in self.tree().path(new)]
+        self.leaves.append((nf, ni, nv))
+        return low, slot
 
 
 def new_blinding(st):
@@ -183,11 +225,11 @@ def cmd_deposit(owner, value):
     print(f"note {n['id']} commitment {hexf(n['hash'])}")
 
 
-def toml_note_in(n, tree, sender, st):
+def toml_note_in(n, tree, sender, st, dummy_blinding=None):
     if n is None:
         # a dummy input: no value, no membership; the sender's key and a fresh blinding give it
         # a nullifier of its own, since the chain records every nullifier a proof names
-        return {"owner_sk": str(sk_of(sender)), "value": "0", "blinding": str(new_blinding(st)), "kind": "0",
+        return {"owner_sk": str(sk_of(sender)), "value": "0", "blinding": str(dummy_blinding or new_blinding(st)), "kind": "0",
                 "index": "0", "path": ["0"] * DEPTH}
     kind = "2" if n["kind"] == "deposit" else "1"
     path = tree.path(n["leaf"]) if kind == "1" else [0] * DEPTH
@@ -283,7 +325,7 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
     client's view of the chain after it lands (inputs spent, outputs as leaves)."""
     st = load()
     tree = Tree(st["leaves"])
-    old_root, old_null = tree.root(), st["null_root"]
+    old_root = tree.root()
     ins = [pick(st, in_a), pick(st, in_b)]
     total_in = sum(n["value"] for n in ins if n)
     value, unshield = int(value), int(unshield)
@@ -297,11 +339,25 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
         raise ClientError(f"the tree has an odd number of leaves ({insert}); sync first")
     insert_path = tree.path(insert, from_level=1)
     logs, logs_hash = seal_notes(outs, enc_pk_of or directory_key)
+    # every nullifier is known before proving: the circuit inserts both into the indexed tree
+    dummy = [new_blinding(st) if n is None else None for n in ins]
+    def nullifier_of_input(n, j):
+        if n is None:
+            return h(h(pk_of(sender), 0, dummy[j]), sk_of(sender))
+        nh = h(pk_of(n["owner"]), n["value"], n["blinding"])
+        return nh if n["kind"] == "deposit" else h(nh, sk_of(n["owner"]))
+    nfs = [nullifier_of_input(n, j) for j, n in enumerate(ins)]
+    itree = IndexedTree(st.get("nullifiers", []))
+    old_null, null_size = itree.root(), len(itree.leaves)
+    witness = [itree.insert(nf) for nf in nfs]
+    lows = [w[0] for w in witness]; slots = [w[1] for w in witness]
     prover = "\n".join([
         f'old_note_root = "{old_root}"', f'old_null_root = "{old_null}"', f'logs_hash = "{logs_hash}"',
+        f'old_null_size = "{null_size}"', f'null_slot_paths = {json.dumps(slots)}',
         f'insert_index1 = "{insert // 2}"', f'insert_path = {json.dumps([str(x) for x in insert_path])}',
         f'unshield_amount = "{unshield}"', f'unshield_receiver = "{int(receiver)}"', f'unshield_dest = "{int(dest)}"',
-        toml_table("ins", toml_note_in(ins[0], tree, sender, st)), toml_table("ins", toml_note_in(ins[1], tree, sender, st)),
+        toml_table("lows", lows[0]), toml_table("lows", lows[1]),
+        toml_table("ins", toml_note_in(ins[0], tree, sender, st, dummy[0])), toml_table("ins", toml_note_in(ins[1], tree, sender, st, dummy[1])),
         toml_table("outs", toml_note_out(outs[0])), toml_table("outs", toml_note_out(outs[1])), ""])
     cdir = circuit("transfer")
     (cdir / "Prover.toml").write_text(prover)
@@ -317,14 +373,14 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
     if r.returncode != 0:
         raise ClientError(f"bb prove failed:\n{r.stdout}\n{r.stderr}")
     pubs = (pdir / "public_inputs").read_bytes(); proof = (pdir / "proof").read_bytes()
-    if len(pubs) != 13 * 32:
-        raise ClientError(f"expected 13 public inputs, got {len(pubs) // 32}")
+    if len(pubs) != 14 * 32:
+        raise ClientError(f"expected 14 public inputs, got {len(pubs) // 32}")
     # [pubs_len u16][pubs][proof_len u16][proof][the two sealed notes]
     payload = len(pubs).to_bytes(2, "little") + pubs + len(proof).to_bytes(2, "little") + proof + logs
     # the client's view of the chain after this package lands
-    # the 12-field view callers use: every public input but logs_hash (index 2)
-    all13 = [int.from_bytes(pubs[i * 32:(i + 1) * 32], "big") for i in range(13)]
-    fields = all13[:2] + all13[3:]
+    # the 12-field view callers use: every public input but logs_hash and old_null_size (2, 3)
+    all14 = [int.from_bytes(pubs[i * 32:(i + 1) * 32], "big") for i in range(14)]
+    fields = all14[:2] + all14[4:]
     for n in ins:
         if n:
             n["spent"] = True
@@ -332,11 +388,12 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
         o["hash"] = fields[6 + i]; o["leaf"] = insert + i
         st["notes"].append(o); st["leaves"].append(o["hash"])
     st["null_root"] = fields[3]
+    st.setdefault("nullifiers", []).extend([fields[4], fields[5]])
     save(st)
     # the new nodes along the insertion path, in one execution, checked against the proof's root
     if seed_path(fields[6], fields[7], insert // 2, insert_path) != fields[2]:
         raise ClientError("path_cli's root differs from the proof's new root")
-    return {"payload": payload, "fields": fields, "logs": logs, "logs_hash": all13[2]}
+    return {"payload": payload, "fields": fields, "logs": logs, "logs_hash": all14[2], "null_size": all14[3]}
 
 
 def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
@@ -363,6 +420,8 @@ def sync(d):
     st = load()
     st["leaves"] = [int(x, 16) for x in d["leaves"]]
     st["null_root"] = int(d["null_root"], 16) if d.get("null_root") else 0
+    if "nullifiers" in d:
+        st["nullifiers"] = [int(x, 16) for x in d["nullifiers"]]
     for n in st["notes"]:              # a note's leaf is wherever the chain put it
         if n.get("hash") in st["leaves"]:
             n["leaf"] = st["leaves"].index(n["hash"])
@@ -440,4 +499,5 @@ def select_inputs(owner, amount):
 if __name__ == "__main__":
     a = sys.argv[1:]
     {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex()), "directory": lambda o: print(directory_entry(o)),
-     "pick": lambda o, n: print(" ".join(select_inputs(o, int(n)))), "balance": lambda o: print(private_balance(o))}[a[0]](*a[1:])
+     "pick": lambda o, n: print(" ".join(select_inputs(o, int(n)))), "balance": lambda o: print(private_balance(o)),
+     "null-root": lambda: print(hexf(IndexedTree(load().get("nullifiers", [])).root()))}[a[0]](*a[1:])

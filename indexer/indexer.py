@@ -38,18 +38,22 @@ def refresh():
     pv = chain.Jip2Chain(PRIVACY, RPC, chain_spec=SPEC)
     leaves = []                       # append-only: read only the leaves not seen yet
     sealed = []                       # the sealed note at each leaf, the same way
+    nfs = []                          # the nullifiers in insertion order (index 1 onward)
     while True:
         try:
             head = pv.head()
             at = head.hash
             n = u64(pv.read(b"leaves", at))
-            if n < len(leaves):           # a shorter chain (a reorg or a new chain): start over
-                leaves, sealed = [], []
+            null_size = u64(pv.read(b"null:size", at)) or 1
+            if n < len(leaves) or null_size - 1 < len(nfs):   # a shorter chain: start over
+                leaves, sealed, nfs = [], [], []
             leaves = leaves + [pv.read(b"leaf:" + struct.pack("<Q", i), at).hex() for i in range(len(leaves), n)]
             sealed = sealed + [pv.read(b"enc:" + struct.pack("<Q", i), at).hex() for i in range(len(sealed), n)]
+            nfs = nfs + [pv.read(b"nfl:" + struct.pack("<Q", i), at).hex() for i in range(len(nfs) + 1, null_size)]
             s = {"ok": True, "net": os.environ.get("NET_NAME", ""), "slot": head.slot, "head": at.hex(), "privacy_id": PRIVACY, "public_id": PUBLIC,
                  "note_root": pv.read(b"root:note", at).hex(), "null_root": pv.read(b"root:null", at).hex(),
-                 "leaves": list(leaves), "sealed": list(sealed), "leaf_count": n, "transfers": u64(pv.read(b"transfers", at)),
+                 "leaves": list(leaves), "sealed": list(sealed), "leaf_count": n,
+                 "nullifiers": list(nfs), "null_size": null_size, "transfers": u64(pv.read(b"transfers", at)),
                  "shielded": u64(pv.read(b"shielded", at)), "unshielded": u64(pv.read(b"unshielded", at)),
                  "updated": time.time()}
             with LOCK:

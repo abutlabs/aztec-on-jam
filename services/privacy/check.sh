@@ -10,7 +10,11 @@ DEMO=$SUB/lasair/_build/default/bin/demo_deploy.exe
 OUT=${OUT:-$HERE/out}; mkdir -p "$OUT"
 JAM=$("$BUILD" "$HERE" --out "$OUT" | awk '{print $1}')
 echo "blob: $(wc -c < "$JAM") bytes"
+# with LTO the verifier is compiled out when the embedded vk cannot match the service's public
+# inputs (a stale fixtures/transfer.vk): the blob shrinks to ~40 KB and every proof is refused
+[ "$(wc -c < "$JAM")" -gt 500000 ] || { echo "FAIL: the blob is too small to hold the verifier (stale fixtures/transfer.vk?)"; exit 1; }
 PAY=$(cat "$HERE/../../out/tx1.hex")                        # client/privacy.py's first transfer
+# out/tx-later.hex, if present: a later transfer of the same client (its trees are not empty)
 # variants of the payload [pubs_len][pubs][proof_len][proof][sealed notes], one byte changed
 variant() { python3 - "$PAY" "$1" <<'PYV'
 import sys
@@ -45,4 +49,10 @@ echo "== a sealed note changed after proving (the logs no longer match logs_hash
 run "$(variant log)" > "$OUT/wronglog.log"
 expect "$OUT/wronglog.log" "verdict      : INVALID" "refine rejects a swapped sealed note"
 expect "$OUT/wronglog.log" "no storage change" "accumulate wrote nothing"
+echo "== a valid proof that starts from a tree of its own making (a non-empty tree on a fresh chain)"
+[ -f "$HERE/../../out/tx-later.hex" ] && {
+  run "$(cat "$HERE/../../out/tx-later.hex")" > "$OUT/genesis.log"
+  expect "$OUT/genesis.log" "verdict      : VALID" "refine accepts the proof itself"
+  expect "$OUT/genesis.log" "no storage change" "accumulate refuses: a new chain starts from the empty trees"
+}
 echo "PASS: $pass assertions"

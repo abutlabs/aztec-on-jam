@@ -3,15 +3,20 @@
 // append-only note tree) with Poseidon2; the nullifier set's non-membership is the chain's
 // (the service refuses a spent nullifier), the nullifier "root" here is a running hash of
 // what this proof spends. Public inputs, in order (params first, then the returned tuple):
-//   0 old_note_root  1 old_null_root  2 logs_hash             (params)
-//   3 new_note_root  4 new_null_root  5,6 nullifiers  7,8 note_hashes
-//   9 unshield_amount  10 unshield_receiver  11 unshield_dest  12 deposit_amount  (returns)
+//   0 old_note_root  1 old_null_root  2 logs_hash  3 old_null_size        (params)
+//   4 new_note_root  5 new_null_root  6,7 nullifiers  8,9 note_hashes
+//   10 unshield_amount  11 unshield_receiver  12 unshield_dest  13 deposit_amount  (returns)
+// The nullifier tree is Aztec's indexed Merkle tree: leaf = H(value, next_index, next_value),
+// a sorted linked list (leaf 0 is the zero leaf); a nullifier is proven absent by the leaf
+// that brackets it, then inserted at index old_null_size + i. The chain checks the old root
+// and size, so non-membership is proven here, not looked up by the service.
 // logs_hash binds the two sealed notes (the openings, encrypted to their owners) to the
 // proof: the service checks blake2b(sealed notes), first byte zeroed, against it, so no one
 // can swap the ciphertexts a receiver will scan for.
 use poseidon::poseidon2::Poseidon2;
 
-global DEPTH: u32 = 16;
+global DEPTH: u32 = 16;      // the note tree
+global NULL_DEPTH: u32 = 16; // the nullifier tree
 global KIND_DUMMY: Field = 0;
 global KIND_TREE: Field = 1;
 global KIND_DEPOSIT: Field = 2;
@@ -23,6 +28,16 @@ struct InNote {
     kind: Field, // 0 dummy (value 0, no membership), 1 in the tree, 2 a shield deposit
     index: Field, // leaf index, kind 1
     path: [Field; DEPTH], // siblings, leaf level first, kind 1
+}
+
+// The nullifier-tree leaf that brackets a new nullifier: value < nullifier < next_value
+// (or next_value is 0, the end of the list), with its index and path.
+struct LowLeaf {
+    value: Field,
+    next_index: Field,
+    next_value: Field,
+    index: Field,
+    path: [Field; NULL_DEPTH],
 }
 
 struct OutNote {
@@ -70,6 +85,33 @@ fn root_from_level1(node1: Field, index1: Field, path: [Field; DEPTH - 1]) -> Fi
     node
 }
 
+fn root_n(leaf: Field, index: Field, path: [Field; NULL_DEPTH]) -> Field {
+    let bits: [bool; NULL_DEPTH] = index.to_le_bits();
+    let mut node = leaf;
+    for i in 0..NULL_DEPTH {
+        let (l, r) = if bits[i] { (path[i], node) } else { (node, path[i]) };
+        node = hash2(l, r);
+    }
+    node
+}
+
+fn null_leaf(value: Field, next_index: Field, next_value: Field) -> Field {
+    Poseidon2::hash([value, next_index, next_value], 3)
+}
+
+/// Insert `nf` into the indexed nullifier tree with root `root` at `new_index`, proving it was
+/// absent (the low leaf brackets it); returns the new root.
+fn insert_nullifier(root: Field, nf: Field, new_index: Field, low: LowLeaf, slot_path: [Field; NULL_DEPTH]) -> Field {
+    assert(root_n(null_leaf(low.value, low.next_index, low.next_value), low.index, low.path) == root, "low leaf not in the nullifier tree");
+    assert(low.value.lt(nf), "the low leaf is not below the nullifier");
+    assert((low.next_value == 0) | nf.lt(low.next_value), "the nullifier is already spent (or the low leaf is wrong)");
+    // the low leaf now points at the new one
+    let root = root_n(null_leaf(low.value, new_index, nf), low.index, low.path);
+    // the new leaf goes into an empty slot and takes over the low leaf's old pointer
+    assert(root_n(0, new_index, slot_path) == root, "the nullifier slot is not empty");
+    root_n(null_leaf(nf, low.next_index, low.next_value), new_index, slot_path)
+}
+
 fn as_u64(v: Field) -> u64 {
     let x = v as u64;
     assert(x as Field == v, "value exceeds u64");
@@ -80,7 +122,10 @@ fn main(
     old_note_root: pub Field,
     old_null_root: pub Field,
     logs_hash: pub Field,
+    old_null_size: pub Field, // the nullifier tree's next free index
     ins: [InNote; 2],
+    lows: [LowLeaf; 2], // per nullifier, the leaf that brackets it (the second against the tree after the first)
+    null_slot_paths: [[Field; NULL_DEPTH]; 2], // per nullifier, its empty slot's siblings
     outs: [OutNote; 2],
     insert_index1: Field, // the level-1 slot the two new leaves fill (leaf indices 2k, 2k+1)
     insert_path: [Field; DEPTH - 1], // siblings of that slot from level 1 up, under the old root
@@ -125,7 +170,10 @@ fn main(
     let empty1 = hash2(0, 0);
     assert(root_from_level1(empty1, insert_index1, insert_path) == old_note_root, "slot not empty");
     let new_note_root = root_from_level1(hash2(note_hashes[0], note_hashes[1]), insert_index1, insert_path);
-    let new_null_root = hash2(hash2(old_null_root, nullifiers[0]), nullifiers[1]);
+    let mut new_null_root = old_null_root;
+    for i in 0..2 {
+        new_null_root = insert_nullifier(new_null_root, nullifiers[i], old_null_size + i as Field, lows[i], null_slot_paths[i]);
+    }
 
     (new_note_root, new_null_root, nullifiers, note_hashes, unshield_amount, unshield_receiver, unshield_dest, deposit_amount as Field)
 }

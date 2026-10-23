@@ -42,18 +42,40 @@ struct Privacy;
 const VK: &[u8] = include_bytes!("../fixtures/transfer.vk");
 
 const HASH_LEN: usize = 32;
-const N_PUBS: usize = 13;
+const N_PUBS: usize = 14;
 const OLD_NOTE_ROOT: usize = 0;
 const OLD_NULL_ROOT: usize = 1;
 const LOGS_HASH: usize = 2;
-const NEW_NOTE_ROOT: usize = 3;
-const NEW_NULL_ROOT: usize = 4;
-const NULLIFIERS: core::ops::Range<usize> = 5..7;
-const NOTE_HASHES: core::ops::Range<usize> = 7..9;
-const UNSHIELD_AMOUNT: usize = 9;
-const UNSHIELD_RECEIVER: usize = 10;
-const UNSHIELD_DEST: usize = 11;
-const DEPOSIT_AMOUNT: usize = 12;
+const OLD_NULL_SIZE: usize = 3;
+const NEW_NOTE_ROOT: usize = 4;
+const NEW_NULL_ROOT: usize = 5;
+const NULLIFIERS: core::ops::Range<usize> = 6..8;
+const NOTE_HASHES: core::ops::Range<usize> = 8..10;
+const UNSHIELD_AMOUNT: usize = 10;
+const UNSHIELD_RECEIVER: usize = 11;
+const UNSHIELD_DEST: usize = 12;
+const DEPOSIT_AMOUNT: usize = 13;
+
+/// The trees a new chain starts from, so the first proof cannot start from a tree of its own
+/// making: the empty depth-16 note tree, and the nullifier tree holding only its zero leaf
+/// (H(0, 0, 0) at index 0; size 1). client/poseidon2.py and lib/core.js compute the same.
+const EMPTY_NOTE_ROOT: [u8; 32] = hex32("14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3");
+const EMPTY_NULL_ROOT: [u8; 32] = hex32("22abec1e2592b57e26f1cd16aa05a25d59c1fd6df93e7e8319e8cc29a7d99fe2");
+const EMPTY_NULL_SIZE: u64 = 1;
+const KEY_NULL_SIZE: &[u8] = b"null:size";
+
+const fn hex32(s: &str) -> [u8; 32] {
+    let b = s.as_bytes();
+    let mut out = [0u8; 32];
+    let mut i = 0;
+    while i < 32 {
+        let hi = (b[2 * i] as char).to_digit(16).unwrap() as u8;
+        let lo = (b[2 * i + 1] as char).to_digit(16).unwrap() as u8;
+        out[i] = hi << 4 | lo;
+        i += 1;
+    }
+    out
+}
 /// A sealed note (client/notecrypt.py): ephemeral X25519 key, AES-256-GCM ciphertext, tag.
 const SEALED_LEN: usize = 32 + 40 + 16;
 const LOGS_LEN: usize = 2 * SEALED_LEN;
@@ -145,13 +167,15 @@ impl Service for Privacy {
             let pubs: Vec<&[u8]> = out[1..1 + N_PUBS * HASH_LEN].chunks_exact(HASH_LEN).collect();
             let logs = &out[1 + N_PUBS * HASH_LEN..];
 
-            // The proof must start from the roots the chain holds (an empty chain accepts any).
-            let stored_note = get_storage(KEY_NOTE_ROOT).unwrap_or_default();
-            let stored_null = get_storage(KEY_NULL_ROOT).unwrap_or_default();
-            if (!stored_note.is_empty() && stored_note.as_slice() != pubs[OLD_NOTE_ROOT])
-                || (!stored_null.is_empty() && stored_null.as_slice() != pubs[OLD_NULL_ROOT])
+            // The proof must start from the trees the chain holds: the empty trees on a new chain.
+            let stored_note = get_storage(KEY_NOTE_ROOT).unwrap_or_else(|| EMPTY_NOTE_ROOT.to_vec());
+            let stored_null = get_storage(KEY_NULL_ROOT).unwrap_or_else(|| EMPTY_NULL_ROOT.to_vec());
+            let null_size = get_storage(KEY_NULL_SIZE).map(|v| le_u64(&v)).unwrap_or(EMPTY_NULL_SIZE);
+            if stored_note.as_slice() != pubs[OLD_NOTE_ROOT]
+                || stored_null.as_slice() != pubs[OLD_NULL_ROOT]
+                || be_u64(pubs[OLD_NULL_SIZE]) != null_size
             {
-                continue; // stale root: another package moved the tree first
+                continue; // stale: another package moved the trees first
             }
             if pubs[NULLIFIERS].iter().any(|nf| get_storage(&key(b"nf:", nf)).is_some()) {
                 continue; // a spent note: double spend
@@ -166,9 +190,13 @@ impl Service for Privacy {
                     _ => continue, // no such deposit, or not that amount
                 }
             }
-            for nf in &pubs[NULLIFIERS] {
+            // the proof showed both absent from the nullifier tree and inserted them; record them,
+            // in order, so any client can rebuild the tree (nfl:<index>), and by value (nf:)
+            for (i, nf) in pubs[NULLIFIERS].iter().enumerate() {
                 set_storage(&key(b"nf:", nf), &[1u8]).ok();
+                set_storage(&key(b"nfl:", &(null_size + i as u64).to_le_bytes()), nf).ok();
             }
+            set_storage(KEY_NULL_SIZE, &(null_size + 2).to_le_bytes()).ok();
             // the tree's leaves in order, so a client can rebuild the tree from the chain
             let mut leaves = get_storage(KEY_LEAVES).map(|v| le_u64(&v)).unwrap_or(0);
             for (i, nh) in pubs[NOTE_HASHES].iter().enumerate() {

@@ -78,10 +78,10 @@ case "${1:-}" in
     echo "== each client learns the tree from the chain"; CLIENT_STATE=$SA sync_client; CLIENT_STATE=$SB sync_client >/dev/null
     N0=$(u64 "$PV" leaves); T0=$(u64 "$PV" transfers); S0=$(u64 "$PV" shielded); U0=$(u64 "$PV" unshielded)
     BA0=$(u64 "$PB" "62616c3a$A"); BB0=$(u64 "$PB" "62616c3a$B"); R0=$(ctl read "$PV" root:note); NR0=$(ctl read "$PV" root:null)
-    # a fresh chain holds no roots: the tree is the empty tree (its root as the client computes
-    # it) and the nullifier root is zero
+    # a fresh chain holds no roots: both trees are empty (the note tree's zero root, the
+    # nullifier tree holding only its zero leaf), as the client computes them
     [ "$R0" = "(none)" ] && R0=$(asA root | sed 's/^0x//')
-    [ "$NR0" = "(none)" ] && NR0=$(hex32 0)
+    [ "$NR0" = "(none)" ] && NR0=$(asA null-root | sed 's/^0x//')   # the nullifier tree's zero leaf
     echo "  before: $N0 leaves, $T0 transfers, shielded $S0, unshielded $U0, bal:A $BA0, bal:B $BB0, root:note ${R0:0:16}…"
 
     echo "== 0. A and B publish how to pay them (encryption key, spend key) in the directory"
