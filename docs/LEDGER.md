@@ -1159,3 +1159,25 @@ guarantors" (filed as #38). All earlier cases unchanged (batch of 6: 967,993,490
 Issues: #37 closed. #38 opened, and added to RALPH's table.
 Next: by dependency order, #23 (the epoch proof at 2^24, with a heavy-opcode circuit), then
 #26 (the settlement service), now that its inputs are measured.
+
+## 2026-10-23 39 — #25 closed: Aztec's Ethereum boundary mapped, and four seams drafted as an unsent proposal
+Why this issue: an independent step while #23's 2^23 proof runs (RALPH allows one that does
+not touch what the run uses). It reads code, needs little memory, and #26 needs it.
+Did: `docs/aztec/BOUNDARY.md`, from aztec-node 1ac42dc and aztec-packages v6 nightly:
+- what runs unchanged: the PXE, the circuits, proving, world state, P2P;
+- every Ethereum touchpoint with its interface status;
+- the 14 publisher methods the sequencer calls and the 14 Rollup reads the archiver, epoch
+  cache and prover node make;
+- four seams drafted for Aztec, not sent: `SettlementPublisher`, `SettlementReader`,
+  `SettlementSource`, and settlement-neutral stdlib types.
+The earlier agent map was checked against the code. The class and interface locations held,
+but four line counts did not and were replaced by direct counts: `ethereum/src` 11,277 (not
+about 13k), archiver `l1/` and `modules/` 4,944 (not 3.7k), prover-node publisher 473 (not
+521), blob client 2,002 (not 838).
+Evidence: `grep -n "^export class RollupContract"` → rollup.ts:288 (1,502 lines);
+`SequencerPublisher` sequencer-publisher.ts:167, taken by type at sequencer.ts:768; TXE runs
+on `TXEArchiver` and `MockEpochCache`; the PXE reads `getNodeInfo` at
+pxe/src/entrypoints/server/utils.ts:40; the method lists come from grep over
+`sequencer-client/src/{sequencer,client}` and the Rollup callers.
+Issues: #25 closed.
+Next: #23's 2^23 result (running), then #26.
