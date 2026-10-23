@@ -59,7 +59,9 @@ case "${1:-}" in
     # ready once finality has left genesis: a package anchored before that is refused (a dev
     # genesis is at slot 0, PolkaJam's first block at today's wall slot)
     for _ in $(seq 1 100); do "$L" ctl head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 3; done
-    "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
+    head=$("$L" ctl head); echo "$head"
+    [[ $head == *"finalized "[1-9]* ]] || { echo "finality never left genesis in 300 s; not deploying (nets/demo.sh down, then up)" >&2; exit 1; }
+    rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
     "$L" indexer; "$0" wallet ;;
   wallet)
