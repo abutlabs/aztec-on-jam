@@ -31,13 +31,20 @@ hash-committed variant would be cheaper in refine, but it means changing Aztec's
 and maintaining the fork, against the direction's purpose. It is recorded as an alternative
 for #30, not taken.
 
+## Measured (#37, ledger 36)
+
+Blobs travel as extrinsics, beside a package of a few hundred bytes. Refine checks each one
+(262M gas) and exports it as 32 segments (+117,483 gas for all 32). Gas sets the count: 3
+blobs a tiny package (786M, 0.73 s on PolkaJam), 19 a full one. An Aztec checkpoint's 6 blobs
+fit one full package; an epoch's 192 take about 10.
+
 ## Open (#37)
 
-- [ ] **The export path, measured on PolkaJam.** Refine exports a blob as 32 segments; a later
-  package imports and re-checks one; the cost of export and import.
+- [x] **The export path, measured on PolkaJam** (above).
+- [ ] **The import path:** a later package importing a blob's 32 segments and re-checking it.
 - [ ] **Batch verification** (c-kzg `verify_blob_kzg_proof_batch`): one pairing for many blobs.
   The 63M a blob for hashing and evaluation stays.
-- [ ] **Blobs as extrinsics, not payloads.** JAM-NP limits the work-package message (CE-133,
+- [x] **Blobs as extrinsics, not payloads** (measured above). JAM-NP limits the work-package message (CE-133,
   CE-146) to 200 KiB, payloads included, so that a guarantor can check authorization before
   downloading more (`simple.md`, jam-np e0b7d29). PolkaJam refuses a payload above 204,533
   bytes (#36). Extrinsic data travels in its own message, bounded only by the bundle limit

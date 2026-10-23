@@ -2,6 +2,9 @@
 //!   kind 0: the 0x0a precompile's 192-byte input (Aztec's BlobLib.sol, once per epoch proof)
 //!   kind 1: [n][n × (blob 131,072 || C 48 || pi 48)], each blob checked against its
 //!           commitment (verify_blob_kzg_proof; Ethereum's consensus does this per blob)
+//!   kind 3: [n][export 0|1][n × (C 48 || pi 48)], blob i in the work-item's extrinsic i (JAM-NP
+//!           caps the package, payloads included, at 200 KiB; extrinsics travel beside it);
+//!           with export 1, each checked blob is exported as 32 segments (28 days in the DA)
 //! Refine outputs [tag][1 all valid | 0 otherwise]; accumulate stores it at "v:" ++ tag.
 #![no_std]
 #![no_main]
@@ -9,6 +12,8 @@
 extern crate alloc;
 
 use jam_pvm_common::accumulate::{accumulate_items, set_storage};
+use jam_pvm_common::refine;
+use jam_pvm_common::jam_types::SEGMENT_LEN;
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
 
@@ -34,6 +39,26 @@ fn blobs(d: &[u8]) -> Option<bool> {
     Some(true)
 }
 
+fn extrinsic_blobs(d: &[u8]) -> Option<bool> {
+    let (n, export) = (*d.first()? as usize, *d.get(1)? == 1);
+    let proofs = d.get(2..)?;
+    if n == 0 || proofs.len() != n * 96 {
+        return None;
+    }
+    for (i, cp) in proofs.chunks_exact(96).enumerate() {
+        let blob = refine::extrinsic(i)?;
+        if kzg_verify::verify_blob_kzg_proof(&blob, cp[..48].try_into().ok()?, cp[48..].try_into().ok()?) != Ok(true) {
+            return Some(false);
+        }
+        if export {
+            for seg in blob.chunks(SEGMENT_LEN) {
+                refine::export_slice(seg).ok()?;
+            }
+        }
+    }
+    Some(true)
+}
+
 impl Service for Spike {
     fn refine(_core: CoreIndex, _item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
@@ -41,6 +66,7 @@ impl Service for Spike {
         let ok = match (p.get(1), p.get(2..)) {
             (Some(0), Some(input)) => kzg_verify::point_evaluation(input) == Ok(true),
             (Some(1), Some(d)) => blobs(d).unwrap_or(false),
+            (Some(3), Some(d)) => extrinsic_blobs(d).unwrap_or(false),
             _ => false,
         };
         alloc::vec![tag, ok as u8].into()

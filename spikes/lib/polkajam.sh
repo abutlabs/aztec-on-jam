@@ -3,8 +3,10 @@
 # PolkaJam's own JIP-3 telemetry for each package's refines (gas, time).
 #   pj_start <out dir>        start the dumper and the testnet; wait for finality
 #   pj_deploy <blob>          deploy; sets PJ_SID
-#   pj_send <tag> <file>      one package, from a .hex file or raw bytes (anything else, sent
-#                             as @file); its Refined events go to $PJ_OUT/refined-<tag>.log
+#   pj_send <tag> <file> [jamboree args...]
+#                             one package, from a .hex file or raw bytes (anything else, sent
+#                             as @file), plus e.g. --extrinsic @f --exports n; its Refined events
+#                             go to $PJ_OUT/refined-<tag>.log
 #   pj_read <key hex>         a storage value of PJ_SID
 #   pj_refines <tag>          "gas seconds" per refine of that package
 # The testnet stops when the sourcing script exits.
@@ -42,10 +44,11 @@ pj_deploy() {
 
 pj_send() {
   local from; from=$(wc -l < "$PJ_OUT/telemetry.log")
-  local payload; case $2 in *.hex) payload="0x$(cat "$2")" ;; *) payload="@$2" ;; esac
-  pj_rpc submit "$PJ_SID" "$payload" --wait --timeout 180 > "$PJ_OUT/submit-$1.json" 2>&1 || echo "  $1: submit: $(tail -1 "$PJ_OUT/submit-$1.json")"
+  local tag=$1 payload; case $2 in *.hex) payload="0x$(cat "$2")" ;; *) payload="@$2" ;; esac
+  shift 2
+  pj_rpc submit "$PJ_SID" "$payload" "$@" --wait --timeout 180 > "$PJ_OUT/submit-$tag.json" 2>&1 || echo "  $tag: submit: $(tail -1 "$PJ_OUT/submit-$tag.json")"
   sleep 4
-  tail -n +"$((from + 1))" "$PJ_OUT/telemetry.log" | grep "Refined {" > "$PJ_OUT/refined-$1.log" || true
+  tail -n +"$((from + 1))" "$PJ_OUT/telemetry.log" | grep "Refined {" > "$PJ_OUT/refined-$tag.log" || true
 }
 
 pj_read() { pj_rpc read "$PJ_SID" "0x$1" 2>/dev/null | tail -1; }

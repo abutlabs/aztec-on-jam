@@ -1103,3 +1103,24 @@ Issues: #36 closed; #37 gains the extrinsic route (`jamboree rpc submit` with ex
 the service fetching them).
 Next: #37 (blobs as extrinsics, exported as segments, measured on PolkaJam). It is now
 unblocked and is the last measurement #26 needs.
+
+## 2026-10-23 36 — #37: blobs as extrinsics, exported as segments, on PolkaJam; gas, not size, sets blobs per package
+Why this issue: #36 showed blobs must travel as extrinsics, and #37 is the last
+measurement #26 (the settlement service) needs.
+Did:
+- `jamboree rpc submit` gained `--extrinsic` (repeatable, referenced by (blake2b-256,
+  E4(length)), GP C.29, sent as JIP-2's third argument) and `--exports`, with a test pinning
+  the encoding (jamboree lasair, pushed).
+- The kzg-gas service gained kind 3: blobs read from extrinsics, KZG-checked, optionally
+  exported as 32 segments each.
+- `spikes/lib/polkajam.sh`'s `pj_send` passes extra jamboree arguments.
+Evidence: `spikes/kzg-gas/measure.sh` → 1 blob as an extrinsic 261,895,733 gas (verdict 01);
+the same exported as 32 segments 262,013,216 (+117,483); 3 blobs exported as 96 segments
+786,027,114 (78.6% of a tiny package, 0.73 s, 01); 4 blobs out of gas at 999,999,331 (no
+verdict). Packages of 401 to 798 bytes carried 131,072 to 524,288 bytes of extrinsics. All
+earlier cases unchanged: point evaluation 199,473,081, blob as payload 262,364,258, invalid
+00. Host: 122 and 29 c-kzg vectors agree.
+Consequence: exporting is cheap (about 3,700 gas a segment), and gas limits blobs per package
+to 3 tiny or 19 full. An Aztec checkpoint's 6 blobs fit one full package; an epoch's 192 take
+about 10 (`docs/aztec/BLOBS.md`).
+Next: #37's import path (a later package importing a blob's segments) and batch verification.

@@ -61,6 +61,15 @@ cases = {1: geth, 2: point("verify_kzg_proof_case_correct_proof_1_2"), 3: point(
          7: blobs(correct[0]), 8: blobs(correct[3]), 9: blobs(wrong[0])}
 for t, b in cases.items():
     open(f"{out}/p{t}.bin", "wb").write(bytes([t]) + b)
+# kind 3: blobs as the work-item's extrinsics, C and pi in the payload; export 0 or 1
+def ext(t, names, export):
+    proofs = b""
+    for i, n in enumerate(names):
+        f = fields(f"{vec}/blob/{n}.yaml", ("blob", "commitment", "proof"))
+        open(f"{out}/x{t}_{i}.bin", "wb").write(f["blob"])
+        proofs += f["commitment"] + f["proof"]
+    open(f"{out}/p{t}.bin", "wb").write(bytes([t, 3, len(names), export]) + proofs)
+ext(10, correct[:1], 0); ext(11, correct[:1], 1); ext(12, correct[:3], 1); ext(13, (correct * 2)[:4], 0)
 PY
 
 echo "== 2. on a PolkaJam testnet ($("$PJD/polkajam" --version | head -1))"
@@ -68,14 +77,21 @@ BLOB=$("$BUILD" "$HERE/service" --out "$O" | awk '{print $1}')
 pj_start "$O"
 pj_deploy "$BLOB"
 for t in 1 2 3 4 5 6 7 8 9; do pj_send "$t" "$O/p$t.bin"; done
+xargs_for() { local a=(); for f in "$O"/x"$1"_*.bin; do a+=(--extrinsic "@$f"); done; echo "${a[@]}"; }
+pj_send 10 "$O/p10.bin" $(xargs_for 10)
+pj_send 11 "$O/p11.bin" $(xargs_for 11) --exports 32
+pj_send 12 "$O/p12.bin" $(xargs_for 12) --exports 96
+pj_send 13 "$O/p13.bin" $(xargs_for 13)
 sleep 12
 echo
 echo "| case | refine gas | of a tiny package (1e9) | PolkaJam refine ($(pj_backend), $(uname -sm)) | accumulate's verdict |"
 echo "|---|---|---|---|---|"
 names=("" "point evaluation: geth pointEvaluation1" "point evaluation: c-kzg correct_proof_1_2" "point evaluation: c-kzg correct_proof_4_4"
        "point evaluation: c-kzg correct_proof_6_5" "point evaluation: geth's, y altered (must fail)" "point evaluation: c-kzg incorrect_proof_2_3 (must fail)"
-       "blob: c-kzg correct_proof, first" "blob: c-kzg correct_proof, fourth" "blob: c-kzg incorrect_proof (must fail)")
-for t in 1 2 3 4 5 6 7 8 9; do
+       "blob: c-kzg correct_proof, first" "blob: c-kzg correct_proof, fourth" "blob: c-kzg incorrect_proof (must fail)"
+       "1 blob as an extrinsic" "1 blob as an extrinsic, exported (32 segments)" "3 blobs as extrinsics, exported (96 segments)"
+       "4 blobs as extrinsics (past a tiny package's gas)")
+for t in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
   rows=$(pj_refines "$t" || true)
   if [ -z "$rows" ]; then
     printf '| %s | refused (#36) | | | %s |\n' "${names[$t]}" "$(pj_read "763a$(printf '%02x' "$t")")"; continue

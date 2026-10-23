@@ -52,6 +52,20 @@ blobs; the 63M per blob remains), checking only the blobs an epoch actually uses
 JAM's own availability (erasure-coded package data, bound by hash) stand in for the KZG
 binding where Aztec's circuits allow it.
 
+**Blobs as extrinsics, exported as segments.** The same check with the blob carried as the
+work-item's extrinsic (`jamboree rpc submit --extrinsic`), and optionally exported:
+
+| case | package | extrinsics | refine gas | of a tiny package | PolkaJam refine | verdict |
+|---|---|---|---|---|---|---|
+| 1 blob | 401 B | 131,072 B | 261,895,733 | 26.2% | 0.251 s | 01 |
+| 1 blob, exported (32 segments) | 401 B | 131,072 B | 262,013,216 | 26.2% | 0.250 s | 01 |
+| 3 blobs, exported (96 segments) | 666 B | 393,216 B | 786,027,114 | 78.6% | 0.727 s | 01 |
+| 4 blobs | 798 B | 524,288 B | 999,999,331, out of gas | 100% | 0.950 s | none |
+
+Exporting 32 segments adds 117,483 gas (about 3,700 a segment): binding a blob costs the
+check, not the export. Per package, gas is the limit, not size: three blobs fit a tiny
+package's 1e9 and four run out, so a full package (5e9) holds 19.
+
 **One blob per package, as a payload.** PolkaJam refuses payloads above 204,533 bytes (#36).
 That is JAM-NP's 200 KiB limit on the work-package message, which holds payloads, so one
 blob fits and two do not. Extrinsics avoid the limit: they travel separately, bounded by the
