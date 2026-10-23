@@ -34,6 +34,12 @@ case "$NET" in
   *) echo "NET=$NET: jb.sh knows jb-pj6, jb-lasair6, jb-mixed" >&2; exit 2 ;;
 esac
 
+# another native net (or anything) on the genesis ports would take this net's nodes' traffic
+ports_free() {
+  local held; held=$(lsof -nP -iUDP:$GENESIS_PORT -iUDP:$((GENESIS_PORT + 5)) 2>/dev/null | awk 'NR>1{print $1" "$2}' | sort -u | head -3)
+  [ -z "$held" ] || { echo "the genesis ports $GENESIS_PORT.. are in use (another net is up?): $held" >&2; exit 2; }
+}
+
 # lasair validator i, as jamboree runs it: listening on the port jamboree moved it to,
 # dialing every other validator at its genesis port with the dev account's peer id
 lasair_node() {
@@ -68,6 +74,7 @@ rpc_node() {
 
 case "${1:-}" in
   up)
+    ports_free
     [ -x "$JB" ] || (cd "$SUB/jamboree" && cargo build --release -q)
     [ "$PJN" = 0 ] || [ -x "$PJ" ] || { echo "no PolkaJam binary at $PJ (scripts/bootstrap.sh fetches it)" >&2; exit 1; }
     [ "$LZN" = 0 ] || [ -x "$LZ" ] || { echo "no lasair binary at $LZ (dune build in ../lasair)" >&2; exit 1; }
@@ -92,6 +99,7 @@ case "${1:-}" in
     # sending JIP-3 telemetry to jamboree; exit 0 only if all six end on the same finalized block.
     # Uses the genesis ports, so the net must be down.
     [ -f "$RUN/jamboree.pid" ] && kill -0 "$(cat "$RUN/jamboree.pid")" 2>/dev/null && { echo "$NET is up: nets/jb.sh down first" >&2; exit 2; }
+    ports_free
     [ -x "$JB" ] || (cd "$SUB/jamboree" && cargo build --release -q)
     RUN=$ROOT/out/$NET-headcheck; SPEC=$RUN/spec.json; rm -rf "$RUN"; mkdir -p "$RUN"
     "$PJ" --chain dev dump-spec "$SPEC" >/dev/null
