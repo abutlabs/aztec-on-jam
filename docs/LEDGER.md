@@ -880,3 +880,23 @@ refines and 0.41 to 0.56 s in 12 (not a node's first refine; cause not known); l
 privacy report in 1.0 to 1.9 s (PolkaJam reports no audit telemetry); one tree at one package a
 slot, 0.385 against 1.0; check and the wallet's moves as above.
 Issues: #14 closed.
+
+## 2026-10-23 27 — Phase 2 done, condition by condition
+1. **Every issue in the table is closed with a closing comment that links its evidence:** #19
+   (ledger 20), #18 (16 to 18, 25), #15, #11, #13, #12 (phase 2's first entries), #14 (26), #4
+   (19), #17 (23, 24). Open: only #21, the `roadmap` issue #18's rule allows (a port on Aztec's
+   own kernels: CHONK verification about 12 billion gas by ratio, so a builder that wraps each
+   proof).
+2. **lasair#93 is closed with a fix** (lasair #95, merged as 5203a8f: intake takes a builder's
+   package only on the head's child's assignment; expiries 14 in 62 → 5 in 77 over 20 minutes),
+   the rest filed as lasair#94; the README says so in *lasair and PolkaJam, side by side*.
+3. **The final verification** (ledger 26): lasair6 and pj6 from clean, `down`, `up`, `check`,
+   the stage commands and the e2e run all pass; so do the three native nets, and jamboree's
+   head check on each.
+4. **docs/DEMO.md, docs/ANNOUNCE.md** (final, no draft notes), **the recording**
+   (docs/images/demo.mp4 and demo.gif, pj6, 2026-10-23), **the CI workflow** (builds both
+   services and the circuits, checks the cryptography against vectors, proves and verifies a
+   transfer offline, and deploys the service on a PolkaJam testnet and times its refine): green
+   on abcd6f9, and on this entry's commit (checked before the promise).
+Other repos, all pushed: demo-wallet `jam` 9db6880; jamboree `lasair` b64d5d4 (offered upstream
+as jamixir/jamboree#49); lasair main 592fb8f (#95, #96).
