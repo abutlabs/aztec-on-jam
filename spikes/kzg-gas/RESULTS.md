@@ -52,7 +52,9 @@ blobs; the 63M per blob remains), checking only the blobs an epoch actually uses
 JAM's own availability (erasure-coded package data, bound by hash) stand in for the KZG
 binding where Aztec's circuits allow it.
 
-**One blob per package, in practice.** PolkaJam refuses packages over about 256 KiB (#36),
-against the Gray Paper's 13,791,360-byte bundle limit: one blob fits, two do not.
+**One blob per package, as a payload.** PolkaJam refuses payloads above 204,533 bytes (#36).
+That is JAM-NP's 200 KiB limit on the work-package message, which holds payloads, so one
+blob fits and two do not. Extrinsics avoid the limit: they travel separately, bounded by the
+Gray Paper's 13,791,360-byte bundle.
 
 **Still open (#24):** where blob data lives on JAM, and for how long; the batch check.

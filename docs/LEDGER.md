@@ -1080,3 +1080,26 @@ ledger 33, and the KZG code is unchanged since.
 Issues: #24 closed. #37 opened for the export path and batch verification on PolkaJam.
 Next: by dependency order, #36 (the package cap, which bounds #37 and #26) or #23's 2^24
 with a heavy-opcode circuit. #36 first: it is small and it changes #26's design.
+
+## 2026-10-23 35 — #36 closed: PolkaJam's cap is JAM-NP's 200 KiB work-package message; blobs go as extrinsics
+Why this issue: it bounded both #37 (how many blobs a package carries) and #26 (the
+settlement service's package layout), and a probe settles it in one testnet session.
+Did: a binary search of payload sizes on one polkajam-testnet v0.8.0. Each payload was
+[tag][kind 2][filler], which the kzg-gas service refuses at once.
+Evidence:
+- The probe → "largest accepted payload: 204533 bytes; smallest refused: 204534 bytes".
+  Refused packages fail on every core: "Failed to submit work-package to even a single
+  proxy/guarantor".
+- 204,533 + 267 bytes of package encoding = 204,800 = 200 KiB.
+- JAM-NP (zdave-parity/jam-np e0b7d29, `simple.md` lines 362 and 383): "The initial message
+  `Core Index ++ Work-Package` should be limited to `2 + (200 * 1024)` bytes", in CE-133 and
+  CE-146, so a guarantor can check authorization before downloading more.
+- Extrinsic data travels in a separate message, bounded by the Gray Paper's W_B =
+  13,791,360 (`definitions.tex:285`).
+Consequence: payloads hold at most about 200 KiB a package (one blob); a checkpoint's blobs go
+as extrinsics, about 100 a package. `docs/aztec/BLOBS.md` and `spikes/kzg-gas/RESULTS.md`
+say so.
+Issues: #36 closed; #37 gains the extrinsic route (`jamboree rpc submit` with extrinsics, and
+the service fetching them).
+Next: #37 (blobs as extrinsics, exported as segments, measured on PolkaJam). It is now
+unblocked and is the last measurement #26 needs.

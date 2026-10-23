@@ -37,5 +37,9 @@ for #30, not taken.
   package imports and re-checks one; the cost of export and import.
 - [ ] **Batch verification** (c-kzg `verify_blob_kzg_proof_batch`): one pairing for many blobs.
   The 63M a blob for hashing and evaluation stays.
-- [ ] **Package size** (#36): PolkaJam refuses packages near 256 KiB, so one blob per package
-  today. The Gray Paper allows about 100.
+- [ ] **Blobs as extrinsics, not payloads.** JAM-NP limits the work-package message (CE-133,
+  CE-146) to 200 KiB, payloads included, so that a guarantor can check authorization before
+  downloading more (`simple.md`, jam-np e0b7d29). PolkaJam refuses a payload above 204,533
+  bytes (#36). Extrinsic data travels in its own message, bounded only by the bundle limit
+  W_B = 13,791,360. So a checkpoint's blobs go as extrinsics, about 100 a package. That needs
+  `jamboree rpc submit` to send extrinsics, and the service to fetch them.
