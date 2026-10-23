@@ -5,7 +5,7 @@ Host calls for the elliptic-curve checks that zero-knowledge proofs and signatur
 evaluation, secp256k1 public-key recovery) and for Poseidon2, the hash their circuits use, so that a service verifies a proof or a
 signature at close to native cost instead of as interpreted PVM code.
 
-*README line:* `- [JIP-8](./JIP-8.md): **Cryptographic host calls** - Host calls for pairing checks, multi-scalar multiplication, KZG point evaluation and secp256k1 recovery, priced from native cost.`
+*README line:* `- [JIP-8](./JIP-8.md): **Cryptographic host calls** - Host calls for pairing checks, multi-scalar multiplication, KZG point evaluation, secp256k1 recovery and the Poseidon2 permutation, priced from native cost.`
 
 *Status: first draft (2026-10-23), for review (#33). Not submitted. The number is the next
 free one at polkadot-fellows/JIPs 5202db1 and may change.*
@@ -29,7 +29,7 @@ script):
 |---|---|---|---|---|
 | UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^24 gates, every gate type in use; 2^24 is Aztec's epoch proof's size) | 170,364,998 – 180,791,299 | 3.4–3.6% | 618,779 – 721,239 (bb's optimized Solidity verifier, using the 0x06–0x08 precompiles) | 1.0–1.2% |
 | EIP-4844 KZG point evaluation | 199,453,527 | 4.0% | 50,000 | 0.083% |
-| One blob checked against its commitment | 262,626,180 | 5.2% | free to contracts (consensus) | |
+| One blob checked against its commitment | 262,626,180 | 5.3% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |
 | Poseidon2 (BN254, t = 4), one hash | 428,839 | 0.009% (4.3% of accumulate's 10M) | none (circuits only) | |
 | A depth-40 tree insertion (40 hashes) | 17.1M | 171% of accumulate's 10M | | |
