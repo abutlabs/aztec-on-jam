@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PolkaJam's refine of one privacy proof, timed by PolkaJam itself (its JIP-3 `Refined` events,
-# read by its own jam-telemetry-dumper): a local polkajam-testnet (six validators, GRANDPA),
+# read by its own jam-telemetry-dumper): a local polkajam-testnet (six validators),
 # the privacy service deployed with `jamboree rpc`, one proved payload submitted N times. Dummy
 # finality: refine is what is measured, and on a small CI runner GRANDPA can take minutes to
 # leave genesis, before which a package's anchor is refused.
