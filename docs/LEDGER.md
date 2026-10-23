@@ -655,3 +655,31 @@ Issues: #19 closed (the browser holds its key, proves in the page, receives by s
 sealed notes; two contexts share only the chain; wallet.py is a static server).
 Next: the same on a clean lasair6 (check, stages, e2e); then #14's lasair runs testing
 lasair#93's cause, the jamboree native net (#17), the Aztec kernel spike (#18).
+
+## 2026-10-23 21 — lasair6 with the new service, and lasair#93's real cause
+Did: lasair6 (ghcr.io/abutlabs/lasair:2.1.3) down and up from clean with the depth-40
+service; `check`, the stage commands and the browser run. All pass; lasair loses packages.
+Evidence:
+`NET=lasair6 nets/demo.sh check` → `PASS` in 6 min 54 s (pj6: 2 min 11 s), three resends;
+`docker logs lasair6-lm0-1 | grep -c EXPIRED` → 3, the other five nodes 0. Stages → pass
+(A 160 → 120, B +40, B unshields 40), two resends, JIP-2 status `Failed: the anchor is not in
+…` for each: the issue's second symptom (Ready for a package never reported) does not recur
+on 2.1.3. `node client/e2e/e2e.mjs` → `PASS` (mint 12.4 s, shield 30.5 s, send 27.5 s,
+unshield 16.1 s; 2 min 10 s).
+The cause, traced on package 0xdf76fa9bc23b846a across the six logs: lm0 (validator 0)
+accepted it, shared it over CE-134 with validators 3, 4 and 5, got three matching signatures
+within 40 ms, and did that again every slot for 38 s without ever distributing over CE-135;
+then EXPIRED (anchor_too_old). lm0 was on core 0 at the head but not at the head's child,
+the slot the pipeline builds the guarantee for: intake (`Wp_intake.authorize`) accepted on
+assignment at the head or the next slot; `Coguarantee.credential` counts only a rotation in
+which our own key signs (lasair#81), and the shares went to the next rotation's guarantors.
+About one package in R = 4 arrives in the last slot of a rotation. My earlier reading in
+lasair#93 (a guarantee waits for the holder's own authoring slot) was wrong: since lasair#60
+the pipeline distributes every tick.
+Fix (lasair branch `intake-at-guarantee-slot`, 0422962): intake checks head + 1 by default;
+the co-signer keeps head .. head + 3. New test `lasair#93: refused when our assignment ends
+at the head` fails on the old window ("accepted a package that should be refused") and passes
+on the new. `dune test --force` → 72 suites "Test Successful", 0 `[FAIL]`;
+`scripts/quic-tests.sh` → 4 ok.
+Next: the conformance gate's result; images from main and from the branch; a lasair6 soak
+on each (one package a slot), counting expiries; then lasair#93 and #14.
