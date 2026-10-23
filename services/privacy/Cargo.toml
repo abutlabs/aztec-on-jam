@@ -7,8 +7,8 @@ authors = ["abutlabs <abutlabs@gmx.com>"]
 description = "Aztec's privacy runtime as a JAM service: folded Noir kernel proofs verified in refine, roots and nullifiers in accumulate"
 
 [dependencies]
-jam-pvm-common = { version = "0.1.29", default-features = false, features = ["service"] }
-polkavm-derive = "0.29"
+jam-pvm-common = { path = "../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
 
 [profile.release]
 panic = "abort"

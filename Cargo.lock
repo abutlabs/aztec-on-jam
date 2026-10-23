@@ -122,22 +122,17 @@ dependencies = [
 
 [[package]]
 name = "jam-pvm-common"
-version = "0.1.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc9b584b9b343ce25ddf3e01bc4ef95e444de3a188d231c386ccd3d0bc0a8fa8"
+version = "0.1.28+gp080"
 dependencies = [
  "bounded-collections",
  "jam-codec",
  "jam-types",
- "picoalloc",
- "polkavm-derive 0.37.0",
+ "polkavm-derive",
 ]
 
 [[package]]
 name = "jam-types"
-version = "0.1.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3786d33c67f2a29311a5d21781f828de51a1fbb34dc6362f4039dea11786bab9"
+version = "0.1.28+gp080"
 dependencies = [
  "atomic-traits",
  "bounded-collections",
@@ -195,12 +190,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
-name = "picoalloc"
-version = "5.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ce68d5282de9d0a9fe76f0189dbcc08ec7713695673f4611ebab9d1c785bf21"
-
-[[package]]
 name = "picosimd"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -208,56 +197,29 @@ checksum = "7823ffd00d2b55ebe51750a19f47f2a33cb1f1d135f5cba893379b81c4d44856"
 
 [[package]]
 name = "polkavm-common"
-version = "0.29.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f634b46a6a47a5de381f56d1d8cced9f8640d063b2b1a44b0da6dbef91bbd400"
-
-[[package]]
-name = "polkavm-common"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b44940b0d82ff491647139e045e026b98666be87770f72d48d6463fb65b866fd"
+checksum = "3b1a84b97f7d7cc46838ff94775c708c7aa904371919f12443359150c1ed7332"
 dependencies = [
  "picosimd",
 ]
 
 [[package]]
 name = "polkavm-derive"
-version = "0.29.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ba6256c003853b6adb5dc8394e0e1882a9545ee3bec4e4ce533e7e4f488825"
+checksum = "41a7a5487e76bf90e7fce09d6bc1c4c41d2e8c817909b4c29ee1bdca2d338601"
 dependencies = [
- "polkavm-derive-impl-macro 0.29.0",
-]
-
-[[package]]
-name = "polkavm-derive"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b155c82c47af761e7450e1e5eff1d48ad78d040b09ed57b93bc8e46ca4ad71b0"
-dependencies = [
- "polkavm-derive-impl-macro 0.37.0",
+ "polkavm-derive-impl-macro",
 ]
 
 [[package]]
 name = "polkavm-derive-impl"
-version = "0.29.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90751404f08622c8a671695605cfc1bd83ec091339bd3258a37acc7a931c8741"
+checksum = "743296539465980c7e7f7294396607add7169b52d276c1642f5cd972f012889f"
 dependencies = [
- "polkavm-common 0.29.0",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "polkavm-derive-impl"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0f385d969918c91b2f89646b5e77e43cd3f52178e3ed642eec2365f9bc3c575"
-dependencies = [
- "polkavm-common 0.37.0",
+ "polkavm-common",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -265,21 +227,11 @@ dependencies = [
 
 [[package]]
 name = "polkavm-derive-impl-macro"
-version = "0.29.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e463de593b485c8685d42737aae81c24005dba967deaaaccbb6f3e936d8596"
+checksum = "5dc5c392278508d85fa6073423470b56faad2438bf33874cc71444cf3c8b279a"
 dependencies = [
- "polkavm-derive-impl 0.29.0",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "polkavm-derive-impl-macro"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d89dbb6c2d1a7c951dc8e70bf1302329939a3c21f757861d97e013f8352c8f7"
-dependencies = [
- "polkavm-derive-impl 0.37.0",
+ "polkavm-derive-impl",
  "syn 2.0.119",
 ]
 
@@ -288,7 +240,7 @@ name = "privacy-service"
 version = "0.0.1"
 dependencies = [
  "jam-pvm-common",
- "polkavm-derive 0.29.0",
+ "polkavm-derive",
 ]
 
 [[package]]

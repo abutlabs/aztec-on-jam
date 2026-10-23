@@ -23,7 +23,7 @@ All four sit under `Aiden/submodules/`. Aztec's code is Apache-2.0; so is this.
 ## Layout
 
 - `services/privacy/` — the service crate (`jam-pvm-common`, `no_std`), built with
-  `cargo jam-build` to `privacy-service.jam`.
+  jamswap's `jam080-build` (GP 0.8.0) to `privacy-service.jam`.
 - `spikes/ultrahonk-gas/` — the measurement that decides the architecture (plan, step 0).
 - `nets/` — how the service lands on a local tiny net: jamswap's `lasair6` (six lasair
   validators), `pj6` (six PolkaJam validators) or the mixed net.
@@ -31,4 +31,4 @@ All four sit under `Aiden/submodules/`. Aztec's code is Apache-2.0; so is this.
 
 ## Status
 
-Scaffold. `jam-pvm-build -m service` in `services/privacy` builds a 16 KB blob whose refine rejects everything; step 0 of the plan is the first thing to do.
+Scaffold. `jam080-build services/privacy --out <dir>` builds a 12 KB GP 0.8.0 blob whose refine rejects everything; step 0 of the plan is under way (#5).
