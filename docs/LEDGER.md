@@ -1333,3 +1333,17 @@ where they said about 169M or 180M.
 Issues: #23 closed.
 Next: #41 (Poseidon2 on PolkaJam), #40 (the Solidity verifier in Foundry), then the JIP's
 native timings (#32).
+
+## 2026-10-23 48 — #41 closed: a depth-40 Poseidon2 insertion costs 17.1M gas, more than accumulate's 10M; Poseidon2 joins the JIP
+Why this issue: the testnet was free, the spike was ready, and its answer settles the JIP's
+second open question.
+Did: `spikes/poseidon2-gas/measure.sh` on PolkaJam. Recorded in RESULTS.md, LIMITS.md
+(candidate 3) and the JIP draft (call 7, `poseidon2_bn254_permute`; open question 2
+answered).
+Evidence: host "p2: 5 permutation vectors, hash_cli's H(7,11,13) and H(0,0), and the empty
+depth-16 root all match". PolkaJam: 1 hash 437,462; 10 chained 4,297,147; 100 chained
+42,892,428 (428,839 a hash); 1 depth-40 path 17,515,645; 10 paths 171,853,288 (17,148,627 a
+path); verdicts 01, and 00 for a wrong root.
+Issues: #41 closed.
+Next: #40 (bb 6's Solidity verifier in Foundry), then the JIP's native timings (#32),
+including Poseidon2's.

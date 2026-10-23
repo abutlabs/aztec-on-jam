@@ -2,7 +2,7 @@
 
 Host calls for the elliptic-curve checks that zero-knowledge proofs and signatures need
 (pairings and multi-scalar multiplication on BN254 and BLS12-381, EIP-4844 KZG point
-evaluation, and secp256k1 public-key recovery), so that a service verifies a proof or a
+evaluation, secp256k1 public-key recovery) and for Poseidon2, the hash their circuits use, so that a service verifies a proof or a
 signature at close to native cost instead of as interpreted PVM code.
 
 *README line:* `- [JIP-8](./JIP-8.md): **Cryptographic host calls** - Host calls for pairing checks, multi-scalar multiplication, KZG point evaluation and secp256k1 recovery, priced from native cost.`
@@ -31,6 +31,8 @@ script):
 | EIP-4844 KZG point evaluation | 199,473,075 | 4.0% | 50,000 | 0.083% |
 | One blob checked against its commitment | 262,430,040 | 5.2% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |
+| Poseidon2 (BN254, t = 4), one hash | 428,839 | 0.009% (4.3% of accumulate's 10M) | none (circuits only) | |
+| A depth-40 tree insertion (40 hashes) | 17.1M | 171% of accumulate's 10M | | |
 
 Compared as shares of the budget each check runs in, a JAM service pays about 50 times what an
 Ethereum contract pays for the same check. That price falls on every privacy system, rollup
@@ -139,6 +141,25 @@ The trusted setup is Ethereum's KZG ceremony output, the same [s]G2 as EIP-4844.
 key, last 20 bytes), or `HUH` if nothing recovers (v not 27 or 28, r or s not in [1, n)).
 High s is accepted, as the precompile accepts it.
 
+### 7. `poseidon2_bn254_permute`
+
+**Index**: 107
+
+**Gas usage**: G_POSEIDON2
+
+**Input registers**: φ7 = state offset (4 BN254 field elements, 32-byte big-endian each, 128
+bytes), φ8 = output offset
+
+**Output registers**: φ'7 = `OK` with the permuted state at φ8 (128 bytes), or `HUH` if an
+element is not below the field modulus
+
+The permutation is Poseidon2 with t = 4, x^5, 8 full and 56 partial rounds, and the round
+constants and internal diagonal Noir and Barretenberg use (pinned by their published vectors).
+Sponges and tree hashing stay in the service. Motivation: a privacy tree's insertion in
+accumulate. One Poseidon2 hash costs 428,839 gas as PVM code, and a depth-40 path 17.1M,
+more than accumulate's 10M a report (jam-privacy-service#41). Without it, every tree update
+must be proven and applied in order, one package a slot.
+
 ### Side-effects
 
 None beyond the output memory. No state is read or written. Every call is available in
@@ -182,7 +203,7 @@ pin these behaviours.
 ## Compatibility
 
 New indices only. Existing services are unaffected, and a service may keep its PVM
-implementation as a fallback before activation. Indices 101–106 follow JIP-1's 100, outside
+implementation as a fallback before activation. Indices 101–107 follow JIP-1's 100, outside
 the GP's 0–27.
 
 ## Test vectors
@@ -209,7 +230,8 @@ Native implementations: blst (BLS12-381), arkworks (BN254), k256 (secp256k1), c-
 ## Open questions
 
 1. R and m: one reference throughput for all clients, or the slowest client's?
-2. Should Poseidon2 (and other proof-system hashes) be included? It depends on whether
-   accumulate can afford a privacy tree's insertions in PVM code (jam-privacy-service#41).
+2. Poseidon2 is included (call 7) because accumulate cannot afford a tree insertion in PVM
+   code (#41). Should other proof-system hashes join it (Poseidon over BN254 as in circom,
+   Rescue)? This draft says no, until a measured case asks.
 3. Should Grumpkin and the BN254 G2 MSM be included, for IPA-based (CHONK) and other verifiers?
 4. A separate index per curve operation, or one call with a curve and operation selector?
