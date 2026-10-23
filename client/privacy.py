@@ -26,8 +26,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 CIRCUITS = ROOT / "circuits"
 STATE = Path(os.environ.get("CLIENT_STATE", HERE / "state.json"))
-DEPTH = 16          # the note tree
-NULL_DEPTH = 16     # the indexed nullifier tree
+DEPTH = 40          # the note tree (Aztec: 40)
+NULL_DEPTH = 40     # the indexed nullifier tree (Aztec: 40)
 P = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 ENV = dict(os.environ, PATH=f"{Path.home()}/.nargo/bin:{Path.home()}/.bb:{os.environ.get('PATH', '')}")
 # the pinned toolchain (docs/TOOLS.md; scripts/bootstrap.sh installs it), overridable
@@ -101,10 +101,10 @@ def seed_path(n0, n1, index1, siblings):
     return node
 
 
-def zeros(depth=DEPTH):
+def zeros(depth=None):
     """Z[0] = 0 (an empty leaf), Z[i] = H(Z[i-1], Z[i-1]); Z[depth] is the empty tree's root."""
     z = [0]
-    for _ in range(depth):
+    for _ in range(depth or DEPTH):
         z.append(h(z[-1], z[-1]))
     return z
 
@@ -133,9 +133,9 @@ def note_hash(n):
 
 class Tree:
     """An append-only Merkle tree over the known leaves; empty leaves are 0."""
-    def __init__(self, leaves, depth=DEPTH):
+    def __init__(self, leaves, depth=None):
         self.leaves = list(leaves)
-        self.depth = depth
+        self.depth = depth or DEPTH             # read when called: DEPTH may be set at runtime
         self.z = zeros(depth)
         self.memo = {}
 

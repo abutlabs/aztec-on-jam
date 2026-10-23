@@ -57,10 +57,10 @@ const UNSHIELD_DEST: usize = 12;
 const DEPOSIT_AMOUNT: usize = 13;
 
 /// The trees a new chain starts from, so the first proof cannot start from a tree of its own
-/// making: the empty depth-16 note tree, and the nullifier tree holding only its zero leaf
+/// making: the empty depth-40 note tree, and the depth-40 nullifier tree holding only its zero leaf
 /// (H(0, 0, 0) at index 0; size 1). client/poseidon2.py and lib/core.js compute the same.
-const EMPTY_NOTE_ROOT: [u8; 32] = hex32("14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3");
-const EMPTY_NULL_ROOT: [u8; 32] = hex32("22abec1e2592b57e26f1cd16aa05a25d59c1fd6df93e7e8319e8cc29a7d99fe2");
+const EMPTY_NOTE_ROOT: [u8; 32] = hex32("1fd848aa69e1633722fe249a5b7f53b094f1c9cef9f5c694b073fd1cc5850dfb");
+const EMPTY_NULL_ROOT: [u8; 32] = hex32("22ce2ee466581b1bd5ddd24c066854b58521fd41637f92dfd04c092d21bca4b6");
 const EMPTY_NULL_SIZE: u64 = 1;
 const KEY_NULL_SIZE: &[u8] = b"null:size";
 

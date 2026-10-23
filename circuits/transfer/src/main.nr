@@ -15,8 +15,8 @@
 // can swap the ciphertexts a receiver will scan for.
 use poseidon::poseidon2::Poseidon2;
 
-global DEPTH: u32 = 16;      // the note tree
-global NULL_DEPTH: u32 = 16; // the nullifier tree
+global DEPTH: u32 = 40;      // the note tree
+global NULL_DEPTH: u32 = 40; // the nullifier tree
 global KIND_DUMMY: Field = 0;
 global KIND_TREE: Field = 1;
 global KIND_DEPOSIT: Field = 2;
