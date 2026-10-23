@@ -31,4 +31,9 @@ All four sit under `Aiden/submodules/`. Aztec's code is Apache-2.0; so is this.
 
 ## Status
 
-Scaffold. `jam080-build services/privacy --out <dir>` builds a 12 KB GP 0.8.0 blob whose refine rejects everything; step 0 of the plan is under way (#5).
+Step 0 done: one UltraHonk verification in `refine` costs **312,279,376 gas** (zk) or
+302,381,955 (plain) on lasair's GP 0.8.0 PVM, 1.26 times Groth16, under a tiny package's
+1 billion; bad proofs are rejected at 12.8M. Verifier: zkVerify `ultrahonk-no-std`, pure
+Rust, built with `jam080-build`. Toolchain pinned to Noir 1.0.0-beta.16 and bb 3.0.3
+(`docs/TOOLS.md`). The service's refine still rejects everything; step 1 is next.
+Numbers and history: issue #13.

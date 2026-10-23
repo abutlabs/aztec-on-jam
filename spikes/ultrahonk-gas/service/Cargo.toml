@@ -1,0 +1,19 @@
+[package]
+name = "ultrahonk-gas-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "Gas spike: one UltraHonk (Keccak, BN254) verification inside a JAM refine, zk and plain flavours"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+ultrahonk-no-std = { git = "https://github.com/zkVerify/ultrahonk_verifier", rev = "986b79b232d0f44c52fe50cd85ba8c3f505fc3c8", default-features = false }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 'z'
+
+[workspace]

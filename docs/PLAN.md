@@ -23,6 +23,12 @@ the way `zk-jam-service/spikes/groth16-gas` metered Groth16 (246,884,255 gas und
 Also measure: a 32-deep Poseidon2 or Blake2 Merkle insert in refine (sets notes a
 package) and the indexed-tree nullifier insert.
 
+**Measured 2026-10-22** (#13): 302,381,955 gas plain, 312,279,376 gas zk, both accepted;
+tampered proof and wrong public input rejected at about 12.8M. Verifier: zkVerify
+`ultrahonk-no-std`, pure Rust. **Row chosen: under 1 billion.** Three verifications fit a
+tiny package, sixteen a full one; no folding is forced. Price: the verifier parses bb 3.0.x
+proofs, so Noir beta.16 and bb 3.0.3 are pinned (#15). Tree-insert gas: still to measure.
+
 ## Step 1: the service (`services/privacy/`)
 
 Refine takes one work-item: `[folded proof][public inputs]`, where the public inputs are
