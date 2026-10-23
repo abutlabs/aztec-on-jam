@@ -8,7 +8,9 @@ time; the state is in the files and the git history. Read, in this order:
 3. The code.
 
 Then do the next step the ledger names. One step an iteration, verified, committed,
-pushed, ledgered. Don't start a second step in the same iteration.
+pushed, ledgered. Don't start a second step in the same iteration, with one exception: while
+a step waits on a long run (a soak, a clean-machine build), an independent step that does
+not touch what the run uses may proceed; each step gets its own ledger entry.
 
 ## Where things are
 
