@@ -72,7 +72,7 @@ transfer itself with noir_js and bb.js. The server behind it only serves files.
   wraps each proof, which is Aztec's prover ([spikes/chonk](../spikes/chonk/RESULTS.md)).
 - **Clients matter.** Both interpreting, PolkaJam refines a privacy proof about 4.5 times faster
   than lasair. lasair's guarantors also wait for the core to be free before guaranteeing the next
-  package, and one tree runs at 0.385 of a slot on lasair against 1.0 on PolkaJam. The README's
+  package, and one tree runs at about 0.38 of a slot on lasair against 1.0 on PolkaJam. The README's
   side-by-side table has the numbers.
 
 ## What is reduced

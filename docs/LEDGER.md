@@ -969,3 +969,26 @@ two Docker-only steps (pulling the lasair image, building jamboree for Linux) ar
 this Mac's `--check` (ledger 24), not from nothing. The privacy blob is 1,028,605 bytes here
 and 1,028,608 on the Mac: still not byte-reproducible across machines (ledger 13).
 Issues: #12 closed.
+
+## 2026-10-23 30 — lasair6's 20 minutes again, on the fixed client: the pace was the chain's; the fix helps less than one pair said
+Did: ledger 22's A/B (`out/ab93.sh`: a clean lasair6, `client/soak.py --seconds 1200`, image
+`lasair:93-before` then `lasair:93-after`) with the client at 99f8b62. The first try of the
+"after" arm failed in `up`: `jamboree rpc deploy` created the privacy service and sent its
+preimage, then "Error: No such file or directory (os error 2)" writing its state file, though
+`out/state/` existed and held the first service's. jamboree's fork now names the path in that
+error (lasair branch); the arm's second try deployed normally, so the cause is not known
+(possibly the Docker Desktop bind mount).
+Evidence (reports: docs/soak-lasair6-main-2.md, docs/soak-lasair6-fix-2.md):
+```
+| image       | run       | submitted | landed | expired (EXPIRED lines) | resends | pace  | p50 / p90 / p99 s  | prove p50 |
+| main        | ledger 22 | 62        | 62     | 14                      | 14      | 0.31  | 21.9 / 44.9 / 62.5 | 4.56 s    |
+| main        | rerun     | 65        | 65     | 9 (lm0 9)               | 10      | 0.325 | 21.8 / 41.9 / 74.5 | 0.99 s    |
+| main + fix  | ledger 22 | 77        | 77     | 5                       | 5       | 0.385 | 21.2 / 30.1 / 55.5 | 6.14 s    |
+| main + fix  | rerun     | 75        | 75     | 7 (lm0 4, lm1 1, lm3 2) | 8       | 0.375 | 21.2 / 35.0 / 48.7 | 1.04 s    |
+```
+With proofs five times faster, pace and latency did not move: lasair's pace is the chain's
+(the guarantor waiting for a free core, lasair#94), as #14 said. The fix's effect is smaller
+than ledger 22's one pair suggested: expiries 14 and 9 without it, 5 and 7 with it, pace 0.31
+and 0.325 against 0.385 and 0.375. README, DEMO.md, ANNOUNCE.md and the tutor's JAM beside
+Aztec page now give both pairs, or "about 0.38 of a slot".
+Issues: #14 commented.

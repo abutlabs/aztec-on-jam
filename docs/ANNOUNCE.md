@@ -20,7 +20,7 @@ lasair validators, six PolkaJam validators, or three of each, with the same serv
   notes on chain (X25519 + AES-256-GCM), and every proof is made in the page (noir_js + bb.js).
 - **What it says about clients.** One tree takes one package a slot, in order. On PolkaJam an
   hour at that pace lost none of 600. On lasair, guarantors wait for a free core, so one tree
-  runs at 0.385 of a slot; we fixed one expiry bug on the way. A mixed net needs both clients to
+  runs at about 0.38 of a slot; we fixed one expiry bug on the way. A mixed net needs both clients to
   agree on PVM gas to the unit: PolkaJam's 2026-09-22 nightly and the v0.8.0 vectors' cmov rule
   differ by 2 gas on one accumulate, which forks the net. PolkaJam v0.8.0 agrees.
 - **Aztec's own kernels, measured.** They compile with Noir rc.3 and prove in 2 to 8 s, but

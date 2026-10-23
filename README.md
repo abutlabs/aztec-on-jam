@@ -76,7 +76,7 @@ PolkaJam is Parity's.
 | The same, interpreted, macOS native | 0.65 s (main, a dev build) | 0.172 s (v0.8.0) |
 | The same, PolkaJam's recompiler (x86-64 only; a 4-vCPU GitHub runner, 30 refines) | no recompiler | 8 to 24 ms in 15; 0.41 to 0.56 s in 12, on the same nodes, cause not yet known |
 | An auditor re-executing a privacy report | 1.0 to 1.9 s | not in its telemetry |
-| One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.385 of a slot, median 21.2 s, 5 of 77 expired and resent | 1.0 of a slot, median 13.4 s, 0 of 600 |
+| One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.375 to 0.385 of a slot, median 21.2 s, 5 of 77 and 7 of 75 expired and resent | 1.0 of a slot, median 13.4 s, 0 of 600 |
 | A shield, then a private send, in the wallet (Docker nets) | 81.3 s, 17.5 s | 25.8 s, 11.2 s |
 | `nets/demo.sh check` (37 assertions), and resends in it and the three stages | 3 min 09 s, 2 resent | 1 min 51 s, none |
 
@@ -86,9 +86,9 @@ and three lasair validators on GRANDPA, runs the whole demo (`check` in 1 min 36
 13.1 s) with both clients finalizing.
 
 Three things about lasair this work found and measured. A guarantor took packages for a core it
-was about to leave and let them expire: fixed in lasair main, expiries fell from 14 in 62 to 5 in
-77. The rest wait for a free core across a rotation turn, and the same wait holds one tree to
-0.385 of a slot: open. And the cmov gas rule lasair took with the v0.8.0 test vectors differs from
+was about to leave and let them expire: fixed in lasair main. Over two pairs of 20-minute runs,
+expiries fell from 14 and 9 to 5 and 7. The rest wait for a free core across a rotation turn, and
+the same wait holds one tree to about 0.38 of a slot: open. And the cmov gas rule lasair took with the v0.8.0 test vectors differs from
 PolkaJam's 2026-09-22 nightly by 2 gas on one accumulate, which forks a mixed net; PolkaJam v0.8.0
 agrees with it.
 
