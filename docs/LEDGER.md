@@ -1296,3 +1296,21 @@ host-call layout (Index 100, Name `log`, Gas usage, Input registers φ7…, Outp
 φ'7 = WHAT, Side-effects).
 Next: `docs/jip/jip-draft.md` in JIP-1's layout, with gas pricing grounded in native timings
 measured here.
+
+## 2026-10-23 46 — #32: the JIP's first draft, specification complete, gas constants pending native timings
+Why this issue: #32 is next in order, and the specification needs no testnet. Native timings
+wait until #23's 2^24 run frees memory, so they don't measure swap.
+Did: `docs/jip/jip-draft.md` (JIP-8, cryptographic host calls), in JIP-1's layout:
+- six calls with Ethereum precompile encodings: `bn254_g1_msm`, `bn254_pairing_check`,
+  `bls12_381_g1_msm`, `bls12_381_pairing_check`, `kzg_point_evaluation`,
+  `secp256k1_recover`;
+- GP conventions checked against `pvm_invocations.tex`: panic on unreadable memory
+  (`export`, 579-583), `HUH` and `OK` codes;
+- the motivation, measured on PolkaJam;
+- gas as G = ⌈t_native × R × m⌉;
+- determinism: a protocol change with an activation slot, unlike JIP-1's optional `log`;
+- compatibility, test vectors, reference implementations, four open questions.
+Two draft claims were wrong and are fixed: the c-kzg vectors agreed with the code built
+natively, and the recompiler's 8–24 ms held in 15 of 30 runs, not "most".
+Next: native timings of each call (blst, arkworks, k256, c-kzg) to fill the gas table; then
+#32 closes.
