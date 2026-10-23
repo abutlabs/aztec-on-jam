@@ -1525,3 +1525,19 @@ Evidence:
   against 181.1M (3.5×).
 Issues: #45 closed.
 Next: #34, the final JIP.
+
+## 2026-10-23 59 — #34 closed: JIP-8 final, four curve calls priced in the GP's unit, with a change log and a submission note; not submitted
+Why this issue: #33's reviews, #44's gain and #45's constants were all in.
+Did: `docs/jip/jip-final.md` makes the agreed revisions. The JIP has four calls (101–104: BN254
+and BLS12-381 G1 MSM and pairing check), the EIPs' semantics with an `OK`/`HUH` mapping, and an
+evaluation order with gas from φ8. Its invariant is R_GP = 10/3 gas/ns × m = 2, with an MSM
+table and pairing bounds from #45's x86 run. Activation is keyed to the lookup-anchor slot, with
+a probe and reserved indices, and Ψ_I is excluded. It adds Rationale, Alternatives considered, a
+KZG composition, Process, and a change log citing the comments. `docs/jip/SUBMISSION.md` lists
+what is ready and six steps before submitting. LIMITS, LESSONS and ARCHITECTURES follow the final
+JIP, and the draft points to it.
+Evidence: `e2e --vectors | cmp - docs/jip/vectors/jip8-core.jsonl` gives no output. `e2e-pricing.py
+< ci/e2e-40026200133.txt` reproduces the constants. The UltraHonk projection (52,122,624 at
+2^24) is in `spikes/verifier-profile/RESULTS.md`.
+Issues: #34 closed. Open: #28 and #35 (tracking), and #46, #47 and #48 (research, not phase-3 rows).
+Next: #28 and #35's status; #48; Phase 3's done check.

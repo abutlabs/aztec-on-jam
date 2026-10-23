@@ -9,7 +9,7 @@ re-execution gives a stronger guarantee than a proof alone. What it lacks is che
 cryptography.** A single cryptographic check (a KZG opening, a signature) costs about 50 times
 more of the budget it runs in (one core's package) than the same check costs of an Ethereum
 block. A whole proof verifier costs about 3 times more. JAM's many cores still give it more
-capacity in total. This is spec-level, and a JIP could ease it by 2–4× (#31, #32). Sharing one
+capacity in total. This is spec-level, and a JIP could ease it: each curve call 7–13× cheaper, an UltraHonk check 3.5× (#44, #45, `docs/jip/jip-final.md`). Sharing one
 private state across many packages a slot looked like a second limit: this demo serializes
 packages on its tree. It is a design choice, not a spec limit: with insertion moved out of the
 proofs into one tree package a slot, a tree takes about 5,675 transfers a slot, by measured

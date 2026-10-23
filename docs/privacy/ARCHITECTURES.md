@@ -39,8 +39,8 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   is cheap storage, not a tree. Only note insertion is sequential, and it happens in one refine
   a slot, which has 5e9 gas. Appended as a batch, the notes share the tree's upper levels, so
   each costs about one hash: 438,966 gas, 11,350 notes a full package (**measured**, #43),
-  against 290 if each rehashed its path. JIP-8's Poseidon2 host call (206,400 gas against
-  428,841, `docs/jip/jip-draft.md`) would double it.
+  against 290 if each rehashed its path. A Poseidon2 host call, left to a later JIP, would
+  double it.
 - **Accumulate stays small.** It checks nullifiers, records them, and accepts the tree
   package's new root if it started from the current one. #41 showed accumulate cannot afford
   even one insertion (17.1M gas against 10M), so 3 keeps all hashing in refine.
@@ -74,5 +74,5 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
 - **For a JAM-native privacy service,** use 3: no prover network, users' proofs checked
   directly and in parallel by re-execution, and one tree's insertions done in refine once a
   slot.
-- **Both benefit from JIP-8** (#32): cheaper proof checks, and Poseidon2 doubling 3's insertion
-  rate.
+- **Both benefit from JIP-8** (`docs/jip/jip-final.md`): an UltraHonk check at about 52M gas
+  instead of 181M (#44, #45), so 3 verifies about 95 proofs a full package instead of 27.

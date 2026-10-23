@@ -7,6 +7,8 @@ signature at close to native cost instead of as interpreted PVM code.
 
 *README line:* `- [JIP-8](./JIP-8.md): **Cryptographic host calls** - Host calls for pairing checks, multi-scalar multiplication, KZG point evaluation, secp256k1 recovery and the Poseidon2 permutation, priced from native cost.`
 
+*Superseded by `jip-final.md`, which revises it after the simulated reviews in `reviews/`. The reviews read it at 4f0fd19; since then only two measured figures were refreshed.*
+
 *Status: first draft (2026-10-23), for review (#33). Not submitted. The number is the next
 free one at polkadot-fellows/JIPs 5202db1 and may change.*
 

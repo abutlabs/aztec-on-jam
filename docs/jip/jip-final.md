@@ -1,0 +1,309 @@
+# JIP-8: Curve host calls for proof verification
+
+Four host calls give services native-speed elliptic-curve arithmetic for checking
+zero-knowledge proofs and BLS-style commitments: multi-scalar multiplication and the pairing
+check, on BN254 and on BLS12-381. Each takes its input in the encoding of the matching Ethereum
+precompile, with the same semantics, and is priced from end-to-end benchmarks under an invariant
+stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification would fall from
+about 181M gas to about 52M.
+
+*README line:* `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254 and BLS12-381 multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
+
+*Status: final draft for later submission (2026-10-23). Not submitted. It revises the first
+draft (`jip-draft.md`) after two simulated reviews (`reviews/`); see the change log. JIP-8 is the
+next free number at polkadot-fellows/JIPs 5202db1 and may change.*
+
+## Motivation
+
+A service that checks a proof spends most of its gas on curve arithmetic, which today is
+metered PVM code: the PVM has no cryptographic host calls (GP 0.8.0, Appendix B, calls 0–27).
+Measured on a six-validator PolkaJam v0.8.0 testnet, refine gas from PolkaJam's telemetry, each
+row with its script in [jam-privacy-service](https://github.com/abutlabs/jam-privacy-service):
+
+| Check | As PVM code today | With JIP-8 | How the second column is obtained |
+|---|---|---|---|
+| UltraHonk, Aztec's epoch-proof shape (plain, Keccak transcript, 2^24, every gate type) | 181,129,375 | about 52.1M (3.5×) | Measured split: MSM (62 points) 71.1M, pairing 48.7M, other work 36.0M. Curve work re-priced at this JIP's constants (`spikes/verifier-profile`) |
+| UltraHonk at 2^16 | 170,681,509 | about 47.9M (3.6×) | The same |
+| One BN254 2-pair pairing check, end to end | 64,337,004 | 8,258,199 (7.8×) | The same function run as PVM code, and as the call |
+| One BN254 128-point G1 MSM, end to end | 110,727,638 | 12,852,234 (8.6×) | The same |
+| EIP-4844 KZG point evaluation | 199,453,527 | about 8.9M plus a SHA-256 (about 22×) | Composed from calls 103 and 104 (*Suggestions & examples*); estimate |
+
+A full refine package (5e9 gas) would check about 95 Aztec-sized UltraHonk proofs instead of
+27, and a tiny one (1e9) about 19 instead of 5. Settling Aztec on JAM (one epoch proof, its blob
+opening and 33 attestation signatures) would fall from about 813M gas to about 494M. The 433M of
+secp256k1 signature recovery that remains is outside this JIP (*Rationale*).
+
+One saving needs no JIP. The reference verifier's default curve hooks encode and decode every
+point. Hooks that convert field by field verify the same 2^24 proof for 156.0M gas instead of
+181.1M. Services should take that first. It leaves 77% of the verification in curve arithmetic,
+which only a host call reaches.
+
+## Rationale
+
+- **Primitives, not verifiers.** Barretenberg changed its proof format at every major release
+  (bb 3 → 5 → 6: challenge derivation, new subrelations). The curves did not change. A
+  `verify_ultrahonk` call would need a protocol amendment per release, while an MSM and a
+  pairing check serve every pairing-based proof system: UltraHonk, PLONK, Groth16, KZG
+  commitments, and BLS signatures.
+- **Whole operations, not field arithmetic.** Field-arithmetic host calls would not pay. Poseidon2,
+  which is pure field arithmetic, already runs within f = 4.7 of native in the recompiled PVM,
+  and a host-call boundary per multiplication costs more than that recovers. MSMs and pairings
+  are where the PVM is furthest from native, because native libraries use algorithms (Pippenger
+  windows, endomorphisms, optimised Miller loops) that a service would otherwise carry as code.
+- **These two curves.** BN254 is what deployed proof systems target: Noir and Barretenberg,
+  Groth16 on Ethereum, Aztec. BLS12-381 is already in the GP (`beefy.tex`) and is the curve of
+  Ethereum's KZG commitments and BLS signatures.
+- **Not in this JIP.** These each need their own measured case and their own proposal:
+  - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
+  - Poseidon2 over BN254: a refine-side note tree already appends 11,350 notes a package
+    without it;
+  - Grumpkin: needed only to check Aztec's client proofs directly;
+  - a dedicated KZG point evaluation: it composes from 103 and 104 for less than a dedicated
+    call would cost.
+- **Separate indices,** one per operation, as JIP-1 uses. A selector argument adds a failure
+  mode and saves nothing.
+
+## Alternatives considered
+
+1. **Better PVM code.** Field-wise curve hooks save 14% of an UltraHonk check, and services
+   should adopt them. Algorithmic gains are mostly already in the arkworks code services run.
+   What remains is the PVM's own overhead on 254- and 381-bit arithmetic.
+2. **An instruction or gas-table change.** A widening multiply-accumulate, add-with-carry, or a
+   re-costed `mul_upper_u_u` (`pvm.tex`) would help every field, including the ones this JIP
+   leaves out, and would cheapen the 36M of an UltraHonk check that no call touches. It is
+   complementary to host calls, not a replacement. Its gains are unmeasured: profiling the
+   kernels by instruction class under the GP's cost model is open work
+   (jam-privacy-service#47).
+3. **A verifier call.** Rejected above: proof formats change faster than the protocol should.
+4. **Larger refine budgets.** A bigger budget leaves each check's share of a package unchanged.
+   The cost is relative to all other work on a core.
+
+## Host-call specification
+
+### Common rules
+
+The calls are available in refine (Ψ_R) and accumulate (Ψ_A), and are added to their
+host-call dispatch functions. They are not available in is-authorized (Ψ_I), which stays as the
+GP defines it (`pvm_invocations.tex`, `eq:isauthorizedmutator`). In Ψ_I each returns `WHAT` at
+Cgasunknown, as any unknown call does.
+
+Every call takes φ7 = input offset and φ8 = input length, and evaluates in this order:
+
+1. **Gas.** The call's gas is computed from φ8 alone, in unbounded integers, using the schedules
+   in *Gas pricing*. If it exceeds the gas remaining, the invocation runs out of gas (∞). If φ8
+   is not a multiple of the call's item size, the gas is that of ⌊φ8 / item⌋ items, at least the
+   1-item price, and step 3 returns `HUH`.
+2. **Memory.** If μ_{φ7…φ7+φ8} is not readable, or the output range is not writable, the
+   invocation panics (☇), as other host calls do on inaccessible memory. Since φ8 ≥ 2^32 can
+   never be readable, this bounds φ8.
+3. **Validation.** If the input is malformed (below), φ'7 = `HUH`, and nothing is written.
+4. **Result.** Otherwise φ'7 = `OK`, and the result is written.
+
+**Semantics are those of the named EIP,** with this mapping: wherever the EIP's precompile fails,
+the call returns `HUH`. Where the precompile returns output, the call returns `OK` and writes the
+same bytes, or, for a pairing check, sets φ'8 to the precompile's 0 or 1. Scalars are any 32-byte
+big-endian integer, as in the EIPs. Malformed means:
+- a length that is not a whole number of items, or no items where an MSM needs at least one;
+- a field element not below the field modulus, or, for BLS12-381, one whose 64-byte encoding
+  has nonzero top 16 bytes;
+- a point that is not on the curve and is not the all-zero encoding of infinity;
+- a point outside the prime-order subgroup where the EIP requires the check. That is G2 for
+  BN254; for BLS12-381, G1 and G2 in both calls (EIP-2537). BN254's G1 has cofactor 1.
+
+### 101. `bn254_g1_msm`
+
+**Gas usage**: G_BN_MSM(n), n = ⌊φ8 / 96⌋. **Input registers**: φ7, φ8, and φ9 = output offset.
+
+- input: n ≥ 1 items of (G1 point, 64 bytes: x ‖ y, each 32-byte big-endian, (0, 0) for
+  infinity, as EIP-196; scalar, 32 bytes).
+- `OK`: μ'_{φ9…φ9+64} = Σ scalar_i · point_i, in the same encoding.
+
+EIP-196 defines ADD and MUL, not an MSM. With n = 1 this call is EIP-196's MUL. EIP-196's ADD is
+an MSM of two points with scalars 1.
+
+### 102. `bn254_pairing_check`
+
+**Gas usage**: G_BN_PAIR(k), k = ⌊φ8 / 192⌋. **Input registers**: φ7, φ8.
+
+- input: k ≥ 0 items of (G1, 64 bytes; G2, 128 bytes: x_im ‖ x_re ‖ y_im ‖ y_re, the imaginary
+  part first, as EIP-197).
+- `OK` with φ'8 = 1 if ∏ e(G1_i, G2_i) = 1, else φ'8 = 0. With k = 0, φ'8 = 1 (EIP-197).
+
+### 103. `bls12_381_g1_msm`
+
+**Gas usage**: G_BLS_MSM(n), n = ⌊φ8 / 160⌋. **Input registers**: φ7, φ8, φ9 = output offset.
+
+- input: n ≥ 1 items of (G1 point, 128 bytes, EIP-2537: x ‖ y, each 64-byte big-endian with
+  the top 16 bytes zero, all zero for infinity; scalar, 32 bytes).
+- `OK`: μ'_{φ9…φ9+128} = Σ scalar_i · point_i, in the same encoding.
+
+### 104. `bls12_381_pairing_check`
+
+**Gas usage**: G_BLS_PAIR(k), k = ⌊φ8 / 384⌋. **Input registers**: φ7, φ8.
+
+- input: k ≥ 0 items of (G1, 128 bytes; G2, 256 bytes: x_c0 ‖ x_c1 ‖ y_c0 ‖ y_c1, as EIP-2537).
+- `OK` with φ'8 = 1 if ∏ e(G1_i, G2_i) = 1, else φ'8 = 0. With k = 0, φ'8 = 1.
+
+### Side-effects
+
+None beyond the output memory and φ'7, φ'8. No state is read or written.
+
+## Gas pricing
+
+**The invariant.** A call charges at least what the GP's own sizing charges for the same time.
+The GP sizes a core as "a regular CPU core executing at somewhere between 25% and 50% of
+regular speed" over the six-second slot (`discussion.tex:77`). It meters a full package at 5e9
+gas, so the conservative end is 5e9 gas for 1.5 s of a core: R_GP = 10/3 gas per nanosecond.
+A call's gas is
+
+    G = ⌈t × R_GP × m⌉,  with m = 2
+
+where t is the call's p99 time on one thread of the reference machine with the reference
+implementation, the worst over the benchmark's input cases. m covers slower clients and
+hardware. The price depends on the GP's sizing and the benchmark, not on how fast any client's
+PVM recompiler runs.
+
+**The benchmark** (`spikes/jip-bench`, `e2e`) times each call end to end from its encoded input,
+with every check above. Each size runs on random group elements and adversarial cases: one base
+repeated, P with −P, half the points at infinity, scalars r − 1 and 2^256 − 1, a pair repeated,
+and a G2 point outside the subgroup last. Two implementations a curve must agree on every
+input: arkworks and substrate-bn for BN254, blst and arkworks for BLS12-381. The faster mature
+one is the reference, arkworks for BN254 and blst (single-threaded) for BLS12-381.
+
+**The constants below** come from one run, GitHub's 4-vCPU x86-64 runner (AMD EPYC 9V45), CI
+run 40026200133, where the implementations agreed on all 144 inputs. They are provisional; see
+the submission note.
+
+**Pairing checks**, an affine bound at or above every measured k = 1, 2, 4, 8:
+
+    G_BN_PAIR(k)  = 4,196,895 + 2,030,652 · k
+    G_BLS_PAIR(k) = 1,827,334 + 1,727,240 · k
+
+**MSMs**, a table. Between listed sizes, gas is linear in n. Past 512 it grows by the last
+segment's slope. Each entry is the largest at its size or any smaller size:
+
+| n | G_BN_MSM(n) | G_BLS_MSM(n) |
+|---|---|---|
+| 1 | 703,667 | 842,540 |
+| 2 | 879,660 | 1,198,814 |
+| 4 | 1,135,920 | 5,997,400 |
+| 8 | 3,178,140 | 5,997,400 |
+| 16 | 3,178,140 | 14,589,460 |
+| 32 | 6,411,967 | 16,341,307 |
+| 64 | 8,007,640 | 30,107,254 |
+| 128 | 12,852,234 | 66,119,300 |
+| 256 | 30,809,314 | 82,714,587 |
+| 512 | 39,471,280 | 208,961,727 |
+| each point past 512 | 33,836 | 493,153 |
+
+Each BN254 call costs less than its own computation as PVM code: a 1-point MSM is 703,667 as a
+call against 9,378,971 as PVM code, and across the sizes measured the saving is 7.2–13.3×
+(`spikes/verifier-profile`). The BLS12-381 calls have no PVM-code baseline here yet.
+
+## Activation and detection
+
+The calls are a protocol change: a GP amendment adopted at an activation timeslot T_A, not an
+optional extension. Every guarantor and auditor of a package must agree on a call's result and
+gas.
+
+- **In Ψ_R,** the calls are available if and only if the work-package's lookup-anchor timeslot
+  ((p_context)_lookupanchortime) is at least T_A. Refine already binds its view of state to that
+  slot (`pvm_invocations.tex`, the Refine invocation and `historical_lookup`), so an execution
+  before activation and its audit after it see the same answer.
+- **In Ψ_A,** they are available if and only if the block's timeslot is at least T_A.
+- **Before activation,** each index is an unknown host call: `WHAT`, for Cgasunknown = 1000 gas.
+- **Detection.** A service probes with `bn254_pairing_check` and φ8 = 0. Before activation it
+  gets `WHAT`. After, it gets `OK` with φ'8 = 1, for G_BN_PAIR(0) = 4,196,895 gas.
+- **Indices.** 101–104 are this JIP's. 105–127 are reserved for later cryptographic calls, each
+  by its own JIP, in order of adoption.
+
+## Determinism and consensus
+
+Implementations must agree byte for byte on outputs, on `HUH`, and on gas. The specification
+above is normative on its own: curve parameters, encodings, canonicality, subgroup membership
+and infinity. It does not depend on any library. Before activation, at least two independent
+implementations of each call are to be fuzzed against each other and against the vectors.
+BN254 has several mature independent implementations (arkworks, substrate-bn, Barretenberg's
+`ecc`, gnark-crypto, mcl), as BLS12-381 does (blst, arkworks, and others). Clients link one of
+them rather than write pairing code from scratch. BN254 is a new dependency for a client that
+implements only what GP 0.8.0 needs. BLS12-381 already is one, for BEEFY (`beefy.tex`).
+
+## Compatibility
+
+New indices only. Existing services are unaffected. A service can keep its PVM implementation
+and switch on the probe's result.
+
+## Test vectors
+
+- **JAM-native:** `vectors/jip8-core.jsonl`, 74 vectors. Each gives the call, the case, the
+  input, the result code, and the output or φ'8, and both implementations of each curve
+  produce them. They cover the benchmark's cases at n ≤ 4 and k ≤ 4, k = 0, and the malformed
+  inputs above: a wrong length, x equal to the modulus, a point off the curve, nonzero top
+  bytes in an EIP-2537 field, and a G1 point outside the subgroup.
+- **Ethereum's,** where the semantics coincide:
+  - EIP-197's pairing vectors, for 102;
+  - EIP-196's MUL vectors, for 101 with n = 1;
+  - EIP-2537's MSM and pairing vectors, for 103 and 104.
+
+## Suggestions & examples
+
+**KZG point evaluation (EIP-4844) from 103 and 104.** The proof π shows a commitment C opens to y
+at z if e(π, [s − z]G2) = e(C − [y]G1, G2). Equivalently, with no G2 scalar multiplication:
+
+    e(C − [y]G1 + [z]π, −G2) · e(π, [s]G2) = 1
+
+- **The work:** one 3-point `bls12_381_g1_msm` (points C, G1, π; scalars 1, −y, z), then one
+  2-pair `bls12_381_pairing_check`. That is about 3.6M + 5.3M gas, against 199,453,527 as PVM
+  code today.
+- **What the service supplies:** the versioned-hash check (0x01 ‖ sha256(C)[1..]) and [s]G2,
+  from Ethereum's KZG ceremony, which it holds as data. Neither enters the protocol.
+- **Vectors:** c-kzg-4844's 122 `verify_kzg_proof` vectors test the composition.
+
+**UltraHonk.** zkVerify's verifier routes every curve operation through its `CurveHooks` trait
+(`ark-bn254-ext`). A service adopts calls 101 and 102 by implementing that one trait.
+
+## Process
+
+A JIP standardises beside the GP; this one changes it. The JIP is the rationale and the
+specification. A companion diff to the GP would add the four functions to Appendix B, the
+constants to `definitions.tex`, and the dispatch entries to Ψ_R's and Ψ_A's host-call
+functions. It is for the GP's maintainers, who decide the activation and the version.
+
+## Open questions
+
+1. **The reference machine and m.** One shared VM's p99 is noisy: the BLS12-381 MSM's 4-point
+   time exceeds its 8-point one. The constants should come from pinned-frequency bare metal,
+   more than one machine, with m chosen against the slowest client the network intends to
+   support.
+2. **Per-pair G2 cost.** Proof systems pair against fixed G2 points, so the per-pair price
+   includes a subgroup check and line computation they don't need. A fixed-point variant would
+   put a particular trusted setup into the protocol, so this JIP does not propose one.
+3. **The instruction-level route** (*Alternatives considered*, 2): measured, it could lower the
+   uncovered 36M and help curves this JIP leaves out.
+
+## Change log from the first draft
+
+Comments are the simulated reviewers': Gavin Wood (GW) and Zac Williamson (ZW), in
+`reviews/`. Decisions on their disagreements are in `reviews/synthesis.md`.
+
+| Change | Comments |
+|---|---|
+| Narrowed to four calls; KZG, secp256k1 and Poseidon2 removed, Grumpkin deferred | GW-6, GW-7, GW-11, ZW-5, ZW-8, ZW-12 |
+| Pricing invariant stated in the GP's terms, R_GP = 10/3 gas/ns, replacing one recompiler's R = 8 | GW-2, ZW-11 |
+| Constants re-derived end to end: decoding and every check, adversarial inputs, p99, single-threaded blst, two implementations | GW-3, ZW-10 |
+| One normative schedule per call: an MSM table, pairing bounds, gas from φ8, evaluation order | GW-4, ZW-3 |
+| EIP semantics adopted (scalars any 32 bytes, k = 0 holds) with a mapping to `OK`/`HUH` | GW-5, ZW-9 |
+| Motivation leads with the measured UltraHonk gain; the 50× share comparison is dropped | GW-10, ZW-1, ZW-2 |
+| Rationale and Alternatives considered added | GW-1, ZW-13 |
+| Activation keyed to the lookup-anchor slot; detection probe; index reservation; no Ψ_I | GW-8, GW-13 |
+| Determinism: normative text, independent implementations fuzzed against each other | GW-9 |
+| KZG composition under Suggestions | GW-6, ZW-5 |
+| Process paragraph | GW-11 |
+| JAM-native vectors | GW-5, ZW-9 |
+| Corrections: the host-call list (28 calls, 0–27), no "reference machine" in the GP, `WHAT`'s 1000 gas, the Poseidon2 motivation the #43 measurement contradicted | GW-14, ZW-8 |
+
+Not adopted:
+- a fixed-G2 pairing call (ZW-4), because it would put an external setup into consensus;
+- a blob-batch call (ZW-2), for the same reason;
+- making the instruction-level route a precondition (GW-1). It is complementary, and is
+  recorded as open.
