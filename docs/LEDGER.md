@@ -164,3 +164,32 @@ JIP-2 and serves HTTP: `/state` (roots, leaves, counts), `/leaves`, `/nullifier/
 and the wallet (#9) reads it too. Python, stdlib, in the same container pattern as jamctl,
 published on a host port. Then the wallet page.
 Blockers: none. The net is left running (services 1 and 2).
+
+## 2026-10-23 7 — step 3, part two: the indexer, and a lost package explained
+Did: `indexer/indexer.py` (stdlib Python on jamswap's offchain modules, in a container on
+the net, HTTP on localhost:19700): follows the privacy service over JIP-2 every 3 s and
+serves `/state` (roots, leaves, counts), `/leaves`, `/nullifier/<hex>`, `/deposit/<hex>`,
+`/balance/<account>`, `/head`, `POST /submit/<sid>`, `/status`. `nets/lasair6.sh indexer`
+starts it; `nets/demo.sh up` starts it after the deploy; the client's `sync` takes
+`/state` in one request (falls back to key-by-key reads). Found a package that went
+`Ready` on JIP-2 but never accumulated: lm0 refined and co-signed it twice, then
+`EXPIRED (anchor_too_old)`; 63 availability-retention drops against 11 accumulations in
+20 minutes on the six nodes. Filed abutlabs/lasair#93. `nets/demo.sh` now has
+`submit_until`: a payload whose state change is not seen in 36 s is sent again (safe:
+accumulate is a no-op for a payload it already applied). Aodh: fork jamboree instead of a
+new testnet repo; forked to abutlabs/jamboree, submodule added, plan on #17 revised.
+Evidence: `nets/lasair6.sh indexer` → `indexer up: slot 67 leaves 4 transfers 2`;
+`curl localhost:19700/state` → `{'slot': 67, 'leaf_count': 4, 'transfers': 2, 'shielded': 100,
+'unshielded': 40, 'note_root': '15f7…'}`; `/balance/<B>` → `{"balance": 40}`;
+`/nullifier/<42>` → `{"spent": false}`. Lost package: `lm0 [ce133] package 0x03ae5e7145c02d61..
+EXPIRED (anchor_too_old)` after `refined … 182164641 gas`; resubmitted by hand → `transfers`
+3 → 4. `nets/demo.sh check` (third run on the same chain, synced 8 leaves from the
+indexer) → `PASS` in 1 min 42 s, no resend needed.
+Issues: #8 (part two), #10, #17 (jamboree plan), lasair#93.
+Next: step 4 (#9): the wallet. Not the demo-wallet fork (it speaks the Aztec PXE, which
+this circuit does not; decision to record on #9): a small web page served next to the
+indexer, over `client/privacy.py` through a local HTTP shim (`client/wallet.py`): shows
+the public balance and the private notes for A and B, three buttons (shield, send,
+unshield) that build the payload and POST it to the indexer's `/submit`, and the chain's
+state live from `/state`. Screenshots to `docs/images/` for the two-browser check (#3).
+Blockers: none. The net is left running.
