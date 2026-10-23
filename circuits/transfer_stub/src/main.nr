@@ -11,6 +11,10 @@ fn main(
     new_null_root: pub Field,
     nullifiers: pub [Field; 2],
     note_hashes: pub [Field; 2],
+    // unshield: amount (0 = none) to a public account on the public-balance service
+    unshield_amount: pub Field,
+    unshield_receiver: pub Field,
+    unshield_dest: pub Field,
 ) {
     let bound = std::hash::pedersen_hash([secret, old_note_root]);
     assert(nullifiers[0] == bound);

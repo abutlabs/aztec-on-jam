@@ -23,3 +23,11 @@ pub fn le_u64(b: &[u8]) -> u64 {
 pub fn take<const N: usize>(b: &[u8], at: usize) -> Option<[u8; N]> {
     b.get(at..at + N).map(|s| s.try_into().unwrap())
 }
+
+/// The low eight bytes of a 32-byte big-endian field element as a u64 (the top 24 must be 0).
+pub fn be_u64(field: &[u8]) -> u64 {
+    if field.len() != 32 || field[..24].iter().any(|b| *b != 0) {
+        return 0;
+    }
+    u64::from_be_bytes(field[24..32].try_into().unwrap())
+}

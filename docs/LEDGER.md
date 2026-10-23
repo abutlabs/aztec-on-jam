@@ -81,3 +81,30 @@ the `transfer` host call from jam-pvm-common's accumulate module and a public-in
 naming a receiver and amount in the stub circuit. Then `nets/demo.sh check`'s first
 version against lasair6.
 Blockers: none. The net is left running.
+
+## 2026-10-22 4 — step 1, part three: shield and unshield by deferred transfer; demo check v1
+Did: the stub circuit gained three public inputs (unshield amount, receiver, destination
+service; 11 in all, 352 bytes), re-proven; `service-util::be_u64`; public-balance op 2
+*shield* `[02][account][amount][dest u32][commitment]` burns and `transfer(dest, amount,
+100_000, memo = commitment ++ "jam")`, and credits a receiver named in an incoming
+transfer's memo; the privacy service records incoming transfers as `dep:<commitment>` and
+`shielded`, and after a valid proof with a non-zero amount sends `transfer(dest, amount,
+memo = receiver ++ "unshield")` and counts `unshielded`. Redeployed both on the running
+lasair6 (public-balance = 3, privacy = 4; the proof's destination field is 3). Wrote
+`nets/demo.sh` (up, check, down) and ran `check`: mint, shield, send + unshield, replay.
+Evidence: `nets/demo.sh check` → `PASS` in 1 min 54 s; the reads over JIP-2:
+`bal:A = 6400000000000000` after the mint; after the shield `bal:A = 0000000000000000`,
+`dep:C = 6400000000000000`, `shielded = 6400000000000000`; after the proof `root:note = …03e9`,
+`root:null = …07d2`, `nf:<nullifier 0> = 01`, `nf:<nullifier 1> = 01`, `transfers = 0100…`,
+`unshielded = 2800000000000000`, `bal:B = 2800000000000000` (40 arrived on the public side);
+after the replay (`Ready`, so refine accepted the valid proof) `transfers`, `unshielded` and
+`bal:B` unchanged. `services/privacy/check.sh` still `PASS: 12 assertions`.
+Issues: #2 (milestone 2 closed, with the stub caveat), #10 (nets progress), #16.
+Next: step 2 (#7): replace the stub with a real transfer circuit in Noir, Poseidon2 from
+noir-lang/poseidon, keeping the 11 public inputs in order: Merkle membership of the two
+spent notes against the old note root, nullifier = H(note, secret), the two new notes
+balance the spent ones minus the unshield amount, the new note root is the old tree plus
+the two note hashes, the new nullifier root is the old plus the two nullifiers. Then a
+prover-side script (`client/`) that builds the witness from a local note set so A can
+really pay B, and demo.sh check reads B's private balance from the notes.
+Blockers: none. The net is left running (services 3 and 4).

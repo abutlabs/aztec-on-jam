@@ -2,8 +2,13 @@
 //! unshields to. Dev-chain rules: anyone may mint (op 0); a burn (op 1) is what a shield will
 //! become once the deferred transfer to the privacy service is wired (step 1, part three).
 //!
-//! Work-item payload: `[op: u8][account: 32][amount: u64 LE]`. Refine checks the shape and
-//! passes it through; accumulate applies it. Storage: `bal:<account>` = u64 LE.
+//! Work-item payload: `[op: u8][account: 32][amount: u64 LE]`, and for a shield (op 2)
+//! `[dest: u32 LE][note commitment: 32]` after it. Refine checks the shape and passes it
+//! through; accumulate applies it. Storage: `bal:<account>` = u64 LE.
+//!
+//! Shield: burn `amount` from `account` and send it as a deferred transfer to the privacy
+//! service `dest` with the note commitment in the memo. Unshield: a Transfer item from the
+//! privacy service carries the receiver account in its memo; credit it.
 #![no_std]
 #![no_main]
 
@@ -11,7 +16,7 @@ extern crate alloc;
 
 use alloc::vec;
 
-use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage};
+use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage, transfer};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
 use service_util::{key, le_u64, take};
@@ -20,8 +25,11 @@ declare_service!(PublicBalance);
 struct PublicBalance;
 
 const ITEM_LEN: usize = 1 + 32 + 8;
+const SHIELD_LEN: usize = ITEM_LEN + 4 + 32;
 const OP_MINT: u8 = 0;
 const OP_BURN: u8 = 1;
+const OP_SHIELD: u8 = 2;
+const SHIELD_GAS: UnsignedGas = 100_000;
 
 impl Service for PublicBalance {
     fn refine(
@@ -32,7 +40,12 @@ impl Service for PublicBalance {
         _package_hash: WorkPackageHash,
     ) -> WorkOutput {
         let data = payload.take();
-        if data.len() != ITEM_LEN || data[0] > OP_BURN {
+        let ok = match data.first() {
+            Some(&OP_MINT) | Some(&OP_BURN) => data.len() == ITEM_LEN,
+            Some(&OP_SHIELD) => data.len() == SHIELD_LEN,
+            _ => false,
+        };
+        if !ok {
             return vec![0u8].into();
         }
         let mut out = vec![1u8];
@@ -44,13 +57,20 @@ impl Service for PublicBalance {
         for item in accumulate_items() {
             let rec = match item {
                 AccumulateItem::WorkItem(r) => r,
-                _ => continue,
+                AccumulateItem::Transfer(t) => {
+                    // an unshield from the privacy service: credit the receiver in the memo
+                    let receiver = &t.memo.0[..32];
+                    let k = key(b"bal:", receiver);
+                    let bal = get_storage(&k).map(|v| le_u64(&v)).unwrap_or(0);
+                    set_storage(&k, &bal.saturating_add(t.amount as u64).to_le_bytes()).ok();
+                    continue;
+                }
             };
             let out = match rec.result {
                 Ok(o) => o.0,
                 Err(_) => continue,
             };
-            if out.len() != 1 + ITEM_LEN || out[0] != 1u8 {
+            if out.len() < 1 + ITEM_LEN || out[0] != 1u8 {
                 continue;
             }
             let op = out[1];
@@ -61,6 +81,20 @@ impl Service for PublicBalance {
             let new = match op {
                 OP_MINT => bal.checked_add(amount),
                 OP_BURN => bal.checked_sub(amount),
+                OP_SHIELD if out.len() == 1 + SHIELD_LEN => {
+                    let dest = u32::from_le_bytes(take::<4>(&out, 42).unwrap()) as ServiceId;
+                    let commitment: [u8; 32] = take(&out, 46).unwrap();
+                    match bal.checked_sub(amount) {
+                        Some(n) => {
+                            let mut memo = Memo([0u8; 128]);
+                            memo.0[..32].copy_from_slice(&commitment);
+                            memo.0[32..35].copy_from_slice(b"jam");
+                            // the debit stands only if the transfer went
+                            if transfer(dest, amount as Balance, SHIELD_GAS, &memo).is_ok() { Some(n) } else { None }
+                        }
+                        None => None,
+                    }
+                }
                 _ => None,
             };
             if let Some(n) = new {

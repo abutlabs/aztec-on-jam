@@ -5,3 +5,6 @@ new_note_root = "1001"
 new_null_root = "2002"
 nullifiers = ["0x1e95b928248aa2a64eeb6e05d80a5742a6d73691cb2666c19d3bcc8dc0a429d3", "42"]
 note_hashes = ["501", "502"]
+unshield_amount = "40"
+unshield_receiver = "2"
+unshield_dest = "3"

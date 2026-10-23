@@ -6,7 +6,14 @@
 //! Work-item payload: `[pubs_len: u16 LE][pubs: pubs_len bytes, 32 each][proof: the rest]`.
 //! Refine output: `[1][pubs]` when the proof verifies, `[0]` otherwise.
 //! Public inputs, in circuit order (circuits/transfer_stub): old note root, old nullifier
-//! root, new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1.
+//! root, new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1,
+//! unshield amount (0 = none), unshield receiver (a public-balance account), unshield
+//! destination (the public-balance service id). Fields are 32-byte big-endian.
+//!
+//! Shield: a deferred transfer from the public-balance service arrives as a Transfer item
+//! with `memo = note commitment (32) ++ "jam" ++ zeros`; accumulate records
+//! `dep:<commitment> = amount` and adds to `shielded`. Unshield: after a valid proof with a
+//! non-zero amount, accumulate sends `transfer(dest, amount, memo = receiver ++ "unshield")`.
 #![no_std]
 #![no_main]
 
@@ -16,10 +23,10 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage};
+use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage, transfer};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
-use service_util::{key, le_u64};
+use service_util::{be_u64, key, le_u64};
 use ultrahonk_no_std::{verify, ProofType};
 
 // BN254 pairings overflow polkavm's default stack (spikes/ultrahonk-gas).
@@ -32,17 +39,23 @@ struct Privacy;
 const VK: &[u8] = include_bytes!("../fixtures/transfer_stub.vk");
 
 const HASH_LEN: usize = 32;
-const N_PUBS: usize = 8;
+const N_PUBS: usize = 11;
 const OLD_NOTE_ROOT: usize = 0;
 const OLD_NULL_ROOT: usize = 1;
 const NEW_NOTE_ROOT: usize = 2;
 const NEW_NULL_ROOT: usize = 3;
 const NULLIFIERS: core::ops::Range<usize> = 4..6;
 const NOTE_HASHES: core::ops::Range<usize> = 6..8;
+const UNSHIELD_AMOUNT: usize = 8;
+const UNSHIELD_RECEIVER: usize = 9;
+const UNSHIELD_DEST: usize = 10;
+const UNSHIELD_GAS: UnsignedGas = 100_000;
 
 const KEY_NOTE_ROOT: &[u8] = b"root:note";
 const KEY_NULL_ROOT: &[u8] = b"root:null";
 const KEY_TRANSFERS: &[u8] = b"transfers";
+const KEY_SHIELDED: &[u8] = b"shielded";
+const KEY_UNSHIELDED: &[u8] = b"unshielded";
 
 fn invalid() -> WorkOutput {
     vec![0u8].into()
@@ -86,7 +99,15 @@ impl Service for Privacy {
         for item in accumulate_items() {
             let rec = match item {
                 AccumulateItem::WorkItem(r) => r,
-                _ => continue, // deferred transfers (shield) arrive in a later step
+                AccumulateItem::Transfer(t) => {
+                    // a shield: the public-balance service sent JAM balance with the note
+                    // commitment in the memo; the note itself is proven into the tree later
+                    let commitment = &t.memo.0[..HASH_LEN];
+                    set_storage(&key(b"dep:", commitment), &t.amount.to_le_bytes()).ok();
+                    let total = get_storage(KEY_SHIELDED).map(|v| le_u64(&v)).unwrap_or(0);
+                    set_storage(KEY_SHIELDED, &(total + t.amount).to_le_bytes()).ok();
+                    continue;
+                }
             };
             let out = match rec.result {
                 Ok(o) => o.0,
@@ -118,6 +139,19 @@ impl Service for Privacy {
             set_storage(KEY_NULL_ROOT, pubs[NEW_NULL_ROOT]).ok();
             let n = get_storage(KEY_TRANSFERS).map(|v| le_u64(&v)).unwrap_or(0);
             set_storage(KEY_TRANSFERS, &(n + 1).to_le_bytes()).ok();
+
+            // unshield: the proof names an amount, a public receiver and the public service
+            let amount = be_u64(pubs[UNSHIELD_AMOUNT]);
+            if amount > 0 {
+                let dest = be_u64(pubs[UNSHIELD_DEST]) as ServiceId;
+                let mut memo = Memo([0u8; 128]);
+                memo.0[..HASH_LEN].copy_from_slice(pubs[UNSHIELD_RECEIVER]);
+                memo.0[HASH_LEN..HASH_LEN + 8].copy_from_slice(b"unshield");
+                if transfer(dest, amount as Balance, UNSHIELD_GAS, &memo).is_ok() {
+                    let u = get_storage(KEY_UNSHIELDED).map(|v| le_u64(&v)).unwrap_or(0);
+                    set_storage(KEY_UNSHIELDED, &(u + amount).to_le_bytes()).ok();
+                }
+            }
         }
         None
     }
