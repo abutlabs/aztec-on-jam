@@ -1397,3 +1397,9 @@ Evidence: `spikes/settlement/measure.sh` → A advanced (tip 2, 170,427,917 gas)
 C stale; B advanced (tip 3, proven 2); B altered fails in refine (8,330,413, last 00).
 Issues: #26 closed.
 Next: #42's CI result; #22's invalid-inner fixtures with the unchecked bb.
+
+**Correction to ledger 51:** the bb build without its self-check did not finish. It failed at step
+235 of 273: `aztec_constants.hpp` not found. Aztec's monorepo generates that header at configure
+time (`barretenberg/cpp/CMakeLists.txt` → `protocol/constants-codegen`), and the sparse checkout
+lacked it. `build_bb_unchecked.sh` (ultrahonk_verifier) now checks out the codegen and generates
+the header (274 constants). The build is resumed.
