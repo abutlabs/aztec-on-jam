@@ -246,7 +246,7 @@ def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
     payload, fields = r["payload"], r["fields"]
     Path(out).write_text(payload.hex())
     print(f"payload {len(payload)} bytes -> {out}")
-    print(f"old_note_root {hexf(fields[0])}\nnew_note_root {hexf(fields[2])}\nnew_null_root {hexf(fields[3])}\nnullifiers {hexf(fields[4])} {hexf(fields[5])}")
+    print(f"old_note_root {hexf(fields[0])}\nnew_note_root {hexf(fields[2])}\nold_null_root {hexf(fields[1])}\nnew_null_root {hexf(fields[3])}\nnullifiers {hexf(fields[4])} {hexf(fields[5])}")
     print(f"note_hashes {hexf(fields[6])} {hexf(fields[7])}\nunshield {fields[8]} -> account {fields[9]} on service {fields[10]}; deposit {fields[11]}")
 
 

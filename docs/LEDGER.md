@@ -220,3 +220,187 @@ Next: step 5, the README's demo: stage commands `shield`, `send`, `unshield` in
 *What is real and what is reduced* section in README.md, then the full verification run
 from `down` → `up` → `check` → e2e on a clean chain, copied into this ledger.
 Blockers: none. Net, indexer and wallet left running.
+
+## 2026-10-23 9 — step 5: stage commands, README, and the verification run (demo ready)
+Did: `nets/demo.sh check` restructured to the demo-ready wording: three proofs (the claim
+of A's shield, A's send of 40 to B, B's unshield of 40), the root asserted three times,
+each equal to the prover's, and equal to the root the client rebuilds from the chain's own
+leaves; the six nullifiers and the nullifier root chained tx1 → tx2 → tx3; A at −100 from
+the shield, B at +40; a replay of the *send* dropped. Stage commands `shield`, `send`,
+`unshield` over the wallet API (defaults A 100, A→B 40, B 40; the faucet tops A up).
+`up` also clears the wallet's note state. README: *Demo* (six one-word stages), *Numbers*,
+*What is real and what is reduced* (each reduction linked to its issue). A complete send's
+accumulate measured on the rig: 103,167 gas. The first stage-command run failed on my
+output formatter (an f-string with backslashes, Python 3.11); the faucet mint had landed
+and the wallet refused the send and unshield (409, nothing private yet), so nothing was
+damaged; fixed and re-run below.
+
+### Verification run, started 2026-10-23T04:29:35Z, copied from the terminal
+
+`nets/demo.sh down` → no containers, no wallet process:
+```
+$ docker ps --format '{{.Names}}' | grep -cE "jamswap|jam-privacy"
+0
+$ pgrep -f client/wallet.py || echo "no wallet process"
+no wallet process
+```
+`nets/demo.sh up` (from that clean state; Docker images cached) → six validators, reader,
+builder, both services, indexer, wallet:
+```
+SERVICE_ID=1
+deploy: privacy-service 0.0.1 (1203645 bytes, hash 546955055ca5265e..)
+deploy: Bootstrap service 0: jam-bootstrap-service 0.1.29
+deploy: CreateService(id 2, 1203645 bytes, endowment 1000000000) to service 0: package 57bc4ed0e4bb207d.. on core 0, anchor #7
+deploy: service 2 created
+deploy: submitPreimage(2, 1203645 bytes) at #12
+deploy: service 2 ready (created #12, balance 1001203846)
+SERVICE_ID=2
+services: public-balance 1, privacy 2
+indexer up: slot 15 leaves 0 transfers 0
+wallet: http://localhost:19710/?user=A   (and ?user=B)   log: out/wallet.log
+nets/demo.sh up  1.52s user 0.67s system 2% cpu 1:23.55 total
+```
+```
+$ docker ps --format '{{.Names}}'
+jam-privacy-indexer jamswap-builder-1 jamswap-lm0-1 jamswap-lm1-1 jamswap-lm2-1 jamswap-lm3-1 jamswap-lm4-1 jamswap-lm5-1 jamswap-reader-1
+```
+`nets/demo.sh check` → exit 0, 34 `ok`, 0 `FAIL`:
+```
+public-balance = service 1, privacy = service 2
+== the client learns the tree from the chain
+synced 0 leaves, root 0x14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3
+  before: 0 leaves, 0 transfers, shielded 0, unshielded 0, bal:A 0, bal:B 0, root:note 14f44d672eb35773…
+== 1. shield: A mints 100 publicly, burns it into a deposit, and proves the claim
+note 0 commitment 0x0977ba66a42ec9f85fa0abd2031df56242a0ac5fa8653d456364ad15c1b988ef
+  status {'Ready': {'reported_in': {'heade
+  ok   bal:A after the mint (+100) = 6400000000000000
+  status {'Ready': {'reported_in': {'heade
+  ok   bal:A after the shield (-100) = 0000000000000000
+  ok   dep:C, arrived by deferred transfer = 6400000000000000
+payload 8642 bytes -> /Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/out/tx1.hex
+  status {'Ready': {'reported_in': {'heade
+  ok   root:note, change 1 of 3 (the claim) = 02be96587523d86dcfb06c26554aabfd8c8853deb863fdf79f1d38b41ec4894d
+  ok   dep:C consumed = (none)
+== 2. send: A proves a payment of 40 to B, keeping 60
+payload 8642 bytes -> /Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/out/tx2.hex
+  status {'Ready': {'reported_in': {'heade
+  ok   root:note, change 2 of 3 (the send) = 0d68250c7c46d7bfc267aaf6dfed61deae5d6fd288fd41131c8e6790f14239c2
+== 3. unshield: B proves a spend of its 40 to public account B on service 1
+payload 8642 bytes -> /Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/out/tx3.hex
+unshield 40 -> account 2 on service 1; deposit 0
+  status {'Ready': {'reported_in': {'heade
+  ok   root:note, change 3 of 3 (the unshield) = 1afa4c9544456145e2cae8c9ca651457794cf4bce534840a8bc528ad25dc6c32
+== the note root: three changes, each the builder's, and the chain's leaves give it back
+  ok   three distinct changes: 14f44d672eb3… → 02be96587523… → 0d68250c7c46… → 1afa4c954445…
+  ok   each proof starts from the root the one before left
+  ok   leaf 0 = tx1's note hash 1 = 0babcf5d4bd8426696920c9802445caaca165b341309ca42faef83df6112b859
+  ok   leaf 1 = tx1's note hash 2 = 22ebe06c99539f3ba35aa1da9b7c4b052b6ad642db79ce9a1e5988de2daacba4
+  ok   leaf 2 = tx2's note hash 1 = 0df152cf0873a21ff28f40b6f187c25eebfe457a4689b7cdc2197b5ea932634b
+  ok   leaf 3 = tx2's note hash 2 = 1fd67a20e4334946c28a281d17f03044549fbbf54da5f8a92025f36ffdc20ca6
+  ok   leaf 4 = tx3's note hash 1 = 0a313652f84ad4be328b35e7db05bf04707fc817e4b480fab37c407f97027bf9
+  ok   leaf 5 = tx3's note hash 2 = 00575ca0cf9999cfd648502b1e5b237a34d915b4ede48cde5eff0d01a9b8d8d4
+  ok   leaves = 6 = 0600000000000000
+  ok   root rebuilt from the chain's 6 leaves = root:note = 1afa4c9544456145…
+== nullifiers: exactly these six, and the nullifier root chains through them
+  ok   nf: tx1 input 1 = 01
+  ok   nf: tx1 input 2 = 01
+  ok   nf: tx2 input 1 = 01
+  ok   nf: tx2 input 2 = 01
+  ok   nf: tx3 input 1 = 01
+  ok   nf: tx3 input 2 = 01
+  ok   root:null chains from before → tx1 → tx2 → tx3: nothing else was spent between them
+  ok   root:null = tx3's = 284010731cf4103ddf2d88f927ea1ec2c398dca5f00565857fe4ab222faf4550
+== balances and counters
+  ok   bal:A: +100 minted, -100 shielded = 0000000000000000
+  ok   bal:B: +40, by deferred transfer = 2800000000000000
+  ok   transfers +3 = 0300000000000000
+  ok   shielded +100 = 6400000000000000
+  ok   unshielded +40 = 2800000000000000
+== replay the send: a valid proof whose nullifiers are spent
+  status {'Ready': {'reported_in': {'heade
+  ok   root:note unchanged = 1afa4c9544456145e2cae8c9ca651457794cf4bce534840a8bc528ad25dc6c32
+  ok   leaves unchanged = 0600000000000000
+  ok   transfers unchanged = 0300000000000000
+  ok   bal:B unchanged = 2800000000000000
+== what each side holds
+note 2: A 0 (tree, leaf 1)
+note 4: A 60 (tree, leaf 3)
+note 5: B 0 (tree, leaf 4)
+note 6: B 0 (tree, leaf 5)
+PASS
+nets/demo.sh check  11.81s user 3.14s system 7% cpu 3:13.26 total
+```
+`nets/demo.sh shield`, `send`, `unshield` (after the formatter fix; A already held the
+faucet's 100 publicly):
+```
+$ nets/demo.sh shield
+A shields 100
+  deposit note: commitment 2cf705a5c2d3…
+  shield: package b0c0d6065a8a… on core 0
+  shield: on chain after 12 s
+  claim: proof of 8642 bytes in 0.5 s
+  claim: package dfef225d0195… on core 0
+  claim: on chain after 22 s
+  done in 35.5 s: A public 0, private 100
+$ nets/demo.sh send
+A sends 40 to B privately
+  send: proof of 8642 bytes in 2.4 s
+  send: package 5695ef12b29b… on core 0
+  send: on chain after 26 s
+  done in 28.8 s: A public 0, private 60
+$ nets/demo.sh unshield
+B unshields 40
+  unshield: proof of 8642 bytes in 2.5 s
+  unshield: package 7640a12319b7… on core 0
+  unshield: on chain after 22 s
+  done in 25.0 s: B public 80, private 0
+```
+`node client/e2e/e2e.mjs` → two browser contexts, A and B, exit 0:
+```
+start: A {"public":0,"private":60}, B {"public":80,"private":0}
+  screenshot docs/images/01-a-start.png
+== A: faucet, mint 100 publicly
+  done: mint 100 in 14.9 s
+  ok   A after mint: public 100 (want 100), private 60 (want 60)
+  screenshot docs/images/02-a-minted.png
+== A: shield 100 (a deposit by deferred transfer, then a proof that claims it)
+  done: shield 100 in 74.6 s
+  ok   A after shield: public 0 (want 0), private 160 (want 160)
+  screenshot docs/images/03-a-shielded.png
+== A: send 40 to B privately
+  done: send 40 to B in 23 s
+  ok   A after send: public 0 (want 0), private 120 (want 120)
+  screenshot docs/images/04-a-sent.png
+== B, in the other browser: the 40 has arrived
+  ok   B after receiving: public 80 (want 80), private 40 (want 40)
+  screenshot docs/images/05-b-received.png
+== B: unshield 40 to B's public account
+  done: unshield 40 in 29.1 s
+  ok   B after unshield: public 120 (want 120), private 0 (want 0)
+  screenshot docs/images/06-b-unshielded.png
+PASS: 5 assertions, 6 screenshots
+```
+Accumulate for a complete send, in-process rig (`demo_deploy.exe privacy-service.jam <tx2>`):
+`refine gas used : 181910244 steps: 59229019`, `accumulate gas used : 103167`.
+
+### The demo-ready conditions (docs/RALPH.md), against this run
+1. `up` from clean starts six lasair validators, deploys both services (public-balance 1,
+   privacy 2), and starts the indexer, the builder container and the wallet; `down` left
+   0 containers and no wallet. The package-building "builder" is the indexer's submit path,
+   one proof a package, no folding (README, reduced).
+2. `check` passed with the assertions listed above: three root changes equal to the
+   prover's and to the root rebuilt from the chain's leaves; the six nullifiers and the
+   chained nullifier root; A −100 from the shield, B +40; the replayed send dropped.
+3. Real UltraHonk proofs from Noir via bb 3.0.3, verified in refine on lasair's PVM: about
+   182 million gas (181,910,244 on the rig here; 182,164,641 in the guarantor's log), in
+   this ledger and the README.
+4. The wallet, `jam/` in the demo-wallet fork, did shield, send and unshield for A and B in
+   two browser contexts against this net; screenshots `docs/images/01…06` are from this run.
+5. README has *Demo* with `up`, `check`, `shield`, `send`, `unshield`, `down`, and
+   *What is real and what is reduced*.
+6. This entry is the verification run.
+Issues: #8 and #10 closed; #4 (the pj6 soak) and #14 (lasair vs PolkaJam) stay open, as
+does #17 (jamboree). Still reduced: #15, #18, #19, lasair#93.
+Next: milestone 4, an hour's soak on pj6; then the reductions, starting with #19 (proving in
+the browser) and #18 (the Aztec kernel).
+Blockers: none. The net, indexer and wallet are left running for Aodh to try.

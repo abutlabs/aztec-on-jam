@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# The demo, one word a stage. Runs against jamswap's lasair6 net (nets/lasair6.sh).
-#   nets/demo.sh up        start the net, build and deploy both services
-#   nets/demo.sh check     A shields 100, A pays B 40 privately, B unshields 40; every value
-#                          read back from the chain byte for byte; a replay must change nothing
-#   nets/demo.sh wallet    start the wallet backend (client/wallet.py) on localhost:19710
-#   nets/demo.sh down      stop the net and wipe the chain
+# The demo, one word a stage, against jamswap's lasair6 net (nets/lasair6.sh).
+#   nets/demo.sh up         six validators, both services deployed, the indexer and the wallet
+#   nets/demo.sh check      no browser: A shields 100, A sends 40 to B, B unshields 40; asserts
+#                           the chain byte for byte; a replay of the send must change nothing
+#   nets/demo.sh shield     A shields 100 through the wallet (minting first if A is short)
+#   nets/demo.sh send       A sends 40 to B privately            (args: from to amount)
+#   nets/demo.sh unshield   B unshields 40 to B's public account (args: user amount)
+#   nets/demo.sh wallet     (re)start the wallet backend, http://localhost:19710/?user=A
+#   nets/demo.sh down       stop everything and wipe the chain
 # Public accounts are 32-byte big-endian field elements: A = 1, B = 2. Private keys derive
-# from the names A and B (client/privacy.py). Service ids come from out/state/*.json.
+# from the names (client/privacy.py). Service ids come from out/state/*.json.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd)
 L=$HERE/lasair6.sh; CLIENT=$ROOT/client/privacy.py
@@ -53,7 +56,7 @@ case "${1:-}" in
   up)
     "$L" up
     for _ in $(seq 1 60); do "$L" ctl head >/dev/null 2>&1 && break; sleep 3; done   # the reader answers
-    "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE"
+    "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
     "$L" indexer; "$0" wallet ;;
   wallet)
@@ -66,41 +69,84 @@ case "${1:-}" in
     "$L" down ;;
   check)
     PB=$(sid public-balance); PV=$(sid privacy); echo "public-balance = service $PB, privacy = service $PV"
-    A=$(hex32 1); B=$(hex32 2); mkdir -p "$ROOT/out"; rm -f "$CLIENT_STATE"
+    A=$(hex32 1); B=$(hex32 2); mkdir -p "$ROOT/out"; rm -f "$CLIENT_STATE"; T=$ROOT/out
     echo "== the client learns the tree from the chain"; sync_client
     N0=$(u64 "$PV" leaves); T0=$(u64 "$PV" transfers); S0=$(u64 "$PV" shielded); U0=$(u64 "$PV" unshielded)
-    BA0=$(u64 "$PB" "62616c3a$A"); BB0=$(u64 "$PB" "62616c3a$B")
-    echo "  chain before: $N0 leaves, $T0 transfers, shielded $S0, unshielded $U0, bal:A $BA0, bal:B $BB0"
-    echo "== A: a deposit note for 100";   "$CLIENT" deposit A 100 | tee "$ROOT/out/deposit.txt"
-    C=$(awk '{print $4}' "$ROOT/out/deposit.txt" | sed 's/^0x//')
-    echo "== mint 100 to A (public)"
-    submit_until "$PB" "00$A$(le64 100)$(openssl rand -hex 32)" "$PB" "62616c3a$A" "$(le64 $((BA0 + 100)))" "bal:A"
-    echo "== shield: A burns 100, the deposit travels to the privacy service with commitment C"
-    submit_until "$PB" "02$A$(le64 100)$(le32 "$PV")$C" "$PB" "62616c3a$A" "$(le64 $BA0)" "bal:A back where it started"
-    read_eq "$PV" "6465703a$C" "$(le64 100)" "dep:C (arrived by deferred transfer)"
-    echo "== A proves: claim the deposit, pay B 40, keep 60"
-    "$CLIENT" transfer A deposit:0 - B 40 0 0 0 "$ROOT/out/tx1.hex" | tee "$ROOT/out/tx1.txt" | grep -E "payload|unshield"
-    submit_until "$PV" "$(cat "$ROOT/out/tx1.hex")" "$PV" "6465703a$C" "(none)" "dep:C consumed"
-    read_eq "$PV" root:note "$(field "$ROOT/out/tx1.txt" new_note_root 2)" "root:note = tx1's new root"
-    read_eq "$PV" root:null "$(field "$ROOT/out/tx1.txt" new_null_root 2)" "root:null"
-    read_eq "$PV" "6e663a$(field "$ROOT/out/tx1.txt" nullifiers 2)" 01 "nf:<deposit commitment>"
-    read_eq "$PV" "6e663a$(field "$ROOT/out/tx1.txt" nullifiers 3)" 01 "nf:<dummy input>"
-    read_eq "$PV" "6c6561663a$(le64 $N0)" "$(field "$ROOT/out/tx1.txt" note_hashes 2)" "leaf $N0 = B's 40 note"
-    read_eq "$PV" "6c6561663a$(le64 $((N0 + 1)))" "$(field "$ROOT/out/tx1.txt" note_hashes 3)" "leaf $((N0 + 1)) = A's 60 change"
-    read_eq "$PV" transfers "$(le64 $((T0 + 1)))" "transfers"
-    echo "== B proves: spend the 40 note, unshield 40 to public account B on service $PB"
-    "$CLIENT" transfer B 1 - B 0 40 2 "$PB" "$ROOT/out/tx2.hex" | tee "$ROOT/out/tx2.txt" | grep -E "payload|unshield"
-    submit_until "$PV" "$(cat "$ROOT/out/tx2.hex")" "$PV" root:note "$(field "$ROOT/out/tx2.txt" new_note_root 2)" "root:note = tx2's new root"
-    read_eq "$PV" "6e663a$(field "$ROOT/out/tx2.txt" nullifiers 2)" 01 "nf:<B's 40 note>"
-    read_eq "$PV" transfers "$(le64 $((T0 + 2)))" "transfers"
-    read_eq "$PV" unshielded "$(le64 $((U0 + 40)))" "unshielded"
-    read_eq "$PB" "62616c3a$B" "$(le64 $((BB0 + 40)))" "bal:B (40 arrived by deferred transfer)"
-    read_eq "$PV" shielded "$(le64 $((S0 + 100)))" "shielded"
-    echo "== replay tx2: a valid proof whose nullifiers are spent"
-    echo "  $(submit "$PV" "$(cat "$ROOT/out/tx2.hex")")"; sleep 8
-    read_eq "$PV" transfers "$(le64 $((T0 + 2)))" "transfers unchanged"
+    BA0=$(u64 "$PB" "62616c3a$A"); BB0=$(u64 "$PB" "62616c3a$B"); R0=$(ctl read "$PV" root:note); NR0=$(ctl read "$PV" root:null)
+    # a fresh chain holds no roots: the tree is the empty tree (its root as the client computes
+    # it) and the nullifier root is zero
+    [ "$R0" = "(none)" ] && R0=$("$CLIENT" root | sed 's/^0x//')
+    [ "$NR0" = "(none)" ] && NR0=$(hex32 0)
+    echo "  before: $N0 leaves, $T0 transfers, shielded $S0, unshielded $U0, bal:A $BA0, bal:B $BB0, root:note ${R0:0:16}…"
+
+    echo "== 1. shield: A mints 100 publicly, burns it into a deposit, and proves the claim"
+    "$CLIENT" deposit A 100 | tee "$T/deposit.txt"; C=$(awk '{print $4}' "$T/deposit.txt" | sed 's/^0x//')
+    submit_until "$PB" "00$A$(le64 100)$(openssl rand -hex 32)" "$PB" "62616c3a$A" "$(le64 $((BA0 + 100)))" "bal:A after the mint (+100)"
+    submit_until "$PB" "02$A$(le64 100)$(le32 "$PV")$C" "$PB" "62616c3a$A" "$(le64 $BA0)" "bal:A after the shield (-100)"
+    read_eq "$PV" "6465703a$C" "$(le64 100)" "dep:C, arrived by deferred transfer"
+    "$CLIENT" transfer A deposit:0 - A 100 0 0 0 "$T/tx1.hex" > "$T/tx1.txt"; grep payload "$T/tx1.txt"
+    R1=$(field "$T/tx1.txt" new_note_root 2)
+    submit_until "$PV" "$(cat "$T/tx1.hex")" "$PV" root:note "$R1" "root:note, change 1 of 3 (the claim)"
+    read_eq "$PV" "6465703a$C" "(none)" "dep:C consumed"
+
+    echo "== 2. send: A proves a payment of 40 to B, keeping 60"
+    "$CLIENT" transfer A 1 - B 40 0 0 0 "$T/tx2.hex" > "$T/tx2.txt"; grep payload "$T/tx2.txt"
+    R2=$(field "$T/tx2.txt" new_note_root 2)
+    submit_until "$PV" "$(cat "$T/tx2.hex")" "$PV" root:note "$R2" "root:note, change 2 of 3 (the send)"
+
+    echo "== 3. unshield: B proves a spend of its 40 to public account B on service $PB"
+    "$CLIENT" transfer B 3 - B 0 40 2 "$PB" "$T/tx3.hex" > "$T/tx3.txt"; grep -E "payload|unshield" "$T/tx3.txt"
+    R3=$(field "$T/tx3.txt" new_note_root 2)
+    submit_until "$PV" "$(cat "$T/tx3.hex")" "$PV" root:note "$R3" "root:note, change 3 of 3 (the unshield)"
+
+    echo "== the note root: three changes, each the builder's, and the chain's leaves give it back"
+    [ "$R0" != "$R1" ] && [ "$R1" != "$R2" ] && [ "$R2" != "$R3" ] && echo "  ok   three distinct changes: ${R0:0:12}… → ${R1:0:12}… → ${R2:0:12}… → ${R3:0:12}…" || { echo "  FAIL roots did not change three times"; exit 1; }
+    [ "$(field "$T/tx1.txt" old_note_root 2)" = "$R0" ] && [ "$(field "$T/tx2.txt" old_note_root 2)" = "$R1" ] && [ "$(field "$T/tx3.txt" old_note_root 2)" = "$R2" ] \
+      && echo "  ok   each proof starts from the root the one before left" || { echo "  FAIL the roots do not chain"; exit 1; }
+    i=$N0; for tx in tx1 tx2 tx3; do for col in 2 3; do
+      read_eq "$PV" "6c6561663a$(le64 $i)" "$(field "$T/$tx.txt" note_hashes $col)" "leaf $i = $tx's note hash $((col - 1))"; i=$((i + 1)); done; done
+    read_eq "$PV" leaves "$(le64 $((N0 + 6)))" "leaves = $((N0 + 6))"
+    for _ in 1 2 3 4 5; do [ "$(curl -s "$INDEXER/state" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("note_root",""))')" = "$R3" ] && break; sleep 2; done
+    sync_client >/dev/null; RECOMPUTED=$("$CLIENT" root | sed 's/^0x//')
+    [ "$RECOMPUTED" = "$R3" ] && echo "  ok   root rebuilt from the chain's $((N0 + 6)) leaves = root:note = ${R3:0:16}…" || { echo "  FAIL rebuilt root $RECOMPUTED != $R3"; exit 1; }
+
+    echo "== nullifiers: exactly these six, and the nullifier root chains through them"
+    for tx in tx1 tx2 tx3; do for col in 2 3; do
+      read_eq "$PV" "6e663a$(field "$T/$tx.txt" nullifiers $col)" 01 "nf: $tx input $((col - 1))"; done; done
+    [ "$(field "$T/tx1.txt" old_null_root 2)" = "$NR0" ] && [ "$(field "$T/tx2.txt" old_null_root 2)" = "$(field "$T/tx1.txt" new_null_root 2)" ] && [ "$(field "$T/tx3.txt" old_null_root 2)" = "$(field "$T/tx2.txt" new_null_root 2)" ] \
+      && echo "  ok   root:null chains from before → tx1 → tx2 → tx3: nothing else was spent between them" || { echo "  FAIL the nullifier roots do not chain"; exit 1; }
+    read_eq "$PV" root:null "$(field "$T/tx3.txt" new_null_root 2)" "root:null = tx3's"
+
+    echo "== balances and counters"
+    read_eq "$PB" "62616c3a$A" "$(le64 $BA0)" "bal:A: +100 minted, -100 shielded"
+    read_eq "$PB" "62616c3a$B" "$(le64 $((BB0 + 40)))" "bal:B: +40, by deferred transfer"
+    read_eq "$PV" transfers "$(le64 $((T0 + 3)))" "transfers +3"
+    read_eq "$PV" shielded "$(le64 $((S0 + 100)))" "shielded +100"
+    read_eq "$PV" unshielded "$(le64 $((U0 + 40)))" "unshielded +40"
+
+    echo "== replay the send: a valid proof whose nullifiers are spent"
+    echo "  $(submit "$PV" "$(cat "$T/tx2.hex")")"; sleep 9
+    read_eq "$PV" root:note "$R3" "root:note unchanged"
+    read_eq "$PV" leaves "$(le64 $((N0 + 6)))" "leaves unchanged"
+    read_eq "$PV" transfers "$(le64 $((T0 + 3)))" "transfers unchanged"
     read_eq "$PB" "62616c3a$B" "$(le64 $((BB0 + 40)))" "bal:B unchanged"
     echo "== what each side holds"; "$CLIENT" notes
     echo "PASS" ;;
-  *) sed -n 2,8p "$0"; exit 1 ;;
+  shield|send|unshield)
+    W=${WALLET:-http://localhost:19710}
+    post() { curl -s -X POST "$W/api/$1" -d "$2" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for s in d.get("steps", []): print("  " + s)
+if not d.get("ok"): print("  error: " + d.get("error", "?")); sys.exit(1)
+print("  done in %s s: %s public %s, private %s" % (d["seconds"], d["user"], d["public"], d["private"]))'; }
+    case "$1" in
+      shield) U=${2:-A}; N=${3:-100}
+        HAVE=$(curl -s "$W/api/state?user=$U" | python3 -c 'import json,sys;print(json.load(sys.stdin)["public"])')
+        if [ "$HAVE" -lt "$N" ]; then echo "$U holds $HAVE publicly; the faucet mints $((N - HAVE))"; post mint "{\"user\":\"$U\",\"amount\":$((N - HAVE))}"; fi
+        echo "$U shields $N"; post shield "{\"user\":\"$U\",\"amount\":$N}" ;;
+      send) F=${2:-A}; TO=${3:-B}; N=${4:-40}; echo "$F sends $N to $TO privately"; post send "{\"user\":\"$F\",\"to\":\"$TO\",\"amount\":$N}" ;;
+      unshield) U=${2:-B}; N=${3:-40}; echo "$U unshields $N"; post unshield "{\"user\":\"$U\",\"amount\":$N}" ;;
+    esac ;;
+  *) sed -n 2,13p "$0"; exit 1 ;;
 esac
