@@ -4,6 +4,7 @@
 # 2^24, each verified twice in refine on a PolkaJam testnet (spikes/lib/polkajam.sh): with the
 # default `()` hooks, as every other spike runs, and with `Gauge`, which meters its own gas per
 # curve operation (service/src/lib.rs). Needs spikes/epoch-proof/measure.sh's out/r16, r20, r24.
+# Then #45's PVM baselines: bn254_g1_msm and bn254_pairing_check as PVM code, end to end.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); O=$HERE/out; mkdir -p "$O"
 . "$HERE/../lib/polkajam.sh"
@@ -17,11 +18,13 @@ for tag, (k, hooks) in enumerate([(16, 0), (16, 1), (20, 0), (20, 1), (24, 0), (
     vk = open(f"{d}/vk", "rb").read(); pubs = open(f"{d}/public_inputs", "rb").read(); proof = open(f"{d}/proof", "rb").read()
     body = bytes([0, tag, hooks]) + len(vk).to_bytes(2, "little") + vk + (len(pubs) // 32).to_bytes(2, "little") + pubs + proof
     open(f"{out}/p{tag}.bin", "wb").write(body)
+for tag, (which, n) in enumerate([(0, 1), (0, 16), (0, 64), (0, 128), (1, 1), (1, 2), (1, 4), (1, 8)], 7):
+    open(f"{out}/p{tag}.bin", "wb").write(bytes([2, tag, which]) + n.to_bytes(2, "little"))
 PY
 BLOB=$("$BUILD" "$HERE/service" --out "$O" | awk '{print $1}')
 pj_start "$O"
 pj_deploy "$BLOB"
-for t in 1 2 3 4 5 6; do pj_send "$t" "$O/p$t.bin"; done
+for t in $(seq 1 14); do pj_send "$t" "$O/p$t.bin"; done
 sleep 12
 echo
 echo "| circuit | hooks | refine gas | verdict | verify | MSM G1 (calls, points) | mul G1 (calls) | Miller loop (pairs) | final exp | rest of verify |"
@@ -43,4 +46,14 @@ rest = verify - sum(r[0] for r in m)
 cell = lambda r, pts=True: f"{f(r[0])} ({r[1]}, {r[2]})" if pts else f"{f(r[0])} ({r[1]})"
 print(f"| 2^{k} | {h} | {f(g)} | {ok:02x} | {f(verify)} | {cell(m[0])} | {cell(m[1], False)} | {cell(m[2])} | {f(m[3][0])} | {f(rest)} |")
 PY
+done
+echo
+echo "| call, as PVM code | n | refine gas | metered: decode, check, compute |"
+echo "|---|---|---|---|"
+for t in $(seq 7 14); do
+  case $t in 7) c=bn254_g1_msm n=1 ;; 8) c=bn254_g1_msm n=16 ;; 9) c=bn254_g1_msm n=64 ;; 10) c=bn254_g1_msm n=128 ;;
+             11) c=bn254_pairing_check n=1 ;; 12) c=bn254_pairing_check n=2 ;; 13) c=bn254_pairing_check n=4 ;; 14) c=bn254_pairing_check n=8 ;; esac
+  g=$(pj_refines "$t" | awk '{print $1}' | sort -n | head -1)
+  v=$(pj_read "$(printf '763a%02x' "$t")")
+  python3 -c "import sys; b=bytes.fromhex(sys.argv[4].removeprefix('0x')); print(f'| {sys.argv[1]} | {sys.argv[2]} | {int(sys.argv[3] or 0):,} | ' + (f'{int.from_bytes(b[1:9], \"little\"):,} |' if len(b) >= 9 and b[0] == 1 else f'{sys.argv[4]} |'))" "$c" "$n" "$g" "$v"
 done

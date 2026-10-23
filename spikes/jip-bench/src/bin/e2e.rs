@@ -293,7 +293,7 @@ fn cases(call: &str, n: usize, rng: &mut StdRng) -> Vec<(&'static str, Vec<u8>)>
                 let (a, b) = if i + 1 == n && n > 1 { (-acc, BnFr::from(1u64)) } else { acc += a * b; (a, b) };
                 items.push([bn::enc1(&(Bn1::generator() * a).into_affine()).to_vec(), bn::enc2(&(Bn2::generator() * b).into_affine()).to_vec()].concat());
             }
-            out.push(("random, holds", items.concat()));
+            out.push((if n > 1 { "random, holds" } else { "random, fails" }, items.concat()));
             let one = items[0].clone();
             out.push(("one pair repeated", (0..n).flat_map(|_| one.clone()).collect()));
             // the last G2 on the twist but outside the subgroup: must be refused
@@ -324,7 +324,7 @@ fn cases(call: &str, n: usize, rng: &mut StdRng) -> Vec<(&'static str, Vec<u8>)>
                 let (a, b) = if i + 1 == n && n > 1 { (-acc, BlsFr::from(1u64)) } else { acc += a * b; (a, b) };
                 items.push([bls_g1(&(Bls1::generator() * a).into_affine()), bls_g2(&(Bls2::generator() * b).into_affine())].concat());
             }
-            out.push(("random, holds", items.concat()));
+            out.push((if n > 1 { "random, holds" } else { "random, fails" }, items.concat()));
             let one = items[0].clone();
             out.push(("one pair repeated", (0..n).flat_map(|_| one.clone()).collect()));
             let mut bad = items.clone();
@@ -343,7 +343,74 @@ fn cases(call: &str, n: usize, rng: &mut StdRng) -> Vec<(&'static str, Vec<u8>)>
     out
 }
 
+fn hex(b: &[u8]) -> String { b.iter().map(|x| format!("{x:02x}")).collect() }
+
+/// `e2e --vectors`: JSON lines of {call, case, input, result, output} for small inputs, from both
+/// implementations (which must agree), plus malformed inputs that must return HUH.
+fn vectors() {
+    let mut rng = StdRng::seed_from_u64(4545);
+    let run = |call: &str, i: &[u8]| -> [Option<Vec<u8>>; 2] {
+        match call {
+            "bn254_g1_msm" => [bn::msm(i).map(|o| o.to_vec()), bn_sub::msm(i).map(|o| o.to_vec())],
+            "bn254_pairing_check" => [bn::pairing(i).map(|o| vec![o as u8]), bn_sub::pairing(i).map(|o| vec![o as u8])],
+            "bls12_381_g1_msm" => [bls::msm(i).map(|o| o.to_vec()), bls_ark::msm(i).map(|o| o.to_vec())],
+            _ => [bls::pairing(i).map(|o| vec![o as u8]), bls_ark::pairing(i).map(|o| vec![o as u8])],
+        }
+    };
+    let emit = |call: &str, case: &str, input: &[u8]| {
+        let [a, b] = run(call, input);
+        assert_eq!(a, b, "{call} {case}: the implementations differ");
+        let (result, output) = match a {
+            None => ("HUH", String::new()),
+            Some(o) if call.contains("pairing") => ("OK", format!("{}", o[0])),
+            Some(o) => ("OK", hex(&o)),
+        };
+        let field = if call.contains("pairing") { "phi8" } else { "output" };
+        println!("{{\"call\": \"{call}\", \"case\": \"{case}\", \"input\": \"{}\", \"result\": \"{result}\", \"{field}\": \"{output}\"}}", hex(input));
+    };
+    for call in ["bn254_g1_msm", "bn254_pairing_check", "bls12_381_g1_msm", "bls12_381_pairing_check"] {
+        for n in [1usize, 2, 4] {
+            for (case, input) in cases(call, n, &mut rng) {
+                emit(call, &format!("{case}, n = {n}"), &input);
+            }
+        }
+        let (item, fe) = match call { "bn254_g1_msm" => (96, 32), "bn254_pairing_check" => (192, 32), "bls12_381_g1_msm" => (160, 64), _ => (384, 64) };
+        let good = cases(call, 1, &mut rng).remove(0).1;
+        emit(call, "length not a multiple of the item", &good[..item - 1]);
+        if call.contains("pairing") { emit(call, "no pairs (holds)", &[]); } else { emit(call, "no items", &[]); }
+        // x = p: not a canonical field element
+        let mut bad = good.clone();
+        if fe == 32 {
+            let m = <ark_bn254::Fq as PrimeField>::MODULUS.to_bytes_be();
+            bad[..32].copy_from_slice(&m);
+        } else {
+            let m = <ark_bls12_381::Fq as PrimeField>::MODULUS.to_bytes_be();
+            bad[16..64].copy_from_slice(&m);
+        }
+        emit(call, "x equal to the field modulus", &bad);
+        let mut off = good.clone();
+        let last = if fe == 32 { 63 } else { 127 };
+        off[last] ^= 1;
+        emit(call, "G1 point off the curve", &off);
+        if fe == 64 {
+            let mut top = good.clone();
+            top[0] = 1;
+            emit(call, "a field element's top 16 bytes not zero", &top);
+            let q = loop {
+                let x = ark_bls12_381::Fq::rand(&mut rng);
+                if let Some(q) = ark_bls12_381::G1Affine::get_point_from_x_unchecked(x, true) {
+                    if !q.is_in_correct_subgroup_assuming_on_curve() { break q; }
+                }
+            };
+            let mut sub = good.clone();
+            sub[..128].copy_from_slice(&bls_g1(&q));
+            emit(call, "G1 point outside the subgroup", &sub);
+        }
+    }
+}
+
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--vectors") { return vectors(); }
     let mut rng = StdRng::seed_from_u64(45);
     let (mut agree, mut differ) = (0, 0);
     println!("| call | implementation | case | n | result | median | p99 | max |");

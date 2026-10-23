@@ -6,6 +6,10 @@
 //!
 //! Payload: [flavour u8: 0 plain, 1 zk][tag u8][hooks u8: 0 the default (), 1 Gauge]
 //!          [vk_len u16 LE][vk][n_pubs u16 LE][n_pubs × 32][proof]
+//!       or [2][tag][call u8: 0 bn254_g1_msm, 1 bn254_pairing_check][n u16 LE]: JIP-8's call as
+//!          PVM code, end to end as `spikes/jip-bench`'s e2e runs it natively (#45). The input,
+//!          n random points of the group in the EIP-196/197 encoding, is made unmetered; then
+//!          decoding, every check and the result are metered. Refine outputs [tag][1][gas u64].
 //! Refine outputs [tag][1 valid | 0][then u64 LE: verify's gas, then for MSM G1, scalar
 //! multiplication G1, Miller loop and final exponentiation: gas, calls, points]; accumulate
 //! stores it at "v:" ++ tag.
@@ -115,11 +119,89 @@ impl CurveHooks for Gauge {
     }
 }
 
+mod call {
+    //! The same functions as jip-bench's e2e `bn` module.
+    use alloc::vec::Vec;
+    use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+    use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, PrimeGroup, VariableBaseMSM};
+    use ark_ff::{BigInteger, One, PrimeField, Zero};
+    fn fq(b: &[u8]) -> Option<Fq> {
+        let v = Fq::from_be_bytes_mod_order(b);
+        (v.into_bigint().to_bytes_be() == b).then_some(v)
+    }
+    fn g1(b: &[u8]) -> Option<G1Affine> {
+        let (x, y) = (fq(&b[..32])?, fq(&b[32..64])?);
+        if x.is_zero() && y.is_zero() { return Some(G1Affine::identity()); }
+        let p = G1Affine::new_unchecked(x, y);
+        p.is_on_curve().then_some(p)
+    }
+    fn g2(b: &[u8]) -> Option<G2Affine> {
+        let x = Fq2::new(fq(&b[32..64])?, fq(&b[..32])?);
+        let y = Fq2::new(fq(&b[96..128])?, fq(&b[64..96])?);
+        if x.is_zero() && y.is_zero() { return Some(G2Affine::identity()); }
+        let p = G2Affine::new_unchecked(x, y);
+        (p.is_on_curve() && p.is_in_correct_subgroup_assuming_on_curve()).then_some(p)
+    }
+    fn put(o: &mut Vec<u8>, f: Fq) { o.extend_from_slice(&f.into_bigint().to_bytes_be()); }
+    pub fn msm(input: &[u8]) -> Option<Vec<u8>> {
+        if input.is_empty() || input.len() % 96 != 0 { return None; }
+        let mut bases = Vec::new();
+        let mut scalars = Vec::new();
+        for item in input.chunks_exact(96) {
+            bases.push(g1(&item[..64])?);
+            scalars.push(Fr::from_be_bytes_mod_order(&item[64..]));
+        }
+        let r = G1Projective::msm(&bases, &scalars).ok()?.into_affine();
+        let mut o = Vec::new();
+        if let Some((x, y)) = r.xy() { put(&mut o, x); put(&mut o, y); }
+        Some(o)
+    }
+    pub fn pairing(input: &[u8]) -> Option<bool> {
+        if input.len() % 192 != 0 { return None; }
+        let mut a = Vec::new();
+        let mut b = Vec::new();
+        for item in input.chunks_exact(192) {
+            a.push(g1(&item[..64])?);
+            b.push(g2(&item[64..])?);
+        }
+        Some(Bn254::multi_pairing(a, b).0.is_one())
+    }
+    /// n items for `which`, from fixed pseudo-random scalars (a 64-bit LCG): not metered.
+    pub fn input(which: u8, n: usize) -> Vec<u8> {
+        let mut st = 0x2545F4914F6CDD1Du64;
+        let mut fr = || { let mut v = [0u8; 32]; for c in v.chunks_mut(8) { st = st.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); c.copy_from_slice(&st.to_be_bytes()); } Fr::from_be_bytes_mod_order(&v) };
+        let mut o = Vec::new();
+        for _ in 0..n {
+            let p = (G1Projective::generator() * fr()).into_affine();
+            let (x, y) = p.xy().unwrap();
+            put(&mut o, x); put(&mut o, y);
+            if which == 0 {
+                o.extend_from_slice(&fr().into_bigint().to_bytes_be());
+            } else {
+                let q = (G2Projective::generator() * fr()).into_affine();
+                let (x, y) = q.xy().unwrap();
+                for f in [x.c1, x.c0, y.c1, y.c0] { put(&mut o, f); }
+            }
+        }
+        o
+    }
+}
+
+fn bench(p: &[u8]) -> Option<(bool, u64)> {
+    let which = *p.get(2)?;
+    let n = le16(p.get(3..)?)?;
+    let input = call::input(which, n);
+    let before = gas();
+    let ok = match which { 0 => call::msm(&input).is_some(), _ => call::pairing(&input).is_some() };
+    Some((ok, before - gas()))
+}
+
 fn le16(b: &[u8]) -> Option<usize> {
     Some(u16::from_le_bytes(b.get(..2)?.try_into().ok()?) as usize)
 }
 
 fn check(p: &[u8]) -> Option<(bool, u64)> {
+    if *p.first()? == 2 { return bench(p); }
     let zk = *p.first()? == 1;
     let gauge = *p.get(2)? == 1;
     let vk_len = le16(p.get(3..)?)?;

@@ -1505,3 +1505,23 @@ Evidence: at 2^24, `()` 181,113,874 and `Gauge` 155,924,836, both verdict 01. Ga
 35,819,314. Projected 81.4M (R = 8) or 54.8M (R = 3.33), m = 2 in both.
 Issues: #44 closed; #48 filed.
 Next: #45's end-to-end benchmark, then #34.
+
+## 2026-10-23 58 — #45 closed: the core calls timed end to end on x86, priced in the GP's unit; an UltraHonk check would be 3.5× cheaper, each call 7–13×
+Why this issue: both simulated reviewers made the bare-kernel constants blocking (GW-3, ZW-10),
+and #34 needs constants.
+Did: `spikes/jip-bench` e2e times calls 101–104 from their EIP-encoded input, with every check.
+It uses random and adversarial inputs and two implementations a curve, and reports median, p99
+and max of 101 runs. Its blst is now `no-threads`: the first timings had used blst's default
+thread pool. `e2e-pricing.py` prices at 10/3 gas/ns × m = 2, the GP's sizing; the jip-e2e
+workflow runs it on x86. `e2e --vectors` writes 74 JAM-native vectors. The profile service
+runs calls 101–102 as PVM code, so each call has a PVM baseline. #44's rows are re-measured
+with the rebuilt service (within 0.1%).
+Evidence:
+- CI run 40026200133 (EPYC 9V45): the implementations agree on all 144 inputs. BN254 pairing
+  is 4,196,895 + 2,030,652 k; BLS12-381 pairing 1,827,334 + 1,727,240 k. MSMs are tabulated:
+  BN254 at 128 points 12,852,234, BLS12-381 66,119,300.
+- PolkaJam: BN254 MSM at 128 points costs 110,727,638 as PVM code, and a 2-pair check
+  64,337,004. That is 7.2–13.3× the calls' gas. A 2^24 UltraHonk check projects to 52.1M,
+  against 181.1M (3.5×).
+Issues: #45 closed.
+Next: #34, the final JIP.
