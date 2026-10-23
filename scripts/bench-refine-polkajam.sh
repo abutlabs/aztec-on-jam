@@ -26,13 +26,17 @@ VERSION=$("$PJD/polkajam" --version | head -1)
 python3 - "$W/telemetry.log" "$BACKEND" "$VERSION" "$(uname -sm)" <<'PY'
 import re, statistics as st, sys
 log, backend, version, host = sys.argv[1:]
-rows = [(int(g), int(ns) / 1e9) for g, ns in
-        re.findall(r"Refined \{.*?RefineCost \{ total: ExecCost \{ gas: (\d+), ns: (\d+) \}", open(log).read())
+rows = [(int(g), int(ns) / 1e9, node) for node, g, ns in
+        re.findall(r"^(\S+?)@\S+: \S+: Refined \{.*?RefineCost \{ total: ExecCost \{ gas: (\d+), ns: (\d+) \}",
+                   open(log).read(), re.M)
         if int(g) > 100_000_000]
 if not rows:
     sys.exit("no privacy refine in the telemetry")
 t = sorted(r[1] for r in rows)
 print(f"{version} ({backend}, {host}): {len(rows)} refines of one privacy proof "
       f"({rows[0][0]:,} gas): median {st.median(t):.3f} s, min {t[0]:.3f}, max {t[-1]:.3f}")
-print("  each, in order:", " ".join(f"{r[1]:.3f}" for r in rows))
+nodes = {}
+for g, t_, node in rows:
+    nodes.setdefault(node[:8], []).append(t_)
+print("  each node's refines, in order:", "; ".join(f"{n}: " + " ".join(f"{x:.3f}" for x in ts) for n, ts in nodes.items()))
 PY
