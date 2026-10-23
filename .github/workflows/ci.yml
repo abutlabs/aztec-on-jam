@@ -75,7 +75,9 @@ jobs:
       - name: The privacy service live on PolkaJam, and its refine timed by PolkaJam (x86-64, recompiler)
         run: |
           set -o pipefail
-          sudo sysctl -w vm.unprivileged_userfaultfd=1 || true    # PolkaVM's recompiler sandbox
+          # PolkaVM's recompiler sandboxes its workers: userfaultfd and unprivileged user
+          # namespaces, which Ubuntu 24.04's AppArmor restricts by default
+          sudo sysctl -w vm.unprivileged_userfaultfd=1 kernel.apparmor_restrict_unprivileged_userns=0
           eval "$(grep -E '^POLKAJAM_NATIVE=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
           mkdir -p pj && curl -sfL "https://github.com/paritytech/polkajam-releases/releases/download/$POLKAJAM_NATIVE/polkajam-$POLKAJAM_NATIVE-linux-x86_64.tgz" | tar xz -C pj
           N=5 JAMBOREE=$PWD/jamboree/target/release/jamboree jam-privacy-service/scripts/bench-refine-polkajam.sh \
