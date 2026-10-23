@@ -571,3 +571,25 @@ client's B 40 through B's directory entry) → proof in 355 ms; rig `VALID`; the
 scans and finds its 60 at leaf 1; B's Python client scans and finds `B 40 at leaf 0`.
 Next for #19: the page itself on lib/core.js (bundled), proving in the browser, and the
 two-browser run with no wallet backend.
+
+## 2026-10-23 18 — #18, part two: an indexed nullifier tree in the circuit, depth 40, a genesis hole closed
+Did: nullifier non-membership is proven in the circuit with Aztec's indexed Merkle tree: each
+nullifier's bracketing low leaf (membership), the rewrite of its pointer, and the new leaf in
+an empty slot at the tree's size (a public input the service checks and advances); the
+service records nullifiers in order (`nfl:<i>`) and the indexer serves them, so any client
+rebuilds the tree (Python `IndexedTree`, JS `IndexedTree`). Designing it showed a soundness
+hole, now closed: with empty storage the service had accepted any old root, so the first
+proof on a new chain could start from a tree of its own (a fake note) — the service now
+starts from the true empty trees (constants). Measured depth before choosing it
+(`spikes/depth/measure.py`) and moved both trees to Aztec's 40. Also: a default argument had
+frozen the client's tree depth (fixed); `check.sh` now fails if the blob is too small to
+hold the verifier (LTO compiles the verifier out when the embedded vk is stale: seen twice).
+Evidence: depth table — 16: 1,464 opcodes, 0.72 s, 167,620,188 gas; 24: 1,960, 0.81 s,
+167,578,114; 32: 2,456, 1.12 s, 168,826,687; 40: 2,952, 1.19 s, 168,929,285 (all VALID).
+At 40: `services/privacy/check.sh` → `PASS: 10 assertions` (incl. `accumulate refuses: a new
+chain starts from the empty trees`), refine 169,112,761 gas; `scripts/offline-proof.sh` →
+`bb verify: the proof holds …`, `… a changed public input is refused`; four chained transfers
+→ the indexed tree's linked list visits every leaf in order, the client's root = the proof's;
+`node test-core.mjs` → the JS wallet's proof `VALID` on the rig, B's Python client finds 40.
+Next: after the soak, everything live on pj6 and lasair6 (the new circuit and service, the
+two-client check, the self-custodial browser run), then the Aztec kernel spike.
