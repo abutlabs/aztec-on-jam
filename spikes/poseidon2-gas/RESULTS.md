@@ -30,5 +30,5 @@ slope from 1 to 10). Gas is the PVM's, the same in accumulate as in refine.
 insertion needs one path, and an indexed-nullifier insertion about two (34M). So under
 today's specs a privacy tree's updates must be computed in the proof (as this project's
 circuit does) and checked against the exact current root, and one tree takes one package a
-slot. A hash host call would change that: native Poseidon2 is about a hundred times cheaper
-(the JIP's timings, #32).
+slot. A hash host call would change that; how much cheaper native Poseidon2 is will be measured
+with the JIP's native timings (#32).
