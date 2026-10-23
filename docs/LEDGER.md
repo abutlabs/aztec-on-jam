@@ -1347,3 +1347,18 @@ path); verdicts 01, and 00 for a wrong root.
 Issues: #41 closed.
 Next: #40 (bb 6's Solidity verifier in Foundry), then the JIP's native timings (#32),
 including Poseidon2's.
+
+## 2026-10-23 49 — #40 closed: Aztec's epoch verifier costs 721,239 gas on Ethereum, so whole verifiers are about 3× JAM's share, not 50×; #29 closed
+Why this issue: #40 was the last missing comparison in LESSONS.md (#29) and the JIP's
+motivation, and needed only Foundry.
+Did: `spikes/evm-verifier`. bb 6.0.0's Solidity verifiers (`--optimized` as Aztec builds its,
+and plain) for #23's every-relation keys at 2^16, 2^20 and 2^24, run in Foundry 1.7.1 on the
+same proofs PolkaJam checked. Each test asserts true, and a revert with a public input altered.
+Evidence: `forge test -vv` → all 6 PASS; optimized 618,779 (2^16), 669,945 (2^20), 721,239
+(2^24); plain 1,632,783, 1,847,625, 2,063,360.
+Correction: LESSONS.md, LIMITS.md and the JIP draft said a JAM service pays "about 50 times"
+Ethereum's share for cryptography. That holds for checks Ethereum prices as precompiles (KZG
+48×, ecrecover 52×). A whole UltraHonk verifier is about 3× (3.6% of a package against 1.2%
+of a 60M block), because Ethereum's verifier is contract code too. All three now say so.
+Issues: #40 closed. #29 closed: LESSONS.md is complete, every claim linked to evidence.
+Next: the JIP's native timings (#32), which fill the gas constants.

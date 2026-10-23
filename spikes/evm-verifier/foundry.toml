@@ -1,0 +1,11 @@
+# #40: bb 6.0.0's Solidity verifiers for #23's every-relation proofs, as Aztec builds its epoch
+# verifier (write_solidity_verifier --optimized; -t evm-no-zk), and the plain one for comparison.
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1
+fs_permissions = [{ access = "read", path = "./data" }]
+code_size_limit = 4294967295

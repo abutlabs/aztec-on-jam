@@ -7,9 +7,10 @@ specs?*
 The short answer: **JAM can check private computation as well as any chain can, and JAM's
 re-execution gives a stronger guarantee than a proof alone. What it lacks is cheap
 cryptography and a way to share one private state across many packages a slot.** The first
-makes each check cost about 50 times more of the budget it runs in (one core's package) than
-the same check costs of an Ethereum block, though JAM's many cores still give it more capacity
-in total. The second
+makes a single cryptographic check (a KZG opening, a signature) cost about 50 times more of the
+budget it runs in (one core's package) than the same check costs of an Ethereum block, and a
+whole proof verifier about 3 times more, though JAM's many cores still give it more capacity in
+total. The second
 limits one privacy pool to one package a slot unless proofs are folded off the chain, which
 brings Aztec's prover back. Neither is a wall: both have measured workarounds on PolkaJam. Both
 are spec-level costs a protocol change could remove (#31, #32).
@@ -53,15 +54,18 @@ the mainnet limit since Fusaka's EIP-7935):
 | One KZG point evaluation | 199,473,075 (#24) | 4.0% | 50,000 (EIP-4844 precompile) | 0.083% | about 48× |
 | One ECDSA recovery | 13,119,449 (#39) | 0.26% | 3,000 (precompile 0x01) | 0.005% | about 52× |
 | 33 ECDSA recoveries (an epoch's attestations) | 432,756,815 (#39) | 8.7% | 99,000 | 0.17% | about 52× |
-| One UltraHonk verification (Aztec's epoch proof) | 180,791,299 at 2^24 (#23) | 3.6% | Solidity on both sides; measured in #40 | | |
+| One UltraHonk verification (Aztec's epoch proof, 2^24) | 180,791,299 (#23) | 3.6% | 721,239 (bb's optimized Solidity verifier, as Aztec builds it, #40) | 1.2% | about 3× |
+
+The UltraHonk row is narrower because Ethereum's verifier is contract code too, using
+precompiles only for its curve operations (`spikes/evm-verifier`).
 
 **But per chain, JAM has more room.** JAM has 341 cores, each with a full package every 6
 s; Ethereum has one 60M block every 12 s. Taking the point evaluation alone: JAM could run
 341 × 25 = 8,525 every 6 s (about 1,400 a second) against Ethereum's 1,200 every 12 s (100 a
-second), about 14 times more in total. **Each check is about 50 times dearer in the unit a
-service buys, and the chain as a whole can do more of them.** For a privacy service, the unit
-is what matters: it pays for its own core's package, so cryptography costs it about 50 times
-what a rollup's transactions cost it on Ethereum.
+second), about 14 times more in total. **Each single check is about 50 times dearer in the
+unit a service buys (a whole proof verifier about 3 times), and the chain as a whole can do
+more of them.** For a privacy service, the unit is what matters: it pays for its own core's
+package.
 
 **b. One shared private state takes one package a slot.** Each proof names the state it
 started from, and refine cannot read state, so packages on one tree must land in order, one a

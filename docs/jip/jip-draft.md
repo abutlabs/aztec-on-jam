@@ -27,7 +27,7 @@ script):
 
 | Check | PVM gas in refine | Share of a full package (5e9) | Ethereum (precompile) | Share of a 60M block |
 |---|---|---|---|---|
-| UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^24 gates, every gate type in use; 2^24 is Aztec's epoch proof's size) | 170,364,998 – 180,791,299 | 3.4–3.6% | Solidity verifier (being measured) | |
+| UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^24 gates, every gate type in use; 2^24 is Aztec's epoch proof's size) | 170,364,998 – 180,791,299 | 3.4–3.6% | 618,779 – 721,239 (bb's optimized Solidity verifier, using the 0x06–0x08 precompiles) | 1.0–1.2% |
 | EIP-4844 KZG point evaluation | 199,473,075 | 4.0% | 50,000 | 0.083% |
 | One blob checked against its commitment | 262,430,040 | 5.2% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |
@@ -35,7 +35,8 @@ script):
 | A depth-40 tree insertion (40 hashes) | 17.1M | 171% of accumulate's 10M | | |
 
 Compared as shares of the budget each check runs in, a JAM service pays about 50 times what an
-Ethereum contract pays for the same check. That price falls on every privacy system, rollup
+Ethereum contract pays for a precompiled check (KZG, ecrecover), and about 3 times for a whole
+UltraHonk verifier, which on Ethereum is contract code using the curve precompiles. That price falls on every privacy system, rollup
 settlement and cross-chain light client a JAM service could host. For example, settling the
 Aztec network on JAM needs about 812M gas an epoch proof and 981M a checkpoint (proof, blobs,
 attestations), most of it pairings and curve arithmetic (`docs/privacy/LESSONS.md`,
