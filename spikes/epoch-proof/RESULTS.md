@@ -53,6 +53,18 @@ Aztec's flags (`-t evm-no-zk`), each checked by `bb verify` and our verifier fir
 | 2^20 | 9,184 B | 7.24 s | 163,676,071 | 16.4% | 3.3% | 0.181 s | accepted |
 | 2^22 | 9,888 B | 40.33 s | 166,433,017 | 16.6% | 3.3% | 0.165 s | accepted |
 | 2^22, a public input altered | | | 9,456,761 | | | 0.010 s | rejected |
+| 2^23 (keccakf1600 circuit, 416 calls) | 10,240 B | 54.08 s (peak 5,582 MB) | 176,083,620 | 17.6% | 3.5% | 0.180 s | accepted |
+| 2^23, a public input altered | | | 9,625,506 | | | 0.011 s | rejected |
+
+**The circuit's content matters, not only its size.** 2^23 costs 9.65M more than 2^22, where
+each earlier doubling added about 1.3M, while the proof grew by exactly one round (352 bytes).
+The 2^12-2^22 circuits are squarings: arithmetic gates only, so most of the verification
+key's selector commitments are zero, and the verifier's curve arithmetic is cheaper on them.
+The 2^23 circuit (keccakf1600) uses lookups and more gate types. Our transfer circuit, which
+uses many gate types, costs 169,112,761 at 2^14 with 20 public inputs, against 155,653,349 for
+the bare 2^14 circuit with 113. So the line through the squaring circuits understates a real
+root rollup, which uses every gate type. Next (#23): the same sizes with a circuit that uses
+every relation, to bound the real cost.
 
 2^24 itself (Aztec's size) was not proved here: on this 16 GB machine the synthetic circuit's
 witness build swapped for 50 minutes before proving began (a loop of 16.7M unrolled steps; #23).

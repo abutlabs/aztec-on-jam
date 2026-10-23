@@ -22,9 +22,10 @@ echo "== 1. proofs (nargo $("$NARGO" --version | head -1 | awk '{print $4}'), bb
 for k in $LOGS; do
   d=$O/c$k; mkdir -p "$d/src"
   if [ ! -f "$d/proof/proof" ]; then
+    printf '[package]\nname = "c%s"\ntype = "bin"\nauthors = [""]\n\n[dependencies]\n' "$k" > "$d/Nargo.toml"
+    if [ "$k" -le 22 ]; then
     # N squarings, one gate each, sized to fill 2^k after the fixed rows (calibrated by `bb gates`)
     n=$(( (1 << k) - 600 ))
-    printf '[package]\nname = "c%s"\ntype = "bin"\nauthors = [""]\n\n[dependencies]\n' "$k" > "$d/Nargo.toml"
     cat > "$d/src/main.nr" <<EOF
 global N: u32 = $n;
 
@@ -36,6 +37,24 @@ fn main(x: Field, inputs: pub [Field; $((NPUBS - 1))]) -> pub Field {
     acc
 }
 EOF
+    else
+    # From 2^23 a loop that size unrolls into a program too big to compile here (#23: 2^24
+    # swapped for 50 minutes in nargo execute). keccakf1600 is one opcode of about 15,100 gates
+    # (25,500 fixed; bb gates, 1 and 10 calls), so N calls fill 3/4 of 2^k with a small program.
+    n=$(( ((1 << (k - 1)) + (1 << (k - 2))) / 15117 ))
+    cat > "$d/src/main.nr" <<EOF
+global N: u32 = $n;
+
+fn main(x: u64, inputs: pub [Field; $((NPUBS - 1))]) -> pub Field {
+    let mut s: [u64; 25] = [x; 25];
+    for i in 0..N {
+        s[0] = s[0] ^ (inputs[i % $((NPUBS - 1))] as u64);
+        s = std::hash::keccakf1600(s);
+    }
+    s[0] as Field
+}
+EOF
+    fi
     python3 -c "print('x = \"3\"'); print('inputs = [' + ', '.join('\"%d\"' % (i + 1) for i in range($NPUBS - 1)) + ']')" > "$d/Prover.toml"
     (cd "$d" && "$NARGO" execute --silence-warnings > /dev/null)
     mkdir -p "$d/proof"

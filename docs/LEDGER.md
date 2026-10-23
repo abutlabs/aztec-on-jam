@@ -1200,3 +1200,25 @@ Conclusion: the prover changes every major release (a small verifier port each t
 v6 in #22), the Rollup's logic changes most, and the node's TypeScript boundary barely moves.
 Issues: #27 closed.
 Next: #23's 2^23 result, then #26.
+
+## 2026-10-23 41 — #23: 2^23 measured on PolkaJam (176,083,620 gas); the circuit's gate mix moves the cost
+Why this issue: #23 is the open measurement nearest the head of the order. 2^23 was the
+largest size this 16 GB machine could prove (#23's first 2^24 attempt swapped).
+Did: from 2^23, `spikes/epoch-proof/measure.sh` builds the circuit from keccakf1600 calls
+(about 15,100 gates each, measured with `bb gates`) instead of an unrolled loop, so the
+program stays small. A 40-minute watchdog was set; it was not needed.
+Evidence: `LOGS=23 ./measure.sh` →
+- "2^23 proof 10240 B, 113 public inputs, prove 54.08 s, peak 5582 MB; bb and our verifier
+  accept";
+- PolkaJam refine 176,083,620 gas (3.5% of a full package), 0.180 s, verdict 01; a public
+  input altered 9,625,506, 00.
+`out/c23/src/main.nr`: N = 416 calls.
+Found: 2^23 costs 9.65M more than 2^22, whose squaring circuits gained about 1.3M a
+doubling. The proof grew by exactly one round, so the jump is the gate mix: zero selector
+commitments are cheaper for the verifier. Our transfer circuit (many gate types) costs 169M
+at 2^14 with 20 public inputs, against 155.6M for the bare one with 113. So "about 169M at
+2^24" understated a real root rollup. RESULTS.md says so.
+Also: `docs/aztec/SERVICE.md` (#26's design) drafted; #39 filed (secp256k1 ECDSA in refine,
+for proposer signatures and attestations).
+Next: #23 with a circuit that uses every relation (lookups, ROM, Poseidon2, elliptic) across
+sizes, to bound the real root rollup's cost; then 2^24 if memory allows. Then #26's skeleton.
