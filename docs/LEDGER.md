@@ -1541,3 +1541,18 @@ Evidence: `e2e --vectors | cmp - docs/jip/vectors/jip8-core.jsonl` gives no outp
 2^24) is in `spikes/verifier-profile/RESULTS.md`.
 Issues: #34 closed. Open: #28 and #35 (tracking), and #46, #47 and #48 (research, not phase-3 rows).
 Next: #28 and #35's status; #48; Phase 3's done check.
+
+## 2026-10-23 60 — Phase 3's done check
+Why: every Phase 3 row's issue is closed, and #28 and #35 carry end-of-phase status comments.
+Checked:
+- **Rows:** #21–#27, #29–#34, #36–#42, #44 and #45 are closed. Each closing comment gives its
+  command and output, and each has a ledger entry (31–59). #28 and #35 stay open as `roadmap`,
+  with status comments listing what is done and what remains.
+- **Demo:** `NET=pj6 nets/demo.sh down; up; check` passed from clean in ledger 56 (PASS, exit
+  0). `git diff --stat 5f3439a..HEAD -- services client nets` is empty, so the code it ran is the
+  code now.
+- **CI:** green on this commit (below, once its run finishes).
+Left open as research for later phases, not Phase 3 rows: #46 (CHONK with an amortised IPA),
+#47 (the instruction-level alternative), and #48 (field-wise hooks in the services, which change
+soaked code and so need a re-soak).
+Nothing was submitted or posted outside this repository's issues.
