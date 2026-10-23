@@ -74,11 +74,11 @@ PolkaJam is Parity's.
 | --- | --- | --- |
 | Refine one privacy proof (169M gas), interpreted, Linux aarch64 container | 0.94 s (2.1.3 image) | 0.207 s (v0.8.0) |
 | The same, interpreted, macOS native | 0.65 s (main, a dev build) | 0.172 s (v0.8.0) |
-| The same, PolkaJam's recompiler (x86-64 only; a GitHub runner) | no recompiler | 14 to 38 ms warm |
+| The same, PolkaJam's recompiler (x86-64 only; a 4-vCPU GitHub runner, 30 refines) | no recompiler | 8 to 24 ms in 15; 0.41 to 0.56 s in 12, on the same nodes, cause not yet known |
 | An auditor re-executing a privacy report | 1.0 to 1.9 s | not in its telemetry |
 | One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.385 of a slot, median 21.2 s, 5 of 77 expired and resent | 1.0 of a slot, median 13.5 s, 0 of 600 |
-| A private send in the wallet (Docker nets) | 27.5 s | 11.2 s |
-| `nets/demo.sh check` (37 assertions) | 3 min 38 s | 1 min 51 s |
+| A shield, then a private send, in the wallet (Docker nets) | 81.3 s, 17.5 s | 25.8 s, 11.2 s |
+| `nets/demo.sh check` (37 assertions), and resends in it and the three stages | 3 min 09 s, 2 resent | 1 min 51 s, none |
 
 Refine times are the clients' own (lasair's log, PolkaJam's JIP-3 `Refined` events;
 `scripts/bench-refine-polkajam.sh` runs PolkaJam's in CI). A mixed net, three PolkaJam v0.8.0

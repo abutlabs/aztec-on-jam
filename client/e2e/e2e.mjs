@@ -13,7 +13,7 @@ import path from "node:path";
 
 const WALLET = process.env.WALLET || "http://localhost:19710";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const IMAGES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs/images");
+const IMAGES = process.env.IMAGES ? path.resolve(process.env.IMAGES) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs/images");   // IMAGES= elsewhere: a run that should not replace the README's
 // RECORD=1: screencast both browsers, then ffmpeg puts them side by side (docs/images/demo.mp4,
 // demo.gif). Needs ffmpeg on PATH.
 const RECORD = process.env.RECORD === "1";
@@ -65,7 +65,7 @@ async function act(page, label, fill) {
 }
 async function shot(page, file) {
   await page.screenshot({ path: path.join(IMAGES, file), fullPage: true });
-  console.log(`  screenshot docs/images/${file}`);
+  console.log(`  screenshot ${path.relative(process.cwd(), path.join(IMAGES, file))}`);
 }
 const setValue = (sel, v) => async (page) => { await page.$eval(sel, (e, v) => { e.value = v; }, String(v)); };
 
@@ -117,6 +117,6 @@ if (RECORD) {
     "setpts=PTS/4,fps=8,scale=900:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer",
     path.join(IMAGES, "demo.gif")]);
   rmSync(ra); rmSync(rb);
-  console.log("  recording docs/images/demo.mp4 and demo.gif (both browsers side by side)");
+  console.log(`  recording ${path.relative(process.cwd(), IMAGES)}/demo.mp4 and demo.gif (both browsers side by side)`);
 }
 await browser.close();

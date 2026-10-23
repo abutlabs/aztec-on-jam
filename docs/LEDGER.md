@@ -809,3 +809,74 @@ loop, so it is roadmap issue #21, the only issue left open under RALPH's #18 rul
 Issues: #18 closed; #21 opened (`roadmap`).
 Next: #14's table into the README (and close #14), the README rewrite, DEMO.md and
 ANNOUNCE.md final, then the final verification on every net.
+
+## 2026-10-23 26 — the final verification, every net from clean; #14's table
+Did: `scripts/verify-all.sh` (new): on each net from a clean state, `down`, `up`, `check`, the
+three stage commands, the two-browser run, `down`; then jamboree's head check on each native
+net. lasair6 and pj6 are the nets RALPH names; the three native nets ran too. The first full
+run passed both Docker nets and failed the native ones at once: my port guard in `nets/jb.sh`
+(`lsof` exits 1 when the ports are free, which `pipefail` + `set -e` turned into a silent exit),
+and the default PolkaJam path picked the Linux build now cached beside the macOS one. Both
+fixed; the native nets rerun; the head checks run separately (I had edited the script under the
+running bash); pj6 rerun to record the README's images (the first run's recording was
+overwritten by the script's `git checkout docs/images`, now replaced by `IMAGES=` for runs that
+should not touch them).
+Evidence (`out/verify-all.log`, `out/verify-jb.log`, `out/verify-pj6-rec.log`; logs in
+out/verify/):
+```
+lasair6     down      ok      0s  
+lasair6     up        ok     96s  indexer up on lasair6: slot 18 leaves 0 transfers 0
+lasair6     check     ok    189s  PASS
+lasair6     shield    ok    199s    A holds 160 privately, 0 publicly
+lasair6     send      ok     24s    A holds 120, B holds 40 privately
+lasair6     unshield  ok     23s    B holds 0 privately, 80 publicly
+lasair6     e2e       ok    178s  PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+lasair6     down      ok     11s  
+pj6         down      ok      1s  
+pj6         up        ok     75s  indexer up on pj6: slot 9503442 leaves 0 transfers 0
+pj6         check     ok    115s  PASS
+pj6         shield    ok     39s    A holds 160 privately, 0 publicly
+pj6         send      ok     18s    A holds 120, B holds 40 privately
+pj6         unshield  ok     18s    B holds 0 privately, 80 publicly
+pj6         e2e       ok     97s  PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+pj6         down      ok     13s  
+jb-pj6      down      ok      2s  
+jb-pj6      up        ok     73s  indexer up on jb-pj6: slot 9503519 leaves 0 transfers 0
+jb-pj6      check     ok     97s  PASS
+jb-pj6      shield    ok     35s    A holds 160 privately, 0 publicly
+jb-pj6      send      ok     12s    A holds 120, B holds 40 privately
+jb-pj6      unshield  ok     13s    B holds 0 privately, 80 publicly
+jb-pj6      e2e       ok     89s  PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+jb-pj6      down      ok      2s  
+jb-lasair6  down      ok      2s  
+jb-lasair6  up        ok    106s  indexer up on jb-lasair6: slot 19 leaves 0 transfers 0
+jb-lasair6  check     ok    171s  PASS
+jb-lasair6  shield    ok    119s    A holds 160 privately, 0 publicly
+jb-lasair6  send      ok     26s    A holds 120, B holds 40 privately
+jb-lasair6  unshield  ok     23s    B holds 0 privately, 80 publicly
+jb-lasair6  e2e       ok    116s  PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+jb-lasair6  down      ok      3s  
+jb-mixed    down      ok      2s  
+jb-mixed    up        ok    127s  indexer up on jb-mixed: slot 9503676 leaves 0 transfers 0
+jb-mixed    check     ok     96s  PASS
+jb-mixed    shield    ok     41s    A holds 160 privately, 0 publicly
+jb-mixed    send      ok     13s    A holds 120, B holds 40 privately
+jb-mixed    unshield  ok     18s    B holds 0 privately, 80 publicly
+jb-mixed    e2e       ok     90s  PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+jb-mixed    down      ok      2s  
+jb-pj6      headcheck ok   same head on 6 nodes after 180s: 0x012514d2154d2f203c2d6091a
+jb-lasair6  headcheck ok   same head on 6 nodes after 180s: 0xde8ee8f823a4ea11a475feda0
+jb-mixed    headcheck ok   same head on 6 nodes after 180s: 0x3c9a65f2b54060bf77f79419c
+pj6 (recorded) e2e: mint 12.1 s,shield 25.8 s,send 11.2 s,unshield 16 s; recording docs/images/demo.mp4, demo.gif
+```
+Resends (a package that went silent and was sent again): lasair6 2 over check and the stages,
+jb-lasair6 1, the PolkaJam and mixed nets none. Two-browser moves: lasair6 shield 81.3 s, send
+17.5 s; pj6 25.8 s, 11.2 s; jb-lasair6 32.2 s, 13.3 s; jb-pj6 25.7 s, 13.2 s; jb-mixed 25.8 s,
+13.2 s.
+#14's table is in the README (*lasair and PolkaJam, side by side*): refine of one proof,
+interpreted, Linux aarch64 containers, lasair 0.94 s against PolkaJam 0.207 s; macOS native
+0.65 s against 0.172 s; PolkaJam's recompiler on CI's x86-64 runner 8 to 24 ms in 15 of 30
+refines and 0.41 to 0.56 s in 12 (not a node's first refine; cause not known); lasair audits a
+privacy report in 1.0 to 1.9 s (PolkaJam reports no audit telemetry); one tree at one package a
+slot, 0.385 against 1.0; check and the wallet's moves as above.
+Issues: #14 closed.

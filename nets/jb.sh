@@ -19,7 +19,11 @@ JB=${JAMBOREE:-$SUB/jamboree/target/release/jamboree}
 # PolkaJam v0.8.0 (scripts/bootstrap.sh fetches it): its PVM gas matches lasair main's (the
 # v0.8.0 vectors' cmov rule); the 2026-09-22 nightly charges 2 gas less on some accumulates,
 # and on a mixed net lasair then rejects PolkaJam's blocks (bad_parent_state_root, key 0x0d)
-PJ=${POLKAJAM:-$(ls "$HOME"/.cache/jam-privacy/polkajam-v0.8.0/polkajam-v0.8.0-*/polkajam 2>/dev/null | head -1)}
+case "$(uname -s)-$(uname -m)" in   # the release build for this machine (bootstrap fetches it)
+  Darwin-arm64) PJP=macos-aarch64 ;; Darwin-x86_64) PJP=macos-x86_64 ;;
+  Linux-aarch64|Linux-arm64) PJP=linux-aarch64 ;; *) PJP=linux-x86_64 ;;
+esac
+PJ=${POLKAJAM:-$HOME/.cache/jam-privacy/polkajam-v0.8.0/polkajam-v0.8.0-$PJP/polkajam}
 LZ=${LASAIR:-$SUB/lasair/_build/default/bin/lasair_client.exe}
 LR=${LASAIR_READER:-$SUB/lasair/_build/default/bin/lasair_reader.exe}
 BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build   # the GP 0.8.0 blob builder
@@ -37,7 +41,7 @@ esac
 
 # another native net (or anything) on the genesis ports would take this net's nodes' traffic
 ports_free() {
-  local held; held=$(lsof -nP -iUDP:$GENESIS_PORT -iUDP:$((GENESIS_PORT + 5)) 2>/dev/null | awk 'NR>1{print $1" "$2}' | sort -u | head -3)
+  local held; held=$( { lsof -nP -iUDP:$GENESIS_PORT -iUDP:$((GENESIS_PORT + 5)) 2>/dev/null || true; } | awk 'NR>1{print $1" "$2}' | sort -u | head -3)
   [ -z "$held" ] || { echo "the genesis ports $GENESIS_PORT.. are in use (another net is up?): $held" >&2; exit 2; }
 }
 
