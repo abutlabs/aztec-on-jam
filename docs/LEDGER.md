@@ -1443,3 +1443,21 @@ ae599d3 -- src Cargo.toml` is empty), and a rebuild at the new rev gives a blob 
 which would leave the gas measured at 2ae44db (#23, #26, #30) unmatched to the code.
 Issues: #22 closed.
 Next: #33, the simulated reviews of the JIP.
+
+## 2026-10-23 54 — #43 closed: one refine appends 11,350 notes to a depth-40 tree; a JAM-native tree is bounded by verification, not insertion
+Why this issue: #30's recommendation rested on a reasoned insertion rate. This measures it,
+while the testnet was free and #33's reviewers work.
+Did: kind 2 in `spikes/poseidon2-gas` appends k notes level by level from a depth-40 tree's
+frontier. The expected roots come from `tools/append.py`'s per-leaf insertion, which it holds
+to a naive tree at depth 4, along with the level-by-level algorithm. ARCHITECTURES, LIMITS
+and LESSONS now use the measurement: one tree package a slot takes about 5,675 transfers, and
+the limit to one package a slot is this demo's design, not the spec. The rebuilt service moved
+the old cases by 2 gas a hash (428,841); the docs carry it, and the CI R and f table keeps its
+run's record.
+Evidence: `measure.sh` on PolkaJam → append 1: 17,917,418 (01); 64: 46,380,829 (01); 1,024:
+466,117,396 (01); 2,048: 915,618,413 (01); 2,048 with a wrong root: 915,618,411 (00). That is
+438,966 gas a note.
+For #34: jip-draft.md's Poseidon2 motivation ("without it, every tree update must be proven
+and applied in order, one package a slot") is now wrong. The final corrects it.
+Issues: #43 closed.
+Next: #38's control run; #33's cross-responses when the reviews land.

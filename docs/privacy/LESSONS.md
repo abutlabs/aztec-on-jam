@@ -6,14 +6,14 @@ specs?*
 
 The short answer: **JAM can check private computation as well as any chain can, and JAM's
 re-execution gives a stronger guarantee than a proof alone. What it lacks is cheap
-cryptography and a way to share one private state across many packages a slot.** The first
-makes a single cryptographic check (a KZG opening, a signature) cost about 50 times more of the
-budget it runs in (one core's package) than the same check costs of an Ethereum block, and a
-whole proof verifier about 3 times more, though JAM's many cores still give it more capacity in
-total. The second
-limits one privacy pool to one package a slot unless proofs are folded off the chain, which
-brings Aztec's prover back. Neither is a wall: both have measured workarounds on PolkaJam. Both
-are spec-level costs a protocol change could remove (#31, #32).
+cryptography.** A single cryptographic check (a KZG opening, a signature) costs about 50 times
+more of the budget it runs in (one core's package) than the same check costs of an Ethereum
+block. A whole proof verifier costs about 3 times more. JAM's many cores still give it more
+capacity in total. This is spec-level, and a JIP could ease it by 2–4× (#31, #32). Sharing one
+private state across many packages a slot looked like a second limit: this demo serializes
+packages on its tree. It is a design choice, not a spec limit: with insertion moved out of the
+proofs into one tree package a slot, a tree takes about 5,675 transfers a slot, by measured
+costs (#30, #43).
 
 Every number below was measured in this repository, most of them on a six-validator PolkaJam
 v0.8.0 testnet with PolkaJam's own telemetry. Each one names its source.
@@ -67,11 +67,13 @@ unit a service buys (a whole proof verifier about 3 times), and the chain as a w
 more of them.** For a privacy service, the unit is what matters: it pays for its own core's
 package.
 
-**b. One shared private state takes one package a slot.** Each proof names the state it
+**b. One shared private state takes one package a slot, as this demo is built.** Each proof names the state it
 started from, and refine cannot read state, so packages on one tree must land in order, one a
 slot: one transfer every 6 s per tree unfolded (#4, the soak; `docs/DEMO.md`). Scale needs
 either folding many transfers into one proof off the chain (Aztec's prover, returned) or many
-trees (more cores, smaller crowds). Aztec on JAM inherits Aztec's folding, so its throughput is
+trees (more cores, smaller crowds). A third way came out of #30 and #43: proofs name a recent
+root, nullifiers live in accumulate's storage, and one tree package a slot appends the new notes
+in refine, 11,350 a full package (`ARCHITECTURES.md`). Aztec on JAM inherits Aztec's folding, so its throughput is
 Aztec's. JAM then checks each checkpoint's blobs (about 968M gas for 6, batched) and one epoch
 proof with its attestations (about 812M) (#23, #37, #39).
 
@@ -95,8 +97,10 @@ that serves witnesses, as Aztec's node does for its PXE (ledger 28).
 
 - **On quality, yes and more:** the same zero-knowledge proofs and client-side privacy, with
   re-execution and auditing on top, and longer data availability.
-- **On scale, not by itself under today's specs.** A JAM-native privacy service without
-  folding is one transfer every 6 s a tree. With Aztec's folding it can match Aztec's
+- **On scale, not with this demo's design.** It names the exact current root, so it does one
+  transfer every 6 s a tree. Redesigned as `ARCHITECTURES.md`'s candidate 3, one tree takes
+  about 5,675 transfers a slot, and verification (29 proofs a core) becomes the bound, by
+  measured costs not yet built into one service. With Aztec's folding it can match Aztec's
   throughput. Settlement then costs two packages for each Aztec checkpoint and epoch: about
   981M gas a checkpoint (blobs and the proposer) and about 812M an epoch proof (proof, blob
   opening, attestations). Each fits a tiny package (#23, #24, #39), at the price of Aztec's

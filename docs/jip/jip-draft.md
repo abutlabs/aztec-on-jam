@@ -31,7 +31,7 @@ script):
 | EIP-4844 KZG point evaluation | 199,453,527 | 4.0% | 50,000 | 0.083% |
 | One blob checked against its commitment | 262,626,180 | 5.3% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |
-| Poseidon2 (BN254, t = 4), one hash | 428,839 | 0.009% (4.3% of accumulate's 10M) | none (circuits only) | |
+| Poseidon2 (BN254, t = 4), one hash | 428,841 | 0.009% (4.3% of accumulate's 10M) | none (circuits only) | |
 | A depth-40 tree insertion (40 hashes) | 17.1M | 171% of accumulate's 10M | | |
 
 Compared as shares of the budget each check runs in, a JAM service pays about 50 times what an
@@ -159,7 +159,7 @@ element is not below the field modulus
 The permutation is Poseidon2 with t = 4, x^5, 8 full and 56 partial rounds, and the round
 constants and internal diagonal Noir and Barretenberg use (pinned by their published vectors).
 Sponges and tree hashing stay in the service. Motivation: a privacy tree's insertion in
-accumulate. One Poseidon2 hash costs 428,839 gas as PVM code, and a depth-40 path 17.1M,
+accumulate. One Poseidon2 hash costs 428,841 gas as PVM code, and a depth-40 path 17.1M,
 more than accumulate's 10M a report (jam-privacy-service#41). Without it, every tree update
 must be proven and applied in order, one package a slot.
 
@@ -205,7 +205,7 @@ cost, not the recovery. This draft takes **R = 8** (7.9 rounded up) and, provisi
 | `bls12_381_g1_msm`, n points | blst | 168 / 972 / 1,491 µs at 1 / 16 / 128 | interpolated (below) | | |
 | `kzg_point_evaluation` | zkcrypto | 4,243 µs | 67,888,000 | 199,453,527 | 2.9× |
 | `secp256k1_recover` | k256 | 201 µs | 3,216,000 | 13,119,449 | 4.1× |
-| `poseidon2_bn254_permute` | arkworks fields (`p2`) | 12.9 µs | 206,400 | 428,839 | 2.1× |
+| `poseidon2_bn254_permute` | arkworks fields (`p2`) | 12.9 µs | 206,400 | 428,841 | 2.1× |
 
 MSM gas is 16 gas/ns times the native time interpolated linearly between the measured sizes
 (1, 16 and 128 points), and extrapolated past 128 from the last segment. A single slope
@@ -218,7 +218,7 @@ bytecode, because the EVM interprets 256-bit arithmetic slowly. The PVM's recomp
 64-bit arithmetic close to native: f, its slowdown on this code, is 4.7–9.4. A host call priced
 consistently with PVM code saves f / m, times any library gain (blst's assembly against the
 pure-Rust code services run). At m = 2 that is **about 2–4× per call**, not the 50× that
-Ethereum's precompile prices suggest. Poseidon2 drops from 428,839 to 206,400 gas, which brings
+Ethereum's precompile prices suggest. Poseidon2 drops from 428,841 to 206,400 gas, which brings
 a depth-40 tree insertion (8.3M) inside accumulate's 10M, with little room to spare.
 
 ## Determinism and consensus

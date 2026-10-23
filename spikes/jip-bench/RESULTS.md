@@ -6,7 +6,7 @@ day; treat the numbers as indicative).
 
 | Operation | Native | PVM gas (PolkaJam, the same Rust) | K = PVM gas / native ns |
 |---|---|---|---|
-| Poseidon2 hash (one permutation), `p2` | 9.5 µs | 428,839 | 44.9 |
+| Poseidon2 hash (one permutation), `p2` | 9.5 µs | 428,841 | 44.9 |
 | KZG point evaluation, `kzg-verify` (zkcrypto `bls12_381`) | 2,989.8 µs | 199,453,527 | 66.7 |
 | secp256k1 recovery, `k256` | 136.9 µs | 13,119,449 | 95.8 |
 | BN254 pairing check, 2 pairs, arkworks | 795.9 µs | | |
@@ -29,7 +29,7 @@ close to native, so a host call, priced consistently with ordinary PVM code, sav
 - **divided by m**, the JIP's safety margin.
 
 So at the draft's m = 2 a host call cuts gas by about 2–4×, not 50×. Poseidon2 drops from
-428,839 to 206,400, so a depth-40 insertion (8.3M) fits accumulate's 10M. The JIP's value is
+428,841 to 206,400, so a depth-40 insertion (8.3M) fits accumulate's 10M. The JIP's value is
 real but narrower: faster on its own terms, constant and deterministic cost, audited libraries
 every client shares, and just enough headroom for accumulate to update a tree.
 

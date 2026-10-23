@@ -37,9 +37,9 @@ fn main() {
         eprintln!("NATIVE {} {ns}", name.split(',').next().unwrap().replace(' ', "_"));
     };
 
-    // Poseidon2: one hash of two elements (one permutation), PVM 428,839 a hash (#41)
+    // Poseidon2: one hash of two elements (one permutation), PVM 428,841 a hash (#41)
     let x = ark_bn254::Fr::from(7u64);
-    row("poseidon2 hash (one permutation), p2", median_ns(|| { black_box(p2::hash(&[black_box(x), x])); }), Some(428_839.0));
+    row("poseidon2 hash (one permutation), p2", median_ns(|| { black_box(p2::hash(&[black_box(x), x])); }), Some(428_841.0));
 
     // KZG point evaluation: geth's precompile vector, PVM 199,453,527 (#24, kind 0)
     let g = fs::read_to_string(format!("{}/geth-pointEvaluation.json", a[1])).unwrap();

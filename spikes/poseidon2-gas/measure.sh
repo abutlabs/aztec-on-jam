@@ -5,7 +5,9 @@
 # permutation vectors, hash_cli's outputs, the empty depth-16 root). The expected results
 # below come from client/poseidon2.py, a second implementation. Then on a PolkaJam testnet
 # (spikes/lib/polkajam.sh): chained hashes and depth-40 paths; refine's gas is the PVM's,
-# the same as accumulate would pay.
+# the same as accumulate would pay. #43: k leaves appended to an append-only depth-40 tree in
+# one refine, level by level; expected roots from tools/append.py's per-leaf insertion, a
+# different algorithm, itself held to a naive full tree.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); O=$HERE/out; mkdir -p "$O"
 . "$HERE/../lib/polkajam.sh"
@@ -14,9 +16,10 @@ BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build
 echo "== 1. on the host"
 (cd "$HERE/host" && cargo run -q --release -- "$HERE/../../client/poseidon2-bn254.json")
 
-PYTHONPATH="$HERE/../../client" python3 - "$O" <<'PY'
+PYTHONPATH="$HERE/../../client:$HERE/tools" python3 - "$O" <<'PY'
 import random, sys
 import poseidon2 as p2
+import append
 out = sys.argv[1]
 random.seed(41)
 be = lambda x: x.to_bytes(32, "big")
@@ -39,6 +42,17 @@ cases = {1: bytes([0]) + (1).to_bytes(2, "little") + be(chained(1)),
          4: bytes([1]) + (1).to_bytes(2, "little") + path + be(root),
          5: bytes([1]) + (10).to_bytes(2, "little") + path + be(root),
          6: bytes([1]) + (1).to_bytes(2, "little") + path + be((root + 1) % p2.P)}
+assert append.check(4)
+zero = append.zeros(40)
+start = random.randrange(1 << 39, 1 << 40) | 1   # odd, so the frontier is used from level 0
+frontier = [random.randrange(p2.P) for _ in range(40)]
+leaves = [random.randrange(p2.P) for _ in range(2048)]
+state = start.to_bytes(8, "little") + b"".join(be(x) for x in frontier) + b"".join(be(x) for x in zero)
+for t, k in [(7, 1), (8, 64), (9, 1024), (10, 2048)]:
+    want = append.sequential(frontier, zero, start, leaves[:k])
+    assert append.batch(frontier, zero, start, leaves[:k]) == want
+    cases[t] = bytes([2]) + k.to_bytes(2, "little") + state + b"".join(be(x) for x in leaves[:k]) + be(want)
+cases[11] = cases[10][:-32] + be((int.from_bytes(cases[10][-32:], "big") + 1) % p2.P)
 for t, b in cases.items():
     open(f"{out}/p{t}.bin", "wb").write(bytes([t]) + b)
 PY
@@ -47,16 +61,18 @@ echo "== 2. on a PolkaJam testnet ($("$PJD/polkajam" --version | head -1))"
 BLOB=$("$BUILD" "$HERE/service" --out "$O" | awk '{print $1}')
 pj_start "$O"
 pj_deploy "$BLOB"
-for t in 1 2 3 4 5 6; do pj_send "$t" "$O/p$t.bin"; done
+for t in $(seq 1 11); do pj_send "$t" "$O/p$t.bin"; done
 sleep 12
-names=("" "1 hash" "10 hashes, chained" "100 hashes, chained" "1 depth-40 path (40 hashes)" "10 depth-40 paths" "1 path, wrong root expected (must fail)")
+names=("" "1 hash" "10 hashes, chained" "100 hashes, chained" "1 depth-40 path (40 hashes)" "10 depth-40 paths" "1 path, wrong root expected (must fail)"
+       "append 1 leaf to a depth-40 tree" "append 64 leaves" "append 1,024 leaves" "append 2,048 leaves" "append 2,048 leaves, wrong root expected (must fail)")
 echo
 echo "| case | refine gas | PolkaJam refine ($(pj_backend), $(uname -sm)) | accumulate's verdict |"
 echo "|---|---|---|---|"
-for t in 1 2 3 4 5 6; do
+for t in $(seq 1 11); do
+  key=$(printf '763a%02x' "$t")
   rows=$(pj_refines "$t" || true)
-  [ -n "$rows" ] || { printf '| %s | refused | | %s |\n' "${names[$t]}" "$(pj_read "763a0$t")"; continue; }
+  [ -n "$rows" ] || { printf '| %s | refused | | %s |\n' "${names[$t]}" "$(pj_read "$key")"; continue; }
   g=$(echo "$rows" | awk '{print $1}' | sort -n | head -1)
   med=$(echo "$rows" | awk '{print $2}' | sort -n | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}')
-  printf '| %s | %s | %s s of %s | %s |\n' "${names[$t]}" "$(python3 -c "print(f'{$g:,}')")" "$med" "$(echo "$rows" | wc -l | tr -d ' ')" "$(pj_read "763a0$t")"
+  printf '| %s | %s | %s s of %s | %s |\n' "${names[$t]}" "$(python3 -c "print(f'{$g:,}')")" "$med" "$(echo "$rows" | wc -l | tr -d ' ')" "$(pj_read "$key")"
 done
