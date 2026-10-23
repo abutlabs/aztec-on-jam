@@ -3,6 +3,7 @@
 #   nets/demo.sh up        start the net, build and deploy both services
 #   nets/demo.sh check     A shields 100, A pays B 40 privately, B unshields 40; every value
 #                          read back from the chain byte for byte; a replay must change nothing
+#   nets/demo.sh wallet    start the wallet backend (client/wallet.py) on localhost:19710
 #   nets/demo.sh down      stop the net and wipe the chain
 # Public accounts are 32-byte big-endian field elements: A = 1, B = 2. Private keys derive
 # from the names A and B (client/privacy.py). Service ids come from out/state/*.json.
@@ -18,7 +19,8 @@ ctl() { "$L" ctl "$@" 2>&1 | tail -1; }
 submit() { WAIT=${WAIT:-300} "$L" ctl submit "$@" 2>&1 | grep -E "^status .*(Ready|Failed)|timeout" | tail -1 | cut -c1-40; }
 # submit_until <sid> <payload> <read-sid> <key> <expected> <name>: send the payload and wait for
 # the state it must produce; a package that goes Ready but never accumulates (lasair#93) is
-# sent again, which is safe: accumulate is a no-op for a payload it has already applied.
+# sent again, which is safe: public-balance skips a nonce it has seen (a mint's random nonce,
+# a shield's commitment) and the privacy service a nullifier it has seen.
 submit_until() {
   local try got
   for try in 1 2 3; do
@@ -53,8 +55,15 @@ case "${1:-}" in
     for _ in $(seq 1 60); do "$L" ctl head >/dev/null 2>&1 && break; sleep 3; done   # the reader answers
     "$L" ctl head; rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE"
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
-    "$L" indexer ;;
-  down) "$L" down ;;
+    "$L" indexer; "$0" wallet ;;
+  wallet)
+    [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true
+    nohup python3 "$ROOT/client/wallet.py" > "$ROOT/out/wallet.log" 2>&1 & echo $! > "$ROOT/out/wallet.pid"
+    for _ in $(seq 1 20); do curl -sf localhost:19710/api/state?user=A >/dev/null 2>&1 && break; sleep 1; done
+    echo "wallet: http://localhost:19710/?user=A   (and ?user=B)   log: out/wallet.log" ;;
+  down)
+    [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true; rm -f "$ROOT/out/wallet.pid"
+    "$L" down ;;
   check)
     PB=$(sid public-balance); PV=$(sid privacy); echo "public-balance = service $PB, privacy = service $PV"
     A=$(hex32 1); B=$(hex32 2); mkdir -p "$ROOT/out"; rm -f "$CLIENT_STATE"
@@ -65,7 +74,7 @@ case "${1:-}" in
     echo "== A: a deposit note for 100";   "$CLIENT" deposit A 100 | tee "$ROOT/out/deposit.txt"
     C=$(awk '{print $4}' "$ROOT/out/deposit.txt" | sed 's/^0x//')
     echo "== mint 100 to A (public)"
-    submit_until "$PB" "00$A$(le64 100)" "$PB" "62616c3a$A" "$(le64 $((BA0 + 100)))" "bal:A"
+    submit_until "$PB" "00$A$(le64 100)$(openssl rand -hex 32)" "$PB" "62616c3a$A" "$(le64 $((BA0 + 100)))" "bal:A"
     echo "== shield: A burns 100, the deposit travels to the privacy service with commitment C"
     submit_until "$PB" "02$A$(le64 100)$(le32 "$PV")$C" "$PB" "62616c3a$A" "$(le64 $BA0)" "bal:A back where it started"
     read_eq "$PV" "6465703a$C" "$(le64 100)" "dep:C (arrived by deferred transfer)"

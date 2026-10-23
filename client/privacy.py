@@ -28,6 +28,10 @@ P = 2188824287183927522224640574525727508854836440041603434369820418657580849561
 ENV = dict(os.environ, PATH=f"{Path.home()}/.nargo/bin:{Path.home()}/.bb:{os.environ.get('PATH', '')}")
 
 
+class ClientError(Exception):
+    """A proof, a hash or an input selection failed; the message says which and why."""
+
+
 def field(x):
     return int(x) % P
 
@@ -50,7 +54,7 @@ def h(*vals):
                          capture_output=True, text=True, env=ENV)
     m = re.search(r"Circuit output: (0x[0-9a-fA-F]+)", out.stdout + out.stderr)
     if not m:
-        raise SystemExit(f"hash_cli failed:\n{out.stdout}\n{out.stderr}")
+        raise ClientError(f"hash_cli failed:\n{out.stdout}\n{out.stderr}")
     v = int(m.group(1), 16)
     cache[key] = v
     _save_hash_cache(cache)
@@ -135,12 +139,18 @@ def cmd_pk(owner):
     print(hexf(pk_of(owner)))
 
 
-def cmd_deposit(owner, value):
+def deposit(owner, value):
+    """A new deposit note for a shield of `value` to `owner`; returns the note (its hash is C)."""
     st = load()
     n = {"id": len(st["notes"]), "owner": owner, "value": int(value), "blinding": new_blinding(st),
          "kind": "deposit", "spent": False, "leaf": None}
     n["hash"] = note_hash(n)
     st["notes"].append(n); save(st)
+    return n
+
+
+def cmd_deposit(owner, value):
+    n = deposit(owner, value)
     print(f"note {n['id']} commitment {hexf(n['hash'])}")
 
 
@@ -173,11 +183,14 @@ def pick(st, ref):
     if ref.startswith("deposit:"):
         ref = ref.split(":", 1)[1]
     n = st["notes"][int(ref)]
-    assert not n["spent"], f"note {ref} is spent"
+    if n["spent"]:
+        raise ClientError(f"note {ref} is spent")
     return n
 
 
-def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
+def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
+    """Prove a join-split; returns {"payload": bytes, "fields": [12 ints]} and records the
+    client's view of the chain after it lands (inputs spent, outputs as leaves)."""
     st = load()
     tree = Tree(st["leaves"])
     old_root, old_null = tree.root(), st["null_root"]
@@ -185,10 +198,13 @@ def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
     total_in = sum(n["value"] for n in ins if n)
     value, unshield = int(value), int(unshield)
     change = total_in - value - unshield
-    assert change >= 0, "not enough in the inputs"
+    if change < 0:
+        raise ClientError(f"not enough in the inputs: {total_in} < {value} + {unshield}")
     outs = [{"id": len(st["notes"]), "owner": to, "value": value, "blinding": new_blinding(st), "kind": "tree", "spent": False},
             {"id": len(st["notes"]) + 1, "owner": sender, "value": change, "blinding": new_blinding(st), "kind": "tree", "spent": False}]
-    insert = len(st["leaves"]); assert insert % 2 == 0
+    insert = len(st["leaves"])
+    if insert % 2:
+        raise ClientError(f"the tree has an odd number of leaves ({insert}); sync first")
     insert_path = tree.path(insert, from_level=1)
     prover = "\n".join([
         f'old_note_root = "{old_root}"', f'old_null_root = "{old_null}"',
@@ -200,18 +216,18 @@ def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
     (cdir / "Prover.toml").write_text(prover)
     r = subprocess.run(["nargo", "execute", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
-        raise SystemExit(f"nargo execute failed:\n{r.stdout}\n{r.stderr}")
+        raise ClientError(f"nargo execute failed:\n{r.stdout}\n{r.stderr}")
     pdir = cdir / "target" / "proof"; pdir.mkdir(parents=True, exist_ok=True)
     for f in ("proof", "public_inputs", "vk", "vk_hash"):
         (pdir / f).unlink(missing_ok=True)
     r = subprocess.run(["bb", "prove", "-s", "ultra_honk", "--oracle_hash", "keccak", "-b", "target/transfer.json",
                         "-w", "target/transfer.gz", "-o", "target/proof", "--write_vk"], cwd=cdir, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
-        raise SystemExit(f"bb prove failed:\n{r.stdout}\n{r.stderr}")
+        raise ClientError(f"bb prove failed:\n{r.stdout}\n{r.stderr}")
     pubs = (pdir / "public_inputs").read_bytes(); proof = (pdir / "proof").read_bytes()
-    assert len(pubs) == 12 * 32, len(pubs)
+    if len(pubs) != 12 * 32:
+        raise ClientError(f"expected 12 public inputs, got {len(pubs) // 32}")
     payload = len(pubs).to_bytes(2, "little") + pubs + proof
-    Path(out).write_text(payload.hex())
     # the client's view of the chain after this package lands
     fields = [int.from_bytes(pubs[i * 32:(i + 1) * 32], "big") for i in range(12)]
     for n in ins:
@@ -222,6 +238,13 @@ def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
         st["notes"].append(o); st["leaves"].append(o["hash"])
     st["null_root"] = fields[3]
     save(st)
+    return {"payload": payload, "fields": fields}
+
+
+def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
+    r = transfer(sender, in_a, in_b, to, value, unshield, receiver, dest)
+    payload, fields = r["payload"], r["fields"]
+    Path(out).write_text(payload.hex())
     print(f"payload {len(payload)} bytes -> {out}")
     print(f"old_note_root {hexf(fields[0])}\nnew_note_root {hexf(fields[2])}\nnew_null_root {hexf(fields[3])}\nnullifiers {hexf(fields[4])} {hexf(fields[5])}")
     print(f"note_hashes {hexf(fields[6])} {hexf(fields[7])}\nunshield {fields[8]} -> account {fields[9]} on service {fields[10]}; deposit {fields[11]}")
@@ -237,14 +260,46 @@ def cmd_root():
     print(hexf(Tree(load()["leaves"]).root()))
 
 
-def cmd_sync(path):
-    st = load(); d = json.loads(Path(path).read_text())
+def sync(d):
+    """Take the chain's leaves and nullifier root ({"leaves": [hex], "null_root": hex})."""
+    st = load()
     st["leaves"] = [int(x, 16) for x in d["leaves"]]
     st["null_root"] = int(d["null_root"], 16) if d.get("null_root") else 0
     for n in st["notes"]:              # a note's leaf is wherever the chain put it
         if n.get("hash") in st["leaves"]:
             n["leaf"] = st["leaves"].index(n["hash"])
-    save(st); print(f"synced {len(st['leaves'])} leaves, root {hexf(Tree(st['leaves']).root())}")
+    save(st)
+    return len(st["leaves"])
+
+
+def cmd_sync(path):
+    n = sync(json.loads(Path(path).read_text()))
+    print(f"synced {n} leaves, root {hexf(Tree(load()['leaves']).root())}")
+
+
+def unspent(owner):
+    """The owner's spendable notes: in the tree with a leaf, or an unclaimed deposit."""
+    return [n for n in load()["notes"] if n["owner"] == owner and not n["spent"] and n["value"] > 0
+            and (n["kind"] == "deposit" or n.get("leaf") is not None)]
+
+
+def private_balance(owner):
+    return sum(n["value"] for n in unspent(owner))
+
+
+def select_inputs(owner, amount):
+    """Two input refs covering `amount` from the owner's notes, largest first; a deposit goes
+    in the first slot (the circuit allows a deposit only there)."""
+    notes = sorted(unspent(owner), key=lambda n: (n["kind"] != "deposit", -n["value"]))
+    for k in (1, 2):
+        for i in range(len(notes)):
+            pick_ = notes[i:i + k]
+            if len(pick_) == k and sum(n["value"] for n in pick_) >= amount:
+                if k == 2 and pick_[1]["kind"] == "deposit":
+                    continue
+                refs = [("deposit:%d" if n["kind"] == "deposit" else "%d") % n["id"] for n in pick_]
+                return refs + ["-"] * (2 - k)
+    raise ClientError(f"{owner} holds {private_balance(owner)} privately, not {amount} in two notes")
 
 
 if __name__ == "__main__":

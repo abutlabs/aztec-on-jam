@@ -11,3 +11,6 @@ Everything the build installs, with the install line and the version pinned.
 | node | 26.11.1 | nvm |
 | yarn | 1.22.22 | npm |
 | python3 | 3.11.6 | system |
+| puppeteer-core | 25.16.0 | `npm install` in `client/e2e` (no browser download; drives the installed Chrome) |
+| Google Chrome | 155.0.8059.85 | system, `/Applications/Google Chrome.app`; `CHROME=` overrides |
+| openssl | system | `nets/demo.sh` draws mint nonces with `openssl rand -hex 32` |

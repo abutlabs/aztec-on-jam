@@ -193,3 +193,30 @@ the public balance and the private notes for A and B, three buttons (shield, sen
 unshield) that build the payload and POST it to the indexer's `/submit`, and the chain's
 state live from `/state`. Screenshots to `docs/images/` for the two-browser check (#3).
 Blockers: none. The net is left running.
+
+## 2026-10-23 8 — step 4: the wallet, two users in two browsers (milestone 3)
+Did: `client/privacy.py` refactored into callable functions (`deposit`, `transfer`, `sync`,
+`unspent`, `select_inputs`; a `ClientError` instead of exits; the CLI prints the same lines).
+`client/wallet.py`: serves the page and `/api/{state,mint,shield,send,unshield}`, proves on
+the host, submits through the indexer, waits until the chain shows the change, resends
+under lasair#93, and rolls the note state back if a proof never lands (a shield's deposit
+note survives a failed claim). The page: `jam/` on the `jam` branch of abutlabs/demo-wallet,
+plain HTML/CSS/JS in the demo-wallet's palette (decision #19). `nets/demo.sh wallet` starts
+the backend; `up` starts it too. Found and fixed a real bug: a resent mint or shield was
+not idempotent; public-balance now applies each nonce once (`seen:<nonce>`; a mint carries
+32 random bytes, a shield its commitment). `client/e2e/e2e.mjs`: puppeteer-core on the
+installed Chrome, user A and user B in two isolated browser contexts.
+Evidence: curl smoke test → `mint … not on chain after 36 s … (resend 1) … on chain after
+6 s`; `shield … on chain after 19 s`, `claim: proof of 8642 bytes in 2.4 s … on chain after
+20 s`. Nonce on chain: one mint payload sent twice → `bal:C = 6400000000000000` both
+times. `node client/e2e/e2e.mjs` → `PASS: 5 assertions, 6 screenshots` in 3 min 10 s:
+A mint 100 (27.5 s), A shield 100 (68.7 s), A send 40 to B (17 s), B sees private 40,
+B unshield 40 (73.5 s, one resend), B public 40, private 0. Screenshots
+`docs/images/01-a-start.png` … `06-b-unshielded.png`. `nets/demo.sh check` after the
+format change → `PASS` in 3 min 19 s (one mint resend, applied once).
+Issues: #9 and #3 closed, #19 (decision), #10, lasair#93 (seen live in both runs).
+Next: step 5, the README's demo: stage commands `shield`, `send`, `unshield` in
+`nets/demo.sh` (one word each, defaults A→B, calling the wallet API), a *Demo* section and a
+*What is real and what is reduced* section in README.md, then the full verification run
+from `down` → `up` → `check` → e2e on a clean chain, copied into this ledger.
+Blockers: none. Net, indexer and wallet left running.

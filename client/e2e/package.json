@@ -1,0 +1,8 @@
+{
+  "name": "jam-privacy-wallet-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Two users, two isolated browser contexts, the wallet's three moves against the live net; asserts balances and saves a screenshot per move",
+  "scripts": { "e2e": "node e2e.mjs" },
+  "dependencies": { "puppeteer-core": "25.16.0" }
+}

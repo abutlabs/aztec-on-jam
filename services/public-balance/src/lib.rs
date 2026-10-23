@@ -2,9 +2,12 @@
 //! unshields to. Dev-chain rules: anyone may mint (op 0); a burn (op 1) is what a shield will
 //! become once the deferred transfer to the privacy service is wired (step 1, part three).
 //!
-//! Work-item payload: `[op: u8][account: 32][amount: u64 LE]`, and for a shield (op 2)
-//! `[dest: u32 LE][note commitment: 32]` after it. Refine checks the shape and passes it
-//! through; accumulate applies it. Storage: `bal:<account>` = u64 LE.
+//! Work-item payload: `[op: u8][account: 32][amount: u64 LE]`, then for a mint or burn a
+//! 32-byte nonce, and for a shield (op 2) `[dest: u32 LE][note commitment: 32]`, the
+//! commitment serving as the nonce. Refine checks the shape and passes it through;
+//! accumulate applies it once: a nonce it has seen (`seen:<nonce>`) is skipped, so a builder
+//! may resend a package it believes lost (lasair#93) without paying twice.
+//! Storage: `bal:<account>` = u64 LE, `seen:<nonce>` = 1.
 //!
 //! Shield: burn `amount` from `account` and send it as a deferred transfer to the privacy
 //! service `dest` with the note commitment in the memo. Unshield: a Transfer item from the
@@ -24,8 +27,9 @@ use service_util::{key, le_u64, take};
 declare_service!(PublicBalance);
 struct PublicBalance;
 
-const ITEM_LEN: usize = 1 + 32 + 8;
-const SHIELD_LEN: usize = ITEM_LEN + 4 + 32;
+const HEAD_LEN: usize = 1 + 32 + 8;
+const ITEM_LEN: usize = HEAD_LEN + 32;
+const SHIELD_LEN: usize = HEAD_LEN + 4 + 32;
 const OP_MINT: u8 = 0;
 const OP_BURN: u8 = 1;
 const OP_SHIELD: u8 = 2;
@@ -74,6 +78,12 @@ impl Service for PublicBalance {
                 continue;
             }
             let op = out[1];
+            // the nonce: 32 bytes after the head, a mint's own or a shield's commitment
+            let nonce_at = if op == OP_SHIELD { 1 + HEAD_LEN + 4 } else { 1 + HEAD_LEN };
+            let seen = match out.get(nonce_at..nonce_at + 32) { Some(n) => key(b"seen:", n), None => continue };
+            if get_storage(&seen).is_some() {
+                continue; // applied already: a resent package
+            }
             let account: [u8; 32] = match take(&out, 2) { Some(a) => a, None => continue };
             let amount = le_u64(&out[34..42]);
             let k = key(b"bal:", &account);
@@ -82,8 +92,8 @@ impl Service for PublicBalance {
                 OP_MINT => bal.checked_add(amount),
                 OP_BURN => bal.checked_sub(amount),
                 OP_SHIELD if out.len() == 1 + SHIELD_LEN => {
-                    let dest = u32::from_le_bytes(take::<4>(&out, 42).unwrap()) as ServiceId;
-                    let commitment: [u8; 32] = take(&out, 46).unwrap();
+                    let dest = u32::from_le_bytes(take::<4>(&out, 1 + HEAD_LEN).unwrap()) as ServiceId;
+                    let commitment: [u8; 32] = take(&out, 1 + HEAD_LEN + 4).unwrap();
                     match bal.checked_sub(amount) {
                         Some(n) => {
                             let mut memo = Memo([0u8; 128]);
@@ -99,6 +109,7 @@ impl Service for PublicBalance {
             };
             if let Some(n) = new {
                 set_storage(&k, &n.to_le_bytes()).ok();
+                set_storage(&seen, &[1u8]).ok();
             }
         }
         None
