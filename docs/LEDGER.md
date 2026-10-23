@@ -941,3 +941,31 @@ README, DEMO.md and docs/soak-pj6.md now carry this run (13.4 s median, 0.74 s a
 Issues: #4 closed on this entry; #14 corrected; #12 open until `scripts/bootstrap.sh` runs from
 nothing again. Still to rerun on the fix: lasair6's 20 minutes (its prover was never starved,
 0 starved slots, so its pace is the chain's, but it ran the quadratic client).
+
+## 2026-10-23 29 — #12: scripts/bootstrap.sh from nothing again, at 99f8b62
+Did: `scripts/bootstrap-clean.sh` (new: a fresh `node:22-bookworm` container, apt's python3,
+git, curl, openssl and a C toolchain, then this repo cloned from GitHub and
+`scripts/bootstrap.sh`), on this Mac's Docker (Linux aarch64). Since ledger 13 the script
+gained the Python dependency, jamboree, the native PolkaJam release, the wallet's provers and
+the CRS fetch; this run covers all of them.
+Evidence: 298 s from clone to report, 24 rows:
+```
+cryptography             >= 41                      50.0.2                             ok
+docker                   daemon running             missing                            missing
+chrome                   any (the e2e run only)     missing; set CHROME=               optional
+../demo-wallet           jam branch                 8f6ded8                            ok
+../jamboree              lasair branch              b64d5d4                            ok
+service privacy          builds                     1028605 bytes                      ok
+wallet provers           noir_js + bb.js            built                              ok
+prover CRS               bb.js 5.0.0 ranges         cached, hashes match               ok
+jamboree                 lasair branch, built       jamboree 0.7.0                     ok
+polkajam (native)        v0.8.0                     polkajam 0.1.29                    ok
+1 missing. Install the rest by hand (see docs/TOOLS.md), then run this again.
+```
+(and curl, git, rust stable 1.99.1 and nightly-2025-05-10, nargo rc.5, bb 5.0.0, node 22, python
+3.11, openssl, jamswap 44213a7, jam080-build, both circuits, public-balance 14,057 bytes,
+puppeteer-core: ok). The one missing row is Docker, which cannot run in the container, so the
+two Docker-only steps (pulling the lasair image, building jamboree for Linux) are covered by
+this Mac's `--check` (ledger 24), not from nothing. The privacy blob is 1,028,605 bytes here
+and 1,028,608 on the Mac: still not byte-reproducible across machines (ledger 13).
+Issues: #12 closed.
