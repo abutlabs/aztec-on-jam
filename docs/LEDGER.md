@@ -1060,3 +1060,23 @@ Arithmetic (not measured): an Aztec epoch's 192 blobs, checked one by one, would
 Next: #24's last part (where blob data lives on JAM, and batch verification), or #36's
 threshold. #24 first.
 Blockers: none.
+
+## 2026-10-23 34 — #24 closed: Aztec's blob data lives in JAM's exported segments (28 days, past Ethereum's 18.2)
+Why this issue: it is first in dependency order, and its last row item (where blob data
+lives) is reading and deciding, with no new run needed.
+Did: `docs/aztec/BLOBS.md`. Four options, each with Gray Paper 0.8.0 sources:
+- the package's own Audits DA, kept until audited (`assurance.tex:5`): too short alone;
+- exported segments, kept 28 days (`assurance.tex:7`), 32 a blob, 96 blobs of exports a
+  package (`definitions.tex:287,292`): **chosen**;
+- service storage at 1 per byte (`definitions.tex:259`), 25 MB a full epoch: rejected for
+  unbounded state;
+- off chain only: rejected, weaker than Ethereum gives Aztec.
+KZG binding is kept so Aztec's circuits stay unchanged. A hash-committed variant goes to #30
+as an alternative.
+Evidence: Ethereum's window `MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS = 4,096` epochs
+(consensus-specs 3dad3d5, `deneb/p2p-interface.md:69`) = 4,096 × 32 × 12 s = 18.2 days, under
+JAM's 28. The point evaluation (199,473,075 gas) and the blob check (262,430,040) are from
+ledger 33, and the KZG code is unchanged since.
+Issues: #24 closed. #37 opened for the export path and batch verification on PolkaJam.
+Next: by dependency order, #36 (the package cap, which bounds #37 and #26) or #23's 2^24
+with a heavy-opcode circuit. #36 first: it is small and it changes #26's design.
