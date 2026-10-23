@@ -9,6 +9,8 @@
 #   nets/net.sh indexer   (re)start the indexer, HTTP on localhost:19700
 #   nets/net.sh ctl ...   nets/jamctl.py inside the net (submit | read | head)
 #   nets/net.sh down      stop the net, the indexer, and wipe the chain
+# On lasair6, SUBMIT_VIA_BUILDER=http://builder:19980 (with LASAIR_BUILDER_FANOUT=all at `up`)
+# makes the indexer submit through the CE-133 builder instead of the reader (lasair#93).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 JAMSWAP=$SUB/jamswap; BUILD=$JAMSWAP/tools/jam080/builder/target/release/jam080-build
@@ -45,7 +47,7 @@ case "${1:-}" in
     docker run -d --name jam-privacy-indexer --network "$NETWORK" -p 127.0.0.1:19700:19700 \
       -v "$JAMSWAP/offchain:/offchain:ro" -v "$VOLUME:/shared:ro" -v "$ROOT/indexer/indexer.py:/indexer.py:ro" \
       -e CHAIN_RPC="$RPC" -e PRIVACY_ID="$(sid privacy)" -e PUBLIC_ID="$(sid public-balance)" \
-      -e NET_NAME="$NET" python:3.11-slim python3 /indexer.py >/dev/null
+      -e NET_NAME="$NET" -e SUBMIT_VIA_BUILDER="${SUBMIT_VIA_BUILDER:-}" python:3.11-slim python3 /indexer.py >/dev/null
     for _ in $(seq 1 30); do curl -sf localhost:19700/state >/dev/null 2>&1 && break; sleep 1; done
     curl -s localhost:19700/state | python3 -c "import json,sys; d=json.load(sys.stdin); print('indexer up on $NET: slot', d.get('slot'), 'leaves', d.get('leaf_count'), 'transfers', d.get('transfers'))" ;;
   names) echo "$NET: project $PROJECT, network $NETWORK, volume $VOLUME, rpc $RPC" ;;

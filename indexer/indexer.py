@@ -15,7 +15,10 @@ in a container on the net (nets/net.sh indexer).
   GET  /status?package=<hex>&anchor=<hex>   JIP-2 workPackageStatus of a submission
 
 Env: CHAIN_RPC (ws://reader:19800), CHAIN_SPEC (/shared/spec.json), PRIVACY_ID, PUBLIC_ID,
-PORT (19700), POLL (seconds between state refreshes, 3).
+PORT (19700), POLL (seconds between state refreshes, 3), SUBMIT_VIA_BUILDER (a lasair
+jamnp-builder's URL: submit over CE-133 through it instead of JIP-2 submitWorkPackage; it
+offers each package to the core's guarantors, every target with LASAIR_BUILDER_FANOUT=all,
+and rebuilds one whose anchor ages out; lasair#93).
 """
 import json, os, struct, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +27,7 @@ sys.path.insert(0, os.environ.get("OFFCHAIN", "/offchain"))
 import chain  # noqa: E402
 
 RPC = os.environ.get("CHAIN_RPC", "ws://reader:19800"); SPEC = os.environ.get("CHAIN_SPEC", "/shared/spec.json")
+BUILDER = os.environ.get("SUBMIT_VIA_BUILDER", "").rstrip("/")
 PRIVACY = int(os.environ["PRIVACY_ID"]); PUBLIC = int(os.environ["PUBLIC_ID"])
 PORT = int(os.environ.get("PORT", "19700")); POLL = float(os.environ.get("POLL", "3"))
 LOCK = threading.Lock()
@@ -117,11 +121,20 @@ class H(BaseHTTPRequestHandler):
         try:
             if len(parts) == 2 and parts[0] == "submit":
                 n = int(self.headers.get("Content-Length", "0")); payload = bytes.fromhex(self.rfile.read(n).decode().strip())
-                ch = chain.Jip2Chain(int(parts[1]), RPC, chain_spec=SPEC)
                 core = parse_qs(urlparse(self.path).query).get("core")
-                if core:
-                    ch.cores = [int(core[0])]     # a chain of dependent packages stays on one core
-                r = ch.submit(payload)
+                if BUILDER:
+                    req = {"service_id": int(parts[1]), "payload_hex": payload.hex()}
+                    if core:
+                        req["cores"] = [int(core[0])]
+                    r = chain._http_json(BUILDER + "/submit", req)
+                    if r.get("accepted") is False:
+                        return self._json(503, {"error": r.get("error") or "every guarantor refused"})
+                    r.setdefault("via", "builder")
+                else:
+                    ch = chain.Jip2Chain(int(parts[1]), RPC, chain_spec=SPEC)
+                    if core:
+                        ch.cores = [int(core[0])]     # a chain of dependent packages stays on one core
+                    r = ch.submit(payload)
                 return self._json(200, r)
             return self._json(404, {"error": "no such route"})
         except Exception as e:  # noqa: BLE001
@@ -133,5 +146,6 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     threading.Thread(target=refresh, daemon=True).start()
-    print(f"indexer: privacy {PRIVACY}, public-balance {PUBLIC}, JIP-2 {RPC}, http :{PORT}", flush=True)
+    print(f"indexer: privacy {PRIVACY}, public-balance {PUBLIC}, JIP-2 {RPC}, http :{PORT}"
+          + (f", submitting through {BUILDER}" if BUILDER else ""), flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
