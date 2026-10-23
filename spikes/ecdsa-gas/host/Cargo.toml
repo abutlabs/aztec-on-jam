@@ -1,0 +1,12 @@
+[package]
+name = "ecdsa-host"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Checks ecrecover against geth's precompile vectors and independently generated signatures"
+
+[dependencies]
+ecrecover = { path = "../ecrecover" }
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }
+
+[workspace]

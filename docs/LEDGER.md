@@ -1222,3 +1222,27 @@ Also: `docs/aztec/SERVICE.md` (#26's design) drafted; #39 filed (secp256k1 ECDSA
 for proposer signatures and attestations).
 Next: #23 with a circuit that uses every relation (lookups, ROM, Poseidon2, elliptic) across
 sizes, to bound the real root rollup's cost; then 2^24 if memory allows. Then #26's skeleton.
+
+## 2026-10-23 42 — #39 closed: ecrecover costs refine 13.1M gas a signature; #23: every relation in use, about 180M at 2^24
+Why these: #23's every-relation series was running when this iteration began, and #39 was the
+last per-package cost #26 needs. Each used the testnet in turn.
+Did:
+- `spikes/ecdsa-gas`: Ethereum's ecrecover on k256 (no_std). geth's valid vector has a high
+  s, which the precompile accepts and k256 does not, so a high s is normalized and the
+  recovery id flipped.
+- `spikes/epoch-proof` gained `CIRCUIT=rich`: keccakf1600, Poseidon2, embedded-curve
+  addition, ROM/RAM, secp256k1 ECDSA and range checks in one circuit (about 17,500 gates a
+  block on 43,400 fixed, from `bb gates`).
+Evidence:
+- `spikes/ecdsa-gas/measure.sh` → host "geth ecRecover vectors: 5 agree, 0 differ",
+  "generated signatures: 40 recover their signer". PolkaJam: 1 signature 13,119,449 gas (01);
+  33 signatures 432,756,815 (8.7% of a full package, 0.52 s, 01); the 17th swapped
+  222,947,408 (00); InvalidHighV 6,379 (00).
+- `CIRCUIT=rich LOGS="16 18 20 22 23" spikes/epoch-proof/measure.sh` → 170,364,998;
+  172,760,359; 175,583,937; 178,078,520; 179,184,883 (2^23, 01); altered 9,631,420 (00).
+Consequence: an epoch-proof package is about 180M (proof) + 199M (blob point evaluation) +
+433M (attestations), about 812M; a checkpoint is about 981M. Both fit a tiny package. 2^24
+(with every relation) is now proving, with a 60-minute watchdog.
+Issues: #39 closed and added to RALPH's table; #23 commented.
+Next: #23's 2^24 result; then #26's skeleton; then #29 (LESSONS.md is drafted, pending
+verified Ethereum comparisons).

@@ -1,0 +1,10 @@
+[package]
+name = "ecrecover"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Ethereum's ecrecover (the 0x01 precompile) in no_std Rust on k256, for the PVM: Aztec's proposer signatures and committee attestations (#39)"
+
+[dependencies]
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }
+sha3 = { version = "0.10", default-features = false }

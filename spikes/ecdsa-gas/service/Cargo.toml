@@ -1,0 +1,20 @@
+[package]
+name = "ecdsa-gas-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "Spike: Ethereum's ecrecover in refine for n signatures; accumulate records the verdict (#39)"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+ecrecover = { path = "../ecrecover" }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]

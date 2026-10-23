@@ -66,6 +66,23 @@ the bare 2^14 circuit with 113. So the line through the squaring circuits unders
 root rollup, which uses every gate type. Next (#23): the same sizes with a circuit that uses
 every relation, to bound the real cost.
 
+**Every relation in use** (`CIRCUIT=rich`: keccakf1600 lookups, Poseidon2, embedded-curve
+addition, ROM and RAM at witness indices, a secp256k1 ECDSA check, range checks, so that no
+selector commitment is zero, as in a real root rollup):
+
+| Circuit | Proof | Prove | Refine gas | Of a tiny package | Of a full one | PolkaJam refine | Verdict |
+|---|---|---|---|---|---|---|---|
+| 2^16 | 7,776 B | 0.68 s | 170,364,998 | 17.0% | 3.4% | 0.176 s | accepted |
+| 2^18 | 8,480 B | 1.18 s | 172,760,359 | 17.3% | 3.5% | 0.213 s | accepted |
+| 2^20 | 9,184 B | 5.08 s | 175,583,937 | 17.6% | 3.5% | 0.182 s | accepted |
+| 2^22 | 9,888 B | 21.30 s | 178,078,520 | 17.8% | 3.6% | 0.203 s | accepted |
+| 2^23 | 10,240 B | 50.32 s (peak 5,311 MB) | 179,184,883 | 17.9% | 3.6% | 0.184 s | accepted |
+| 2^23, a public input altered | | | 9,631,420 | | | 0.010 s | rejected |
+
+That confirms the gate-mix reading: the same sizes cost about 12M more than with squarings
+(178.1M against 166.4M at 2^22), and still about 1.2M more per doubling. **Aztec's 2^24 epoch
+proof should cost about 180M gas**, 3.6% of a full package.
+
 2^24 itself (Aztec's size) was not proved here: on this 16 GB machine the synthetic circuit's
 witness build swapped for 50 minutes before proving began (a loop of 16.7M unrolled steps; #23).
 
