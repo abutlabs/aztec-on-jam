@@ -16,7 +16,7 @@ trap cleanup EXIT
 (cd "$W" && "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode grandpa > "$W/testnet.log" 2>&1 &)
 rpc() { "$JB" rpc --url ws://127.0.0.1:19800 --chain-spec "$W/spec.json" "$@"; }
 for _ in $(seq 1 90); do rpc head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 2; done
-rpc head >/dev/null
+rpc head >/dev/null 2>&1 || { echo "the testnet never answered on :19800; its log:" >&2; tail -40 "$W/testnet.log" >&2; exit 1; }
 rpc deploy "$BLOB" --state "$W/privacy.json" | tail -1 >&2
 SID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['service_id'])" "$W/privacy.json")
 for _ in $(seq 1 "$N"); do rpc submit "$SID" "0x$(tr -d '\n' < "$PAYLOAD")" --wait --timeout 120 >/dev/null 2>&1 || true; done
