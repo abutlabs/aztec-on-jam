@@ -715,3 +715,50 @@ Aodh's call) and keeps its resend after 36 s, which is safe (payloads apply once
 Next: #14 and #17 together: the native nets jamboree launches (jb-pj6, jb-lasair6, jb-mixed)
 with `nets/jb.sh`, the demo's check on each, and refine wall time per client from the mixed
 net's logs; then the comparison table.
+
+## 2026-10-23 23 — #17: the demo on three native nets jamboree launches; a mixed-net fork found and explained
+Did: `nets/jb.sh` grew from one untested net to three, each launched by our jamboree fork
+(`--move-ports`) on PolkaJam's dev spec, deployed and driven with `jamboree rpc`, read by the
+indexer's own JIP-2 client: nothing of jamswap. `jb-pj6` (six PolkaJam + an ordinary node for
+JIP-2), `jb-lasair6` (six lasair at main with #95 + lasair-reader), `jb-mixed` (PolkaJam 0-2,
+lasair 3-5). `jb.sh headcheck` runs jamboree's own check (validators headless, JIP-3 to
+jamboree, `--head jip3-final`). What the runs found, fixed:
+- jamboree ran each `--cmd` from the net's directory: `$0` must be absolute.
+- A native net answers before finality leaves genesis (dev genesis at slot 0, first block at
+  today's wall slot), and a package then is refused ("invalid epoch 791829, reference epoch
+  is 0"): `up` waits for finality.
+- lasair alone must run chain-paced (`--interval 6`, no `--wall`), as jamswap's lasair6 does;
+  wall-paced it "lags wall slot 9502050" and back-fills forever. Its pipeline and builder port
+  need `--guarantor`.
+- **The mixed net forked**: lasair rejected PolkaJam's block 9502227 (`bad_parent_state_root`).
+  `jamnp_probe --dump` (lasair #96, new) read both clients' whole state at the last common
+  block over CE-129: 33 keys each, one byte apart, in key 0x0d (activity statistics): a
+  service's accumulate gas, PolkaJam 17,475, lasair 17,477. lasair main charges the v0.8.0
+  vectors' cmov rule (063fe3a, GP PR 559); PolkaJam nightly-2026-09-22 predates it. With
+  PolkaJam **v0.8.0** (2026-10-16) the mixed net agrees: native nets now pin v0.8.0
+  (bootstrap fetches it). Docker nets keep jamswap's pair (lasair 2.1.3 + the 09-22 nightly),
+  which agree with each other.
+- PolkaJam's default finality is a dummy (best block finalized alone): in a mixed net lasair's
+  three voters never reach 5 of 6 (0 finalized in 3 minutes). PolkaJam now runs
+  `--finality-mode grandpa` on the native nets, as on Docker pj6: lasair then finalizes with it.
+- `check` failed when rerun on a used chain (B also holds earlier runs' notes): it now counts
+  only the notes this run made. `demo.sh wallet` waited 20 s for a route the static server
+  no longer has.
+Evidence (all on this Mac, Apple M-series):
+```
+jb-pj6     up + deploy (jamboree rpc)   check PASS 1:40 (37)  e2e PASS: mint 12.1 s, shield 25.8, send 11.1, unshield 15.6
+jb-lasair6 up 26 s to finality          check PASS 3:06 (37)  e2e PASS: mint 16.5 s, shield 50.3, send 19.3, unshield 27.8
+jb-mixed   (v0.8.0)                     check PASS 1:41 (37)  e2e PASS: mint 10.1 s, shield 25.7, send 13.1, unshield 17.8
+jb-mixed   (v0.8.0, GRANDPA)            check PASS 1:36 (37); lasair node 4: 35 blocks finalized, 0 rejected
+jb-pj6     check rerun on a used chain  PASS 1:28 (37)
+NET=jb-mixed|jb-pj6|jb-lasair6 nets/jb.sh headcheck 3 → "same head on 6 nodes after 180s", exit 0, each
+```
+The jamboree fork's README now carries a lasair recipe and a mixed one; both run as written
+(`--headless 2m --head jip3-final` appended) → "same head on 6 nodes after 120s".
+Refine of one privacy proof (169M gas), both interpreted on macOS: PolkaJam v0.8.0 median
+0.172 s over 18 (its JIP-3 `Refined` events, `JB_TELEMETRY` + jam-telemetry-dumper); lasair
+(native dev build) 0.63 to 0.97 s over 10 (its logs).
+Not yet: the demo's check on jb-pj6 since PolkaJam moved to GRANDPA (the head check passed);
+the final verification will run it.
+Issues: #17 (all but the upstream offer, next); #14 gets these numbers.
+Next: the upstream issue on jamixir/jamboree; then #14's table and the README; then #18.
