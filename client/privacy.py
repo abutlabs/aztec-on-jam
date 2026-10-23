@@ -86,6 +86,28 @@ def _save_hash_cache(c):
     (HERE / "hashes.json").write_text(json.dumps(c))
 
 
+def seed_path(n0, n1, index1, siblings):
+    """Put the nodes a two-leaf insertion creates into the hash cache, from one execution of
+    circuits/path_cli; returns the new root. Saves one `nargo execute` per tree level."""
+    prover = CIRCUITS / "path_cli" / "Prover.toml"
+    prover.write_text(f'n0 = "{field(n0)}"\nn1 = "{field(n1)}"\nindex1 = "{int(index1)}"\n'
+                      f'siblings = {json.dumps([str(field(x)) for x in siblings])}\n')
+    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=CIRCUITS / "path_cli",
+                         capture_output=True, text=True, env=ENV)
+    m = re.search(r"Circuit output: \[([^\]]*)\]", out.stdout + out.stderr)
+    if not m:
+        raise ClientError(f"path_cli failed:\n{out.stdout}\n{out.stderr}")
+    nodes = [int(x.strip(), 16) for x in m.group(1).split(",")]
+    cache = _hash_cache()
+    cache[f"{field(n0)},{field(n1)}"] = nodes[0]
+    for i, sib in enumerate(siblings):
+        left_is_node = not ((int(index1) >> i) & 1)
+        l, r = (nodes[i], sib) if left_is_node else (sib, nodes[i])
+        cache[f"{field(l)},{field(r)}"] = nodes[i + 1]
+    _save_hash_cache(cache)
+    return nodes[-1]
+
+
 def zeros():
     """Z[0] = 0 (an empty leaf), Z[i] = H(Z[i-1], Z[i-1]); Z[DEPTH] is the empty tree's root."""
     z = [0]
@@ -268,6 +290,9 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
         st["notes"].append(o); st["leaves"].append(o["hash"])
     st["null_root"] = fields[3]
     save(st)
+    # the new nodes along the insertion path, in one execution, checked against the proof's root
+    if seed_path(fields[6], fields[7], insert // 2, insert_path) != fields[2]:
+        raise ClientError("path_cli's root differs from the proof's new root")
     return {"payload": payload, "fields": fields}
 
 
