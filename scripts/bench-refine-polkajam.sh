@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # PolkaJam's refine of one privacy proof, timed by PolkaJam itself (its JIP-3 `Refined` events,
 # read by its own jam-telemetry-dumper): a local polkajam-testnet (six validators, GRANDPA),
-# the privacy service deployed with `jamboree rpc`, one proved payload submitted N times.
+# the privacy service deployed with `jamboree rpc`, one proved payload submitted N times. Dummy
+# finality: refine is what is measured, and on a small CI runner GRANDPA can take minutes to
+# leave genesis, before which a package's anchor is refused.
 # Refine reads no state, so any valid payload refines in full on any chain.
 #   scripts/bench-refine-polkajam.sh <polkajam release dir> <payload.hex> <privacy-service.jam>
 # Env: N (packages, default 5), JAMBOREE (default jamboree on PATH). Prints one summary line:
@@ -13,9 +15,9 @@ cleanup() { pkill -f "$PJD/polkajam" 2>/dev/null || true; pkill -f "$PJD/jam-tel
 trap cleanup EXIT
 "$PJD/polkajam" --chain dev dump-spec "$W/spec.json" >/dev/null
 "$PJD/jam-telemetry-dumper" --port 19900 > "$W/telemetry.log" 2>&1 &
-(cd "$W" && "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode grandpa > "$W/testnet.log" 2>&1 &)
+(cd "$W" && "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode dummy > "$W/testnet.log" 2>&1 &)
 rpc() { "$JB" rpc --url ws://127.0.0.1:19800 --chain-spec "$W/spec.json" "$@"; }
-for _ in $(seq 1 90); do rpc head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 2; done
+for _ in $(seq 1 150); do rpc head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 2; done
 rpc head >/dev/null 2>&1 || { echo "the testnet never answered on :19800; its log:" >&2; tail -40 "$W/testnet.log" >&2; exit 1; }
 rpc deploy "$BLOB" --state "$W/privacy.json" | tail -1 >&2
 SID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['service_id'])" "$W/privacy.json")
