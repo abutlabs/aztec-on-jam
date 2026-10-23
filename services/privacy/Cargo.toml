@@ -9,5 +9,6 @@ description = "Aztec's privacy runtime as a JAM service: folded Noir kernel proo
 [dependencies]
 jam-pvm-common = { path = "../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
+blake2 = { version = "0.10", default-features = false }
 service-util = { path = "../../crates/service-util" }
 ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "a4b2a4af5d", default-features = false }  # zkVerify PR #9: bb 5.0.x proofs

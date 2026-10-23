@@ -40,6 +40,34 @@ NARGO = _tool("NARGO", Path.home() / ".nargo" / "versions" / f"nargo-{NOIR_VERSI
 BB = _tool("BB", Path.home() / ".bb" / "versions" / f"bb-{BB_VERSION}", "bb")
 
 
+_WORK = {}
+
+
+def circuit(name):
+    """This process's own copy of circuits/<name> (Nargo.toml, src, and the compiled program
+    if it is current), made on first use and removed at exit. Proving writes Prover.toml, the
+    witness and the proof inside it, so two clients (the wallet, the soak, check) never
+    overwrite each other's files, and a long run keeps the circuit it started with even if
+    the source changes under it."""
+    if name not in _WORK:
+        import atexit, shutil
+        work = Path(os.environ.get("CLIENT_WORK") or ROOT / "out" / "work") / f"{os.getpid()}" / name
+        if work.exists():
+            shutil.rmtree(work)
+        src = CIRCUITS / name
+        work.mkdir(parents=True)
+        shutil.copy(src / "Nargo.toml", work / "Nargo.toml")
+        shutil.copytree(src / "src", work / "src")
+        art = src / "target" / f"{name}.json"
+        newest_src = max(f.stat().st_mtime for f in (src / "src").rglob("*") if f.is_file())
+        if art.exists() and art.stat().st_mtime >= newest_src:
+            (work / "target").mkdir()
+            shutil.copy(art, work / "target" / art.name)
+        atexit.register(shutil.rmtree, work.parent, True)
+        _WORK[name] = work
+    return _WORK[name]
+
+
 class ClientError(Exception):
     """A proof, a hash or an input selection failed; the message says which and why."""
 
@@ -60,9 +88,9 @@ def h(*vals):
     if key in cache:
         return cache[key]
     vals3 = list(vals) + [0] * (3 - len(vals))
-    prover = CIRCUITS / "hash_cli" / "Prover.toml"
+    prover = circuit("hash_cli") / "Prover.toml"
     prover.write_text(f'a = "{field(vals3[0])}"\nb = "{field(vals3[1])}"\nc = "{field(vals3[2])}"\nn = "{len(vals)}"\n')
-    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=CIRCUITS / "hash_cli",
+    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=circuit("hash_cli"),
                          capture_output=True, text=True, env=ENV)
     m = re.search(r"Circuit output: (0x[0-9a-fA-F]+)", out.stdout + out.stderr)
     if not m:
@@ -83,16 +111,20 @@ def _hash_cache():
 
 
 def _save_hash_cache(c):
-    (HERE / "hashes.json").write_text(json.dumps(c))
+    # atomically: other clients read and write the same cache (every entry is a pure function
+    # of its key, so a lost update costs only a recomputation)
+    tmp = HERE / f"hashes.json.{os.getpid()}"
+    tmp.write_text(json.dumps(c))
+    os.replace(tmp, HERE / "hashes.json")
 
 
 def seed_path(n0, n1, index1, siblings):
     """Put the nodes a two-leaf insertion creates into the hash cache, from one execution of
     circuits/path_cli; returns the new root. Saves one `nargo execute` per tree level."""
-    prover = CIRCUITS / "path_cli" / "Prover.toml"
+    prover = circuit("path_cli") / "Prover.toml"
     prover.write_text(f'n0 = "{field(n0)}"\nn1 = "{field(n1)}"\nindex1 = "{int(index1)}"\n'
                       f'siblings = {json.dumps([str(field(x)) for x in siblings])}\n')
-    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=CIRCUITS / "path_cli",
+    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=circuit("path_cli"),
                          capture_output=True, text=True, env=ENV)
     m = re.search(r"Circuit output: \[([^\]]*)\]", out.stdout + out.stderr)
     if not m:
@@ -225,7 +257,7 @@ def pick(st, ref):
 def transfer_vk():
     """The transfer circuit's verification key for bb's evm target (zk, Keccak), written once
     per circuit build. The service embeds the same key (services/privacy/fixtures)."""
-    cdir = CIRCUITS / "transfer"; art = cdir / "target" / "transfer.json"; vdir = cdir / "target" / "vk"
+    cdir = circuit("transfer"); art = cdir / "target" / "transfer.json"; vdir = cdir / "target" / "vk"
     if not art.exists():
         r = subprocess.run([NARGO, "compile", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
         if r.returncode != 0:
@@ -239,7 +271,23 @@ def transfer_vk():
     return vk
 
 
-def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
+def enc_keys(owner):
+    """(secret, public) X25519 note-encryption keys of a named user (the Python client's
+    users are names; the browser wallet keeps a random key instead)."""
+    import notecrypt
+    return notecrypt.keypair(owner.encode().ljust(32, b"\0")[:32])
+
+
+def seal_notes(outs, enc_pk_of):
+    """The two output notes' openings, each sealed to its owner: the logs the proof commits
+    to. Returns (logs bytes, logs_hash as a field element)."""
+    import notecrypt
+    logs = b"".join(notecrypt.seal(enc_pk_of(o["owner"]), notecrypt.note_plaintext(o["value"], o["blinding"])) for o in outs)
+    h = bytearray(hashlib.blake2b(logs, digest_size=32).digest()); h[0] = 0
+    return logs, int.from_bytes(h, "big")
+
+
+def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=None):
     """Prove a join-split; returns {"payload": bytes, "fields": [12 ints]} and records the
     client's view of the chain after it lands (inputs spent, outputs as leaves)."""
     st = load()
@@ -257,13 +305,14 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
     if insert % 2:
         raise ClientError(f"the tree has an odd number of leaves ({insert}); sync first")
     insert_path = tree.path(insert, from_level=1)
+    logs, logs_hash = seal_notes(outs, enc_pk_of or (lambda owner: enc_keys(owner)[1]))
     prover = "\n".join([
-        f'old_note_root = "{old_root}"', f'old_null_root = "{old_null}"',
+        f'old_note_root = "{old_root}"', f'old_null_root = "{old_null}"', f'logs_hash = "{logs_hash}"',
         f'insert_index1 = "{insert // 2}"', f'insert_path = {json.dumps([str(x) for x in insert_path])}',
         f'unshield_amount = "{unshield}"', f'unshield_receiver = "{int(receiver)}"', f'unshield_dest = "{int(dest)}"',
         toml_table("ins", toml_note_in(ins[0], tree, sender, st)), toml_table("ins", toml_note_in(ins[1], tree, sender, st)),
         toml_table("outs", toml_note_out(outs[0])), toml_table("outs", toml_note_out(outs[1])), ""])
-    cdir = CIRCUITS / "transfer"
+    cdir = circuit("transfer")
     (cdir / "Prover.toml").write_text(prover)
     r = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
@@ -277,11 +326,14 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
     if r.returncode != 0:
         raise ClientError(f"bb prove failed:\n{r.stdout}\n{r.stderr}")
     pubs = (pdir / "public_inputs").read_bytes(); proof = (pdir / "proof").read_bytes()
-    if len(pubs) != 12 * 32:
-        raise ClientError(f"expected 12 public inputs, got {len(pubs) // 32}")
-    payload = len(pubs).to_bytes(2, "little") + pubs + proof
+    if len(pubs) != 13 * 32:
+        raise ClientError(f"expected 13 public inputs, got {len(pubs) // 32}")
+    # [pubs_len u16][pubs][proof_len u16][proof][the two sealed notes]
+    payload = len(pubs).to_bytes(2, "little") + pubs + len(proof).to_bytes(2, "little") + proof + logs
     # the client's view of the chain after this package lands
-    fields = [int.from_bytes(pubs[i * 32:(i + 1) * 32], "big") for i in range(12)]
+    # the 12-field view callers use: every public input but logs_hash (index 2)
+    all13 = [int.from_bytes(pubs[i * 32:(i + 1) * 32], "big") for i in range(13)]
+    fields = all13[:2] + all13[3:]
     for n in ins:
         if n:
             n["spent"] = True
@@ -293,7 +345,7 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
     # the new nodes along the insertion path, in one execution, checked against the proof's root
     if seed_path(fields[6], fields[7], insert // 2, insert_path) != fields[2]:
         raise ClientError("path_cli's root differs from the proof's new root")
-    return {"payload": payload, "fields": fields}
+    return {"payload": payload, "fields": fields, "logs": logs, "logs_hash": all13[2]}
 
 
 def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):

@@ -3,9 +3,12 @@
 // append-only note tree) with Poseidon2; the nullifier set's non-membership is the chain's
 // (the service refuses a spent nullifier), the nullifier "root" here is a running hash of
 // what this proof spends. Public inputs, in order (params first, then the returned tuple):
-//   0 old_note_root  1 old_null_root            (params)
-//   2 new_note_root  3 new_null_root  4,5 nullifiers  6,7 note_hashes
-//   8 unshield_amount  9 unshield_receiver  10 unshield_dest  11 deposit_amount  (returns)
+//   0 old_note_root  1 old_null_root  2 logs_hash             (params)
+//   3 new_note_root  4 new_null_root  5,6 nullifiers  7,8 note_hashes
+//   9 unshield_amount  10 unshield_receiver  11 unshield_dest  12 deposit_amount  (returns)
+// logs_hash binds the two sealed notes (the openings, encrypted to their owners) to the
+// proof: the service checks blake2b(sealed notes), first byte zeroed, against it, so no one
+// can swap the ciphertexts a receiver will scan for.
 use poseidon::poseidon2::Poseidon2;
 
 global DEPTH: u32 = 16;
@@ -76,6 +79,7 @@ fn as_u64(v: Field) -> u64 {
 fn main(
     old_note_root: pub Field,
     old_null_root: pub Field,
+    logs_hash: pub Field,
     ins: [InNote; 2],
     outs: [OutNote; 2],
     insert_index1: Field, // the level-1 slot the two new leaves fill (leaf indices 2k, 2k+1)

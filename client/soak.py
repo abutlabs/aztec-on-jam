@@ -14,7 +14,9 @@ within --report-after seconds is sent again (safe: the nullifiers make it apply 
 An observer records every root change and the best and finalized slots. A package whose root
 never appears within --drop-after seconds is counted as dropped, the client resyncs from the
 chain, and the soak goes on. The verdict (exit 0) needs: zero dropped packages, every package
-landed, finality advancing the whole time (no stall longer than --max-stall seconds).
+landed, no proof that failed to build, no slot left without a package to send, at least
+90% of one package a slot, and finality advancing the whole time (no stall longer than
+--max-stall seconds).
 Writes <out>/events.jsonl, <out>/report.json and <out>/report.md.
 """
 import argparse, json, os, queue, statistics, sys, threading, time, urllib.request
@@ -211,7 +213,12 @@ class Soak:
                 last_change = t1
             stall = max(stall, t1 - last_change)
         end_head = http("GET", "/head")
+        events = [json.loads(l) for l in (self.out / "events.jsonl").read_text().splitlines()]
+        prove_errors = sum(1 for e in events if e["kind"] == "prove_error")
+        starved = sum(1 for e in events if e["kind"] == "starved")
+        pace = len(self.txs) / max(1.0, a.seconds / a.slot)          # over the sending window, not the final wait
         verdict = (not dropped and len(landed) == len(self.txs) and len(self.txs) > 0
+                   and prove_errors == 0 and starved == 0 and pace >= 0.9
                    and end_head["finalized"] > start_head["finalized"] and stall <= a.max_stall)
         rep = {"net": self.net, "seconds": round(time.time() - t_start), "slot_s": a.slot, "core": a.core,
                "submitted": len(self.txs), "landed": len(landed), "dropped": len(dropped),
@@ -219,6 +226,7 @@ class Soak:
                "prove_s_p50": statistics.median([t["prove_s"] for t in self.txs]) if self.txs else None,
                "packages_per_minute": round(len(landed) / max(1, (time.time() - t_start) / 60), 2),
                "resends": sum(max(0, t.get("sends", 1) - 1) for t in self.txs),
+               "prove_errors": prove_errors, "starved_slots": starved, "pace_vs_one_a_slot": round(pace, 3),
                "best": [start_head["best"], end_head["best"]],
                "finalized": [start_head["finalized"], end_head["finalized"]],
                "finality_longest_stall_s": round(stall, 1),

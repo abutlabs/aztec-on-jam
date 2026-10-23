@@ -3,8 +3,9 @@
 //! public inputs to accumulate; accumulate checks the old roots against the stored ones,
 //! refuses a spent nullifier, then writes the nullifiers, the note hashes and the new roots.
 //!
-//! Work-item payload: `[pubs_len: u16 LE][pubs: pubs_len bytes, 32 each][proof: the rest]`.
-//! Refine output: `[1][pubs]` when the proof verifies, `[0]` otherwise.
+//! Work-item payload: `[pubs_len u16 LE][pubs][proof_len u16 LE][proof][two sealed notes]`.
+//! Refine output: `[1][pubs][sealed notes]` when the proof verifies and the sealed notes are
+//! the ones it commits to (`logs_hash`), `[0]` otherwise.
 //! Public inputs, in circuit order (circuits/transfer): old note root, old nullifier root,
 //! new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1,
 //! unshield amount (0 = none), unshield receiver (a public-balance account), unshield
@@ -27,6 +28,7 @@ use alloc::vec::Vec;
 use jam_pvm_common::accumulate::{accumulate_items, get_storage, remove_storage, set_storage, transfer};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
+use blake2::{Blake2b, Digest, digest::consts::U32};
 use service_util::{be_u64, key, le_u64};
 use ultrahonk_no_std::{verify, ProofType};
 
@@ -40,17 +42,21 @@ struct Privacy;
 const VK: &[u8] = include_bytes!("../fixtures/transfer.vk");
 
 const HASH_LEN: usize = 32;
-const N_PUBS: usize = 12;
+const N_PUBS: usize = 13;
 const OLD_NOTE_ROOT: usize = 0;
 const OLD_NULL_ROOT: usize = 1;
-const NEW_NOTE_ROOT: usize = 2;
-const NEW_NULL_ROOT: usize = 3;
-const NULLIFIERS: core::ops::Range<usize> = 4..6;
-const NOTE_HASHES: core::ops::Range<usize> = 6..8;
-const UNSHIELD_AMOUNT: usize = 8;
-const UNSHIELD_RECEIVER: usize = 9;
-const UNSHIELD_DEST: usize = 10;
-const DEPOSIT_AMOUNT: usize = 11;
+const LOGS_HASH: usize = 2;
+const NEW_NOTE_ROOT: usize = 3;
+const NEW_NULL_ROOT: usize = 4;
+const NULLIFIERS: core::ops::Range<usize> = 5..7;
+const NOTE_HASHES: core::ops::Range<usize> = 7..9;
+const UNSHIELD_AMOUNT: usize = 9;
+const UNSHIELD_RECEIVER: usize = 10;
+const UNSHIELD_DEST: usize = 11;
+const DEPOSIT_AMOUNT: usize = 12;
+/// A sealed note (client/notecrypt.py): ephemeral X25519 key, AES-256-GCM ciphertext, tag.
+const SEALED_LEN: usize = 32 + 40 + 16;
+const LOGS_LEN: usize = 2 * SEALED_LEN;
 const UNSHIELD_GAS: UnsignedGas = 100_000;
 
 const KEY_NOTE_ROOT: &[u8] = b"root:note";
@@ -64,6 +70,22 @@ fn invalid() -> WorkOutput {
     vec![0u8].into()
 }
 
+/// A u16-LE length, then that many bytes: (them, the rest).
+fn take_sized(b: &[u8]) -> Option<(&[u8], &[u8])> {
+    let n = u16::from_le_bytes([*b.first()?, *b.get(1)?]) as usize;
+    let rest = b.get(2..)?;
+    (rest.len() >= n).then(|| rest.split_at(n))
+}
+
+/// blake2b-256 of the sealed notes with the first byte zeroed: a BN254 field element.
+fn logs_hash(logs: &[u8]) -> [u8; HASH_LEN] {
+    let mut h = Blake2b::<U32>::new();
+    h.update(logs);
+    let mut out: [u8; HASH_LEN] = h.finalize().into();
+    out[0] = 0;
+    out
+}
+
 
 
 impl Service for Privacy {
@@ -75,26 +97,27 @@ impl Service for Privacy {
         _package_hash: WorkPackageHash,
     ) -> WorkOutput {
         let data = payload.take();
-        if data.len() < 2 {
+        // [pubs_len u16][pubs][proof_len u16][proof][logs: the two sealed notes]
+        let Some((pubs_bytes, rest)) = take_sized(&data) else { return invalid() };
+        let Some((proof, logs)) = take_sized(rest) else { return invalid() };
+        if pubs_bytes.len() != N_PUBS * HASH_LEN || logs.len() != LOGS_LEN {
             return invalid();
         }
-        let pubs_len = u16::from_le_bytes([data[0], data[1]]) as usize;
-        if pubs_len % HASH_LEN != 0 || data.len() < 2 + pubs_len {
-            return invalid();
-        }
-        let pubs_bytes = &data[2..2 + pubs_len];
-        let proof = &data[2 + pubs_len..];
         let pubs: Vec<[u8; HASH_LEN]> = pubs_bytes
             .chunks_exact(HASH_LEN)
             .map(|c| c.try_into().unwrap())
             .collect();
-        let proof = ProofType::ZK(Box::from(proof));
-        if verify::<()>(VK, &proof, &pubs).is_err() {
+        // the sealed notes are the ones the prover committed to
+        if logs_hash(logs) != pubs[LOGS_HASH] {
             return invalid();
         }
-        let mut out = Vec::with_capacity(1 + pubs_len);
+        if verify::<()>(VK, &ProofType::ZK(Box::from(proof)), &pubs).is_err() {
+            return invalid();
+        }
+        let mut out = Vec::with_capacity(1 + pubs_bytes.len() + LOGS_LEN);
         out.push(1u8);
         out.extend_from_slice(pubs_bytes);
+        out.extend_from_slice(logs);
         out.into()
     }
 
@@ -116,10 +139,11 @@ impl Service for Privacy {
                 Ok(o) => o.0,
                 Err(_) => continue,
             };
-            if out.len() != 1 + N_PUBS * HASH_LEN || out[0] != 1u8 {
+            if out.len() != 1 + N_PUBS * HASH_LEN + LOGS_LEN || out[0] != 1u8 {
                 continue;
             }
-            let pubs: Vec<&[u8]> = out[1..].chunks_exact(HASH_LEN).collect();
+            let pubs: Vec<&[u8]> = out[1..1 + N_PUBS * HASH_LEN].chunks_exact(HASH_LEN).collect();
+            let logs = &out[1 + N_PUBS * HASH_LEN..];
 
             // The proof must start from the roots the chain holds (an empty chain accepts any).
             let stored_note = get_storage(KEY_NOTE_ROOT).unwrap_or_default();
@@ -147,9 +171,11 @@ impl Service for Privacy {
             }
             // the tree's leaves in order, so a client can rebuild the tree from the chain
             let mut leaves = get_storage(KEY_LEAVES).map(|v| le_u64(&v)).unwrap_or(0);
-            for nh in &pubs[NOTE_HASHES] {
-                set_storage(&key(b"nh:", nh), &[1u8]).ok(); // the encrypted note goes here later
+            for (i, nh) in pubs[NOTE_HASHES].iter().enumerate() {
+                set_storage(&key(b"nh:", nh), &[1u8]).ok();
                 set_storage(&key(b"leaf:", &leaves.to_le_bytes()), nh).ok();
+                // the note's opening, sealed to its owner: a receiver scans these
+                set_storage(&key(b"enc:", &leaves.to_le_bytes()), &logs[i * SEALED_LEN..(i + 1) * SEALED_LEN]).ok();
                 leaves += 1;
             }
             set_storage(KEY_LEAVES, &leaves.to_le_bytes()).ok();
