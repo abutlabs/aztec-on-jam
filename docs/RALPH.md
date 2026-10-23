@@ -109,6 +109,9 @@ and so later sessions can pick up where this one stopped:
   before it starts; a finding that decides something goes on a `research` issue as a
   comment with the evidence; a choice made under *Liberties* gets a `decision` issue
   naming its price and the way back; anything that stops a step gets a `blocker` issue.
+- Every measurement gets a `benchmark` issue (what ran, on what, the numbers), and later
+  runs of the same measurement go on it as comments, so the numbers have a history. The
+  lasair-against-PolkaJam comparison has one already.
 - Every iteration comments on the issue it worked, with the command and output, and
   closes the issue when its check passes. Commits name the issue (`#12`).
 - The ledger stays the sequential record; the issues are the map. Both, every iteration.
