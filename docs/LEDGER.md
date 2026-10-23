@@ -1246,3 +1246,21 @@ Consequence: an epoch-proof package is about 180M (proof) + 199M (blob point eva
 Issues: #39 closed and added to RALPH's table; #23 commented.
 Next: #23's 2^24 result; then #26's skeleton; then #29 (LESSONS.md is drafted, pending
 verified Ethereum comparisons).
+
+## 2026-10-23 43 — #29: LESSONS.md drafted, its Ethereum comparisons checked; #40 filed (Aztec's benchmark uses a mock verifier)
+Why this issue: #23's 2^24 is proving (memory-bound), and #29 is reading and writing. Its
+inputs from #23, #24, #37 and #39 are measured.
+Did: `docs/privacy/LESSONS.md`, Aodh's first question answered with each claim linked to its
+evidence. Checking the draft's Ethereum figures changed three of them:
+- The block gas limit is 60M (Fusaka, EIP-7935), not the draft's 36M.
+- "25 to 2,000 times" was unfounded. Like with like (share of the budget each check runs in),
+  JAM pays about 48× (point evaluation) and 52× (ecrecover). Per chain, JAM has about 14×
+  the room: 341 packages of 5e9 a 6 s slot against one 60M block a 12 s slot.
+- The UltraHonk verifier's Ethereum cost had no source. Aztec's `gas_benchmark.md` (908,757
+  for `submitEpochRootProof`) runs a mock verifier (`test/benchmark/happy.t.sol:732`), so
+  it is to be measured in #40.
+Evidence: `l1-contracts/test/benchmark/happy.t.sol:732` "the mock verifier still needs
+production-sized calldata"; sources for the gas limit listed in LESSONS.md.
+Issues: #40 filed and added to RALPH's table; #29 stays open until #40's row lands in
+LESSONS.md.
+Next: #23's 2^24 result; #40 in Foundry after it (memory); then #26's skeleton.
