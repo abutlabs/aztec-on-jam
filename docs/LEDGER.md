@@ -593,3 +593,26 @@ chain starts from the empty trees`), refine 169,112,761 gas; `scripts/offline-pr
 `node test-core.mjs` → the JS wallet's proof `VALID` on the rig, B's Python client finds 40.
 Next: after the soak, everything live on pj6 and lasair6 (the new circuit and service, the
 two-client check, the self-custodial browser run), then the Aztec kernel spike.
+
+## 2026-10-23 19 — #4: an hour on pj6, one privacy package a slot, nothing lost (milestone 4)
+Did: `client/soak.py` (a prover thread chaining real zero-value transfers, a builder that
+sends package k+1 once k is Reported, resends on silence, an observer, a verdict that fails on
+any drop, prove error, starved slot, pace under 90% or finality stall over 60 s) for 3,600 s on
+pj6 at commit 76aac7c. The first attempt is void (ledger 16: my circuit change reached it).
+A first 3-minute trial without the Reported gate lost a package to reordering (14 landed, 16
+dropped after it), which is why the gate exists: on one tree, packages must land in order.
+Evidence: `client/soak.py --seconds 3600 --out out/soak-hour` → `soak exit 0`:
+```
+| submitted | 600 |  | landed | 600 |  | dropped | 0 |  | resends | 0 |
+| latency_s | {'p50': 13.52, 'p90': 15.01, 'p99': 15.87, 'max': 16.15} |
+| prove_s_p50 | 0.661 |  | packages_per_minute | 9.97 |  | pace_vs_one_a_slot | 1.0 |
+| prove_errors | 0 |  | starved_slots | 0 |
+| best | [9500427, 9501028] |  | finalized | [9500426, 9501027] |  | finality_longest_stall_s | 10.1 |
+| verdict | PASS |
+```
+(report: docs/soak-pj6.md; events: out/soak-hour/events.jsonl.)
+Issues: #4 closed; lasair#93 given PolkaJam's count; #14 (the pj6 half of the comparison).
+Next: the live runs held back by the soak, on a clean pj6 and lasair6: the new circuit and
+service (indexed nullifier tree, depth 40, sealed notes), `check` with two clients, the
+stage commands, and the self-custodial browser run; then #14's lasair runs (reader against
+builder, testing lasair#93's cause), the jamboree native net, and the Aztec kernel spike.
