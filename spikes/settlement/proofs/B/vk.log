@@ -1,0 +1,22 @@
+Scheme is: ultra_honk, num threads: 10 (mem: 8.48 MiB)
+CircuitProve: Proving key computed in 87 ms (mem: 107.73 MiB)
+VK saved to "/Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/spikes/epoch-proof/out/r16/proof/vk" (mem: 131.16 MiB)
+VK Hash saved to "/Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/spikes/epoch-proof/out/r16/proof/vk_hash" (mem: 131.17 MiB)
+        0.21 real         0.68 user         0.08 sys
+           137658368  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                9918  page reclaims
+                  32  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   3  voluntary context switches
+                5883  involuntary context switches
+          7766838573  instructions retired
+          2257178009  cycles elapsed
+           132317688  peak memory footprint

@@ -1379,3 +1379,21 @@ about 8M, inside accumulate's 10M. The JIP draft's pricing section and motivatio
 Issues: #42 filed (R and f on an x86 recompiler) and added to RALPH's table.
 Next: #42 in CI (x86 PolkaJam recompiler, the KZG, ecrecover and Poseidon2 spikes, native on
 the same runner); then #32 closes with constants.
+
+## 2026-10-23 51 — #26 closed: the settlement service's skeleton keeps Aztec's proven tip on PolkaJam; #42 rerun after a clean-machine fix
+Why this issue: #26 needed only its skeleton (its design and costs were done), and the testnet
+was free while CI measured #42.
+Did:
+- `spikes/settlement`: refine verifies an Aztec-shaped epoch proof (UltraHonk, verifier at
+  bb-v6 2ae44db) and outputs previous and end roots; accumulate advances `tip` only from the
+  tip.
+- Three proofs of #23's 2^16 every-relation circuit with chained inputs (A 1→2, B 2→3,
+  C 5→6), each verified by bb.
+- #42's first CI run failed: `kzg-gas/measure.sh` never fetched the batch vectors, which I
+  had downloaded by hand. It fetches them now (tested from a clean directory: 122, 29, 24),
+  and CI was rerun.
+- The bb build without its self-check (#22) finished; that fixture is next.
+Evidence: `spikes/settlement/measure.sh` → A advanced (tip 2, 170,427,917 gas); A again stale;
+C stale; B advanced (tip 3, proven 2); B altered fails in refine (8,330,413, last 00).
+Issues: #26 closed.
+Next: #42's CI result; #22's invalid-inner fixtures with the unchecked bb.

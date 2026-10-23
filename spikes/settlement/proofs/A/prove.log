@@ -1,0 +1,23 @@
+Scheme is: ultra_honk, num threads: 10 (mem: 8.48 MiB)
+CircuitProve: Proving key computed in 95 ms (mem: 107.89 MiB)
+Proof verified successfully (mem: 179.67 MiB)
+Public inputs saved to "/Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/spikes/epoch-proof/out/r16/proof/public_inputs" (mem: 179.70 MiB)
+Proof saved to "/Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service/spikes/epoch-proof/out/r16/proof/proof" (mem: 179.70 MiB)
+        0.68 real         1.85 user         0.13 sys
+           188432384  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               13079  page reclaims
+                  96  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   1  voluntary context switches
+               14989  involuntary context switches
+         19560847346  instructions retired
+          5665294629  cycles elapsed
+           181551656  peak memory footprint

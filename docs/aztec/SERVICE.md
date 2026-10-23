@@ -91,8 +91,22 @@ Whether JAM's own guarantors could replace Aztec's committee is a question for #
 already re-execute refine, so an epoch's validity is checked by JAM's auditors, not only by
 the proof.
 
-## Next: the skeleton
+## Built: the skeleton
 
-`spikes/settlement/`, #26's last item, not yet built. It will verify an epoch proof in refine
-and keep `tip:proven` in accumulate: an accepted proof's `previous_archive_root` must equal the
-tip, and then the tip moves to `end_archive_root`. Deployed and measured on PolkaJam.
+`spikes/settlement/` (ledger 51) is the epoch-proof path, deployed on a PolkaJam testnet:
+- **Refine** verifies an Aztec-shaped epoch proof (plain UltraHonk, Keccak transcript, 113
+  public inputs; #23's 2^16 every-relation circuit) and outputs its first two public inputs
+  as `previous_archive_root` and `end_archive_root`.
+- **Accumulate** keeps `tip`: a verified proof advances it only from the tip, and the first
+  accepted proof anchors the chain.
+
+| sent | expected | refine gas | tip after | proven | outcome |
+|---|---|---|---|---|---|
+| A (1 → 2) | advance | 170,427,917 | 2 | 1 | advanced |
+| A again | stale | 170,427,917 | 2 | 1 | stale |
+| C (5 → 6) | stale | 170,258,342 | 2 | 1 | stale |
+| B (2 → 3) | advance | 170,262,144 | 3 | 2 | advanced |
+| B, a public input altered | fails in refine | 8,330,413 | 3 | 2 | failed |
+
+The rest of the design (checkpoints with blobs and signatures, the Inbox ring, the Outbox,
+fees) is specified above, and its per-package costs are measured (#23, #37, #39).
