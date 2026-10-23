@@ -146,6 +146,12 @@ if [ -x "$JB" ] && [ -x "$NV" ] && [ -x "$BV" ] && install; then
     if out=$("$JB" "$HERE/services/$svc" --out "$HERE/out" 2>&1 | grep '\.jam'); then row "service $svc" builds "$(echo "$out" | awk '{print $2}' | tr -d '(') bytes" ok; else row "service $svc" builds failed missing; fi
   done
 fi
+# the wallet page's provers: noir_js and bb.js bundled for the browser (demo-wallet jam/dist)
+DW=$SUB/demo-wallet/jam
+if have npm && [ -f "$DW/package.json" ]; then
+  [ -f "$DW/dist/provers.js" ] || { install && (cd "$DW" && npm install --no-audit --no-fund >/dev/null 2>&1 && npm run build >/dev/null 2>&1); } || true
+  [ -f "$DW/dist/provers.js" ] && row "wallet provers" "noir_js + bb.js" "built" ok || row "wallet provers" "noir_js + bb.js" "not built" missing
+fi
 if have npm && [ -f "$HERE/client/e2e/package.json" ]; then
   [ -d "$HERE/client/e2e/node_modules/puppeteer-core" ] || { install && (cd "$HERE/client/e2e" && npm install --no-audit --no-fund >/dev/null 2>&1); } || true
   [ -d "$HERE/client/e2e/node_modules/puppeteer-core" ] && row puppeteer-core "$PUPPETEER" "$(node -p "require('$HERE/client/e2e/node_modules/puppeteer-core/package.json').version")" ok || row puppeteer-core "$PUPPETEER" missing missing
