@@ -9,6 +9,8 @@ in a container on the net (nets/net.sh indexer).
   GET  /nullifier/<hex>           {"spent": true|false}
   GET  /deposit/<hex>             {"amount": n} or {"amount": null}
   GET  /balance/<account-hex>     {"balance": n} on the public-balance service
+  GET  /key/<account-hex>         {"key": hex or null}: the account's note-encryption key
+  GET  /notes?from=N              {"from": N, "notes": [hex, ...]}: sealed notes, leaf N onward
   POST /submit/<service_id>       body: payload hex; ?core=N pins the core; returns the receipt
   GET  /status?package=<hex>&anchor=<hex>   JIP-2 workPackageStatus of a submission
 
@@ -35,17 +37,19 @@ def u64(b):
 def refresh():
     pv = chain.Jip2Chain(PRIVACY, RPC, chain_spec=SPEC)
     leaves = []                       # append-only: read only the leaves not seen yet
+    sealed = []                       # the sealed note at each leaf, the same way
     while True:
         try:
             head = pv.head()
             at = head.hash
             n = u64(pv.read(b"leaves", at))
             if n < len(leaves):           # a shorter chain (a reorg or a new chain): start over
-                leaves = []
+                leaves, sealed = [], []
             leaves = leaves + [pv.read(b"leaf:" + struct.pack("<Q", i), at).hex() for i in range(len(leaves), n)]
+            sealed = sealed + [pv.read(b"enc:" + struct.pack("<Q", i), at).hex() for i in range(len(sealed), n)]
             s = {"ok": True, "net": os.environ.get("NET_NAME", ""), "slot": head.slot, "head": at.hex(), "privacy_id": PRIVACY, "public_id": PUBLIC,
                  "note_root": pv.read(b"root:note", at).hex(), "null_root": pv.read(b"root:null", at).hex(),
-                 "leaves": list(leaves), "leaf_count": n, "transfers": u64(pv.read(b"transfers", at)),
+                 "leaves": list(leaves), "sealed": list(sealed), "leaf_count": n, "transfers": u64(pv.read(b"transfers", at)),
                  "shielded": u64(pv.read(b"shielded", at)), "unshielded": u64(pv.read(b"unshielded", at)),
                  "updated": time.time()}
             with LOCK:
@@ -86,6 +90,13 @@ class H(BaseHTTPRequestHandler):
             if len(parts) == 2 and parts[0] == "deposit":
                 v = chain.Jip2Chain(PRIVACY, RPC, chain_spec=SPEC).read(b"dep:" + bytes.fromhex(parts[1]))
                 return self._json(200, {"amount": u64(v) if v else None})
+            if parts == ["notes"]:
+                start = int(parse_qs(u.query).get("from", ["0"])[0])
+                with LOCK:
+                    return self._json(200, {"from": start, "notes": STATE.get("sealed", [])[start:]})
+            if len(parts) == 2 and parts[0] == "key":
+                v = chain.Jip2Chain(PUBLIC, RPC, chain_spec=SPEC).read(b"key:" + bytes.fromhex(parts[1]))
+                return self._json(200, {"key": v.hex() if v else None})
             if len(parts) == 2 and parts[0] == "balance":
                 v = chain.Jip2Chain(PUBLIC, RPC, chain_spec=SPEC).read(b"bal:" + bytes.fromhex(parts[1]))
                 return self._json(200, {"balance": u64(v)})

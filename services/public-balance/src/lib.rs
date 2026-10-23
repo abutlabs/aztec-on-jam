@@ -7,7 +7,9 @@
 //! commitment serving as the nonce. Refine checks the shape and passes it through;
 //! accumulate applies it once: a nonce it has seen (`seen:<nonce>`) is skipped, so a builder
 //! may resend a package it believes lost (lasair#93) without paying twice.
-//! Storage: `bal:<account>` = u64 LE, `seen:<nonce>` = 1.
+//! Op 3 publishes a note-encryption key: `[3][account: 32][X25519 public key: 32]` sets
+//! `key:<account>`, so a sender can seal a note to the account's owner (client/notecrypt.py).
+//! Storage: `bal:<account>` = u64 LE, `seen:<nonce>` = 1, `key:<account>` = 32 bytes.
 //!
 //! Shield: burn `amount` from `account` and send it as a deferred transfer to the privacy
 //! service `dest` with the note commitment in the memo. Unshield: a Transfer item from the
@@ -33,6 +35,8 @@ const SHIELD_LEN: usize = HEAD_LEN + 4 + 32;
 const OP_MINT: u8 = 0;
 const OP_BURN: u8 = 1;
 const OP_SHIELD: u8 = 2;
+const OP_KEY: u8 = 3;
+const KEY_LEN: usize = 1 + 32 + 32;
 const SHIELD_GAS: UnsignedGas = 100_000;
 
 impl Service for PublicBalance {
@@ -47,6 +51,7 @@ impl Service for PublicBalance {
         let ok = match data.first() {
             Some(&OP_MINT) | Some(&OP_BURN) => data.len() == ITEM_LEN,
             Some(&OP_SHIELD) => data.len() == SHIELD_LEN,
+            Some(&OP_KEY) => data.len() == KEY_LEN,
             _ => false,
         };
         if !ok {
@@ -74,7 +79,15 @@ impl Service for PublicBalance {
                 Ok(o) => o.0,
                 Err(_) => continue,
             };
-            if out.len() < 1 + ITEM_LEN || out[0] != 1u8 {
+            if out.first() != Some(&1u8) {
+                continue;
+            }
+            if out.get(1) == Some(&OP_KEY) && out.len() == 1 + KEY_LEN {
+                // publishing a key is idempotent: the latest one stands
+                set_storage(&key(b"key:", &out[2..34]), &out[34..66]).ok();
+                continue;
+            }
+            if out.len() < 1 + ITEM_LEN {
                 continue;
             }
             let op = out[1];

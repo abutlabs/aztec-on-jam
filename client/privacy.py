@@ -13,6 +13,9 @@ client/state.json) of notes and the tree's leaves.
       writes the work-item payload hex to <out> and marks the inputs spent
   privacy.py notes [owner]                            the unspent notes
   privacy.py root                                     the tree root the client believes
+  privacy.py scan <owner> <state.json>                find the owner's notes in the chain's sealed
+      notes ({"leaves": [...], "sealed": [...]} from the indexer's /state), and mark spent the
+      ones whose nullifiers the chain has (<state.json>'s "spent" list, if given)
   privacy.py sync <leaves.json>                       take the tree's leaves and nullifier root
       from the chain ({"leaves": [hex...], "null_root": hex}, read by nets/demo.sh over JIP-2)
 """
@@ -278,6 +281,17 @@ def enc_keys(owner):
     return notecrypt.keypair(owner.encode().ljust(32, b"\0")[:32])
 
 
+def directory_key(owner):
+    """The owner's note-encryption key: from PRIVACY_KEYS (a JSON map of owner -> hex, read
+    from the chain's directory by the caller) when it names the owner, else derived."""
+    path = os.environ.get("PRIVACY_KEYS")
+    if path and Path(path).exists():
+        k = json.loads(Path(path).read_text()).get(owner)
+        if k:
+            return bytes.fromhex(k)
+    return enc_keys(owner)[1]
+
+
 def seal_notes(outs, enc_pk_of):
     """The two output notes' openings, each sealed to its owner: the logs the proof commits
     to. Returns (logs bytes, logs_hash as a field element)."""
@@ -305,7 +319,7 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
     if insert % 2:
         raise ClientError(f"the tree has an odd number of leaves ({insert}); sync first")
     insert_path = tree.path(insert, from_level=1)
-    logs, logs_hash = seal_notes(outs, enc_pk_of or (lambda owner: enc_keys(owner)[1]))
+    logs, logs_hash = seal_notes(outs, enc_pk_of or directory_key)
     prover = "\n".join([
         f'old_note_root = "{old_root}"', f'old_null_root = "{old_null}"', f'logs_hash = "{logs_hash}"',
         f'insert_index1 = "{insert // 2}"', f'insert_path = {json.dumps([str(x) for x in insert_path])}',
@@ -379,6 +393,43 @@ def sync(d):
     return len(st["leaves"])
 
 
+def scan(owner, chain_state, is_spent=None):
+    """Open every sealed note on chain this client has not seen with the owner's key; each
+    that opens and hashes to its leaf is the owner's. A receiver needs nothing but the chain
+    and its key. Returns the notes found."""
+    import notecrypt
+    sync(chain_state)
+    st = load()
+    enc_sk = enc_keys(owner)[0]
+    known = {n["leaf"] for n in st["notes"] if n.get("leaf") is not None}
+    pk = pk_of(owner)
+    found = []
+    for i, (leaf_hex, sealed_hex) in enumerate(zip(chain_state.get("leaves", []), chain_state.get("sealed", []))):
+        if i in known or not sealed_hex:
+            continue
+        pt = notecrypt.open_(enc_sk, bytes.fromhex(sealed_hex))
+        if pt is None:
+            continue
+        value, blinding = notecrypt.note_from_plaintext(pt)
+        nh = h(pk, value, blinding)
+        if nh != int(leaf_hex, 16):
+            continue                   # opens, but not the note at this leaf: not trusted
+        n = {"id": len(st["notes"]), "owner": owner, "value": value, "blinding": blinding,
+             "kind": "tree", "spent": False, "leaf": i, "hash": nh}
+        if is_spent is not None and is_spent(f"{h(nh, sk_of(owner)):064x}"):
+            n["spent"] = True
+        st["notes"].append(n); found.append(n)
+    save(st)
+    return found
+
+
+def cmd_scan(owner, path):
+    d = json.loads(Path(path).read_text())
+    spent = set(d.get("spent", []))
+    for n in scan(owner, d, (lambda nf: nf in spent) if "spent" in d else None):
+        print(f"found note {n['id']}: {owner} {n['value']} at leaf {n['leaf']}{' (spent)' if n['spent'] else ''}")
+
+
 def cmd_sync(path):
     n = sync(json.loads(Path(path).read_text()))
     print(f"synced {n} leaves, root {hexf(Tree(load()['leaves']).root())}")
@@ -411,4 +462,4 @@ def select_inputs(owner, amount):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync}[a[0]](*a[1:])
+    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex())}[a[0]](*a[1:])

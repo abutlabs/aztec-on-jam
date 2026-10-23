@@ -69,33 +69,51 @@ case "${1:-}" in
     "$L" down ;;
   check)
     PB=$(sid public-balance); PV=$(sid privacy); echo "public-balance = service $PB, privacy = service $PV"
-    A=$(hex32 1); B=$(hex32 2); mkdir -p "$ROOT/out"; rm -f "$CLIENT_STATE"; T=$ROOT/out
-    echo "== the client learns the tree from the chain"; sync_client
+    A=$(hex32 1); B=$(hex32 2); mkdir -p "$ROOT/out"; T=$ROOT/out
+    # A and B are separate clients: separate note state, sharing nothing but the chain
+    SA=$T/client-A.json; SB=$T/client-B.json; rm -f "$SA" "$SB" "$T/keys.json"
+    asA() { CLIENT_STATE=$SA PRIVACY_KEYS=$T/keys.json "$CLIENT" "$@"; }
+    asB() { CLIENT_STATE=$SB PRIVACY_KEYS=$T/keys.json "$CLIENT" "$@"; }
+    echo "== each client learns the tree from the chain"; CLIENT_STATE=$SA sync_client; CLIENT_STATE=$SB sync_client >/dev/null
     N0=$(u64 "$PV" leaves); T0=$(u64 "$PV" transfers); S0=$(u64 "$PV" shielded); U0=$(u64 "$PV" unshielded)
     BA0=$(u64 "$PB" "62616c3a$A"); BB0=$(u64 "$PB" "62616c3a$B"); R0=$(ctl read "$PV" root:note); NR0=$(ctl read "$PV" root:null)
     # a fresh chain holds no roots: the tree is the empty tree (its root as the client computes
     # it) and the nullifier root is zero
-    [ "$R0" = "(none)" ] && R0=$("$CLIENT" root | sed 's/^0x//')
+    [ "$R0" = "(none)" ] && R0=$(asA root | sed 's/^0x//')
     [ "$NR0" = "(none)" ] && NR0=$(hex32 0)
     echo "  before: $N0 leaves, $T0 transfers, shielded $S0, unshielded $U0, bal:A $BA0, bal:B $BB0, root:note ${R0:0:16}…"
 
+    echo "== 0. A and B publish their note-encryption keys in the directory (public-balance)"
+    KA=$(asA enckey A); KB=$(asB enckey B)
+    submit_until "$PB" "03$A$KA" "$PB" "6b65793a$A" "$KA" "key:A"
+    submit_until "$PB" "03$B$KB" "$PB" "6b65793a$B" "$KB" "key:B"
+    # A's client reads B's key from the chain, not from B
+    echo "{\"A\": \"$(curl -s "$INDEXER/key/$A" | python3 -c 'import json,sys;print(json.load(sys.stdin)["key"])')\", \"B\": \"$(curl -s "$INDEXER/key/$B" | python3 -c 'import json,sys;print(json.load(sys.stdin)["key"])')\"}" > "$T/keys.json"
+
     echo "== 1. shield: A mints 100 publicly, burns it into a deposit, and proves the claim"
-    "$CLIENT" deposit A 100 | tee "$T/deposit.txt"; C=$(awk '{print $4}' "$T/deposit.txt" | sed 's/^0x//')
+    asA deposit A 100 | tee "$T/deposit.txt"; C=$(awk '{print $4}' "$T/deposit.txt" | sed 's/^0x//')
     submit_until "$PB" "00$A$(le64 100)$(openssl rand -hex 32)" "$PB" "62616c3a$A" "$(le64 $((BA0 + 100)))" "bal:A after the mint (+100)"
     submit_until "$PB" "02$A$(le64 100)$(le32 "$PV")$C" "$PB" "62616c3a$A" "$(le64 $BA0)" "bal:A after the shield (-100)"
     read_eq "$PV" "6465703a$C" "$(le64 100)" "dep:C, arrived by deferred transfer"
-    "$CLIENT" transfer A deposit:0 - A 100 0 0 0 "$T/tx1.hex" > "$T/tx1.txt"; grep payload "$T/tx1.txt"
+    asA transfer A deposit:0 - A 100 0 0 0 "$T/tx1.hex" > "$T/tx1.txt"; grep payload "$T/tx1.txt"
     R1=$(field "$T/tx1.txt" new_note_root 2)
     submit_until "$PV" "$(cat "$T/tx1.hex")" "$PV" root:note "$R1" "root:note, change 1 of 3 (the claim)"
     read_eq "$PV" "6465703a$C" "(none)" "dep:C consumed"
 
-    echo "== 2. send: A proves a payment of 40 to B, keeping 60"
-    "$CLIENT" transfer A 1 - B 40 0 0 0 "$T/tx2.hex" > "$T/tx2.txt"; grep payload "$T/tx2.txt"
+    echo "== 2. send: A proves a payment of 40 to B, keeping 60, sealing B's note to B's key"
+    asA transfer A 1 - B 40 0 0 0 "$T/tx2.hex" > "$T/tx2.txt"; grep payload "$T/tx2.txt"
     R2=$(field "$T/tx2.txt" new_note_root 2)
     submit_until "$PV" "$(cat "$T/tx2.hex")" "$PV" root:note "$R2" "root:note, change 2 of 3 (the send)"
 
-    echo "== 3. unshield: B proves a spend of its 40 to public account B on service $PB"
-    "$CLIENT" transfer B 3 - B 0 40 2 "$PB" "$T/tx3.hex" > "$T/tx3.txt"; grep -E "payload|unshield" "$T/tx3.txt"
+    echo "== B's client finds the payment by scanning the chain with B's key"
+    for _ in 1 2 3 4 5; do curl -sf "$INDEXER/state" > "$T/chain.json"; python3 -c "import json,sys; sys.exit(0 if json.load(open('$T/chain.json'))['note_root']=='$R2' else 1)" && break; sleep 2; done
+    asB scan B "$T/chain.json" | tee "$T/scanB.txt"
+    NB=$(grep -c "found note .*: B 40 at leaf $((N0 + 2))" "$T/scanB.txt" || true)
+    [ "$NB" = 1 ] && [ "$(grep -c 'found note' "$T/scanB.txt")" = 1 ] && echo "  ok   B's client found exactly one note: 40 at leaf $((N0 + 2)), sealed to B on chain" || { echo "  FAIL B's scan: $(cat "$T/scanB.txt")"; exit 1; }
+    BNOTE=$(sed -n 's/^found note \([0-9]*\): B 40.*/\1/p' "$T/scanB.txt")
+
+    echo "== 3. unshield: B proves a spend of the found note, 40 to public account B on service $PB"
+    asB transfer B "$BNOTE" - B 0 40 2 "$PB" "$T/tx3.hex" > "$T/tx3.txt"; grep -E "payload|unshield" "$T/tx3.txt"
     R3=$(field "$T/tx3.txt" new_note_root 2)
     submit_until "$PV" "$(cat "$T/tx3.hex")" "$PV" root:note "$R3" "root:note, change 3 of 3 (the unshield)"
 
@@ -107,7 +125,7 @@ case "${1:-}" in
       read_eq "$PV" "6c6561663a$(le64 $i)" "$(field "$T/$tx.txt" note_hashes $col)" "leaf $i = $tx's note hash $((col - 1))"; i=$((i + 1)); done; done
     read_eq "$PV" leaves "$(le64 $((N0 + 6)))" "leaves = $((N0 + 6))"
     for _ in 1 2 3 4 5; do [ "$(curl -s "$INDEXER/state" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("note_root",""))')" = "$R3" ] && break; sleep 2; done
-    sync_client >/dev/null; RECOMPUTED=$("$CLIENT" root | sed 's/^0x//')
+    CLIENT_STATE=$SA sync_client >/dev/null; RECOMPUTED=$(CLIENT_STATE=$SA "$CLIENT" root | sed 's/^0x//')
     [ "$RECOMPUTED" = "$R3" ] && echo "  ok   root rebuilt from the chain's $((N0 + 6)) leaves = root:note = ${R3:0:16}…" || { echo "  FAIL rebuilt root $RECOMPUTED != $R3"; exit 1; }
 
     echo "== nullifiers: exactly these six, and the nullifier root chains through them"
@@ -130,7 +148,7 @@ case "${1:-}" in
     read_eq "$PV" leaves "$(le64 $((N0 + 6)))" "leaves unchanged"
     read_eq "$PV" transfers "$(le64 $((T0 + 3)))" "transfers unchanged"
     read_eq "$PB" "62616c3a$B" "$(le64 $((BB0 + 40)))" "bal:B unchanged"
-    echo "== what each side holds"; "$CLIENT" notes
+    echo "== what each client holds"; echo "  A:"; CLIENT_STATE=$SA "$CLIENT" notes; echo "  B:"; CLIENT_STATE=$SB "$CLIENT" notes
     echo "PASS" ;;
   shield|send|unshield)
     W=${WALLET:-http://localhost:19710}
