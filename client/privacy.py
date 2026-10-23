@@ -439,4 +439,5 @@ def select_inputs(owner, amount):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex()), "directory": lambda o: print(directory_entry(o))}[a[0]](*a[1:])
+    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex()), "directory": lambda o: print(directory_entry(o)),
+     "pick": lambda o, n: print(" ".join(select_inputs(o, int(n)))), "balance": lambda o: print(private_balance(o))}[a[0]](*a[1:])

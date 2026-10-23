@@ -3,10 +3,11 @@
 #   nets/demo.sh up         six validators, both services deployed, the indexer and the wallet
 #   nets/demo.sh check      no browser: A shields 100, A sends 40 to B, B unshields 40; asserts
 #                           the chain byte for byte; a replay of the send must change nothing
-#   nets/demo.sh shield     A shields 100 through the wallet (minting first if A is short)
-#   nets/demo.sh send       A sends 40 to B privately            (args: from to amount)
-#   nets/demo.sh unshield   B unshields 40 to B's public account (args: user amount)
-#   nets/demo.sh wallet     (re)start the wallet backend, http://localhost:19710/?user=A
+#   nets/demo.sh shield     A shields 100 (minting first if A is short)  (args: user amount)
+#   nets/demo.sh send       A sends 40 to B privately; B finds it by scanning  (args: from to amount)
+#   nets/demo.sh unshield   B unshields 40 to B's public account   (args: user amount)
+#   nets/demo.sh wallet     (re)start the wallet page's static server, http://localhost:19710/?user=A
+#                           (the page keeps its own keys and proves in the browser)
 #   nets/demo.sh down       stop everything and wipe the chain
 # Public accounts are 32-byte big-endian field elements: A = 1, B = 2. Private keys derive
 # from the names (client/privacy.py). Service ids come from out/state/*.json.
@@ -151,20 +152,39 @@ case "${1:-}" in
     echo "== what each client holds"; echo "  A:"; CLIENT_STATE=$SA "$CLIENT" notes; echo "  B:"; CLIENT_STATE=$SB "$CLIENT" notes
     echo "PASS" ;;
   shield|send|unshield)
-    W=${WALLET:-http://localhost:19710}
-    post() { curl -s -X POST "$W/api/$1" -d "$2" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-for s in d.get("steps", []): print("  " + s)
-if not d.get("ok"): print("  error: " + d.get("error", "?")); sys.exit(1)
-print("  done in %s s: %s public %s, private %s" % (d["seconds"], d["user"], d["public"], d["private"]))'; }
+    # the stages as the Python client: named users A and B (accounts 1 and 2), each with its own
+    # note state in out/stage-<name>.json, paid through the directory, finding notes by scanning
+    PB=$(sid public-balance); PV=$(sid privacy); T=$ROOT/out; mkdir -p "$T"
+    acct() { case "$1" in A) hex32 1 ;; B) hex32 2 ;; *) echo "users: A or B" >&2; exit 2 ;; esac; }
+    as() { local u=$1; shift; CLIENT_STATE=$T/stage-$u.json PRIVACY_KEYS=$T/keys.json "$CLIENT" "$@"; }
+    publish() { local e; e=$(as "$1" directory "$1")
+      [ "$(ctl read "$PB" "6b65793a$(acct "$1")")" = "$e" ] || submit_until "$PB" "03$(acct "$1")$e" "$PB" "6b65793a$(acct "$1")" "$e" "key:$1" >/dev/null; }
+    keys() { echo "{\"A\": \"$(ctl read "$PB" "6b65793a$(acct A)")\", \"B\": \"$(ctl read "$PB" "6b65793a$(acct B)")\"}" > "$T/keys.json"; }
+    view() { for _ in 1 2 3 4 5 6; do curl -sf "$INDEXER/state" > "$T/stage-chain.json" && break; sleep 1; done; }
+    seen() { local root=$1; for _ in $(seq 1 15); do view; python3 -c "import json,sys; sys.exit(0 if json.load(open('$T/stage-chain.json'))['note_root']=='$root' else 1)" && return 0; sleep 2; done; return 1; }
+    scan() { view; as "$1" scan "$1" "$T/stage-chain.json" | sed 's/^/  /'; }
+    prove_send() { # <user> <a> <b> <to> <value> <unshield> <receiver> <label>
+      as "$1" transfer "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$PB" "$T/stage.hex" > "$T/stage.txt"
+      submit_until "$PV" "$(cat "$T/stage.hex")" "$PV" root:note "$(field "$T/stage.txt" new_note_root 2)" "$8"; }
+    publish A; publish B; keys
     case "$1" in
-      shield) U=${2:-A}; N=${3:-100}
-        HAVE=$(curl -s "$W/api/state?user=$U" | python3 -c 'import json,sys;print(json.load(sys.stdin)["public"])')
-        if [ "$HAVE" -lt "$N" ]; then echo "$U holds $HAVE publicly; the faucet mints $((N - HAVE))"; post mint "{\"user\":\"$U\",\"amount\":$((N - HAVE))}"; fi
-        echo "$U shields $N"; post shield "{\"user\":\"$U\",\"amount\":$N}" ;;
-      send) F=${2:-A}; TO=${3:-B}; N=${4:-40}; echo "$F sends $N to $TO privately"; post send "{\"user\":\"$F\",\"to\":\"$TO\",\"amount\":$N}" ;;
-      unshield) U=${2:-B}; N=${3:-40}; echo "$U unshields $N"; post unshield "{\"user\":\"$U\",\"amount\":$N}" ;;
+      shield) U=${2:-A}; N=${3:-100}; scan "$U"
+        HAVE=$(u64 "$PB" "62616c3a$(acct "$U")")
+        if [ "$HAVE" -lt "$N" ]; then echo "$U holds $HAVE publicly; the faucet mints $((N - HAVE))"
+          submit_until "$PB" "00$(acct "$U")$(le64 $((N - HAVE)))$(openssl rand -hex 32)" "$PB" "62616c3a$(acct "$U")" "$(le64 "$N")" "bal:$U"; fi
+        echo "$U shields $N"; as "$U" deposit "$U" "$N" > "$T/stage-dep.txt"
+        C=$(awk '{print $4}' "$T/stage-dep.txt" | sed 's/^0x//'); D=$(awk '{print $2}' "$T/stage-dep.txt")
+        submit_until "$PB" "02$(acct "$U")$(le64 "$N")$(le32 "$PV")$C" "$PV" "6465703a$C" "$(le64 "$N")" "the deposit"
+        view; prove_send "$U" "deposit:$D" - "$U" "$N" 0 0 "the claim"
+        echo "  $U holds $(as "$U" balance "$U") privately, $(u64 "$PB" "62616c3a$(acct "$U")") publicly" ;;
+      send) F=${2:-A}; TO=${3:-B}; N=${4:-40}; scan "$F"; echo "$F sends $N to $TO privately"
+        read -r IA IB <<<"$(as "$F" pick "$F" "$N")"; prove_send "$F" "$IA" "$IB" "$TO" "$N" 0 0 "the send"
+        echo "  $TO's client scans the chain:"; scan "$TO"
+        echo "  $F holds $(as "$F" balance "$F"), $TO holds $(as "$TO" balance "$TO") privately" ;;
+      unshield) U=${2:-B}; N=${3:-40}; scan "$U"; echo "$U unshields $N"
+        R=$(case "$U" in A) echo 1 ;; B) echo 2 ;; esac)
+        read -r IA IB <<<"$(as "$U" pick "$U" "$N")"; prove_send "$U" "$IA" "$IB" "$U" 0 "$N" "$R" "the unshield"
+        echo "  $U holds $(as "$U" balance "$U") privately, $(u64 "$PB" "62616c3a$(acct "$U")") publicly" ;;
     esac ;;
   *) sed -n 2,13p "$0"; exit 1 ;;
 esac
