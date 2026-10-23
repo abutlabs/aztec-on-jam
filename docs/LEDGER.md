@@ -404,3 +404,12 @@ does #17 (jamboree). Still reduced: #15, #18, #19, lasair#93.
 Next: milestone 4, an hour's soak on pj6; then the reductions, starting with #19 (proving in
 the browser) and #18 (the Aztec kernel).
 Blockers: none. The net, indexer and wallet are left running for Aodh to try.
+
+## 2026-10-23 10 — phase 2 begins
+Did: Aodh asked to close every open issue and make the demo ready for the JAM implementers'
+channel, testnet improvements included. `docs/RALPH.md` gained *Phase 2* with a closing
+condition per issue (#4, #11, #12, #13, #14, #15, #17, #18, #19), lasair#93, polish and CI.
+Next: #15 first, since #19 and #18 move the circuit and the toolchain: fork zkVerify's
+verifier, find what bb 5.0.0 changed in the UltraHonk proof (7,232 bytes zk against 7,488),
+accept it, measure it on the PVM, and move the toolchain to Noir 1.0.0-rc.5 + bb 5.0.0.
+Blockers: none.

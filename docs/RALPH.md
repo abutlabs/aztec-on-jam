@@ -127,3 +127,53 @@ Evidence: `<command>` → <the lines that prove it>
 Next: <one step>
 Blockers: <none, or what and why>
 ```
+
+---
+
+# Phase 2: ready for the JAM implementers' channel
+
+Phase 1 ended with `DEMO READY` (ledger entry 9). Phase 2's goal, from Aodh (2026-10-23):
+close every open issue and make the demo polished enough to show the JAM implementers'
+channel, with the testnet improvements included. Everything phase 1 made true must stay
+true: `nets/demo.sh up`, `check` and the e2e run pass on every net the demo supports.
+
+The issues open when phase 2 began, and what closes each one:
+
+| Issue | Closed when |
+| --- | --- |
+| #19 the wallet holds every key | The browser holds its own key and proves in the page (noir_js + bb.js); notes reach the receiver through the chain, encrypted; two browser contexts are two wallets that share nothing but the chain; `client/wallet.py` is gone or only a static server. The e2e run proves it. |
+| #18 our circuit, not Aztec's kernels | The demo-visible reductions are gone: encrypted notes on chain with tags (shared with #19), nullifier non-membership proven in the circuit (an indexed nullifier tree, Aztec's shape) with accumulate checking that tree's root, and the note tree at Aztec's depth or a measured reason not to. Plus a spike that compiles and proves Aztec v6's private kernel circuits with our toolchain and says, with numbers, what a kernel-based port would take. If that port is beyond a loop, it becomes one `roadmap` issue, named in the final report. |
+| #15 bb 3.0.3 pin | The verifier accepts the proof layout of the bb that current Noir pins (bb 5.x for Noir rc.5), in a fork of zkVerify's verifier, measured on the PVM, and the toolchain moves to it; or a measured reason to stay, with both layouts tested. |
+| #11 which verifier | The verifier decision is final after #15; a closing comment says so. |
+| #13 verifier gas | The 312M (spike) against 182M (service) difference is explained by measurement, and the final table (layouts, zk and plain, public-input count) is in the README. |
+| #12 tools | `scripts/bootstrap.sh` checks and installs every tool at its pinned version on a fresh macOS or Linux machine, and `docs/TOOLS.md` matches it. |
+| #14 lasair vs PolkaJam | The same privacy package refined and accumulated on both clients: refine wall time, slot-to-accumulation latency, move latency in the wallet, on lasair6, pj6 and a mixed net; a table in the README and the issue. |
+| #4 an hour on pj6 | `nets/demo.sh` runs on the PolkaJam-only net, and a soak sends one privacy package a slot for an hour: zero dropped roots, finality advancing, numbers in the ledger. |
+| #17 testnet plumbing | Our fork of jamixir's jamboree (`../jamboree`, branch `lasair`) launches the demo's nets (lasair-only, PolkaJam-only, mixed) and has `deploy`, `submit`, `read` and `status` over JIP-2 in Rust; the demo uses it instead of jamswap's Python; its headless check runs in our verification; and an issue on jamixir/jamboree offers the work upstream (Aodh asked for this), linking the branch. |
+
+Also, for the channel:
+
+- **lasair#93** (packages Ready on JIP-2 that never land): investigate in `../lasair` on a
+  branch, fix it with lasair's own gate passing, and run the demo on a locally built image.
+  If it cannot be fixed safely, say why in the issue and the README.
+- **Polish:** a recorded walk-through (a GIF or video of the two browsers, made by the e2e
+  script), `docs/DEMO.md` for an implementer who has ten minutes, the README tightened, and
+  `docs/ANNOUNCE.md`, a short post for the channel that Aodh sends himself. Never post to
+  the channel or any public forum from the loop, apart from the jamboree upstream issue.
+- **CI:** a GitHub Actions workflow that builds both services and the circuit and runs the
+  checks that need no network (`cargo check`, `nargo test`, the verifier spike's host test).
+
+## Phase 2 done
+
+`<promise>CHANNEL READY</promise>` may be written only when all of these hold, with the
+evidence in the ledger:
+
+1. Every issue in the table above is closed, each with a closing comment that links its
+   evidence. The only issues left open are `roadmap` issues opened under the #18 rule, and
+   the final report names each one.
+2. lasair#93 is closed with a fix, or carries a comment explaining why it cannot be fixed
+   safely, and the README says which.
+3. A final verification run, copied into the ledger: `down`, `up`, `check`, the stage
+   commands and the e2e run, on lasair6 and on pj6, from a clean state, all passing.
+4. `docs/DEMO.md`, `docs/ANNOUNCE.md`, the recording and the CI workflow exist, and the CI
+   run on the last commit is green.
