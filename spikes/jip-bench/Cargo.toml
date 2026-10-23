@@ -1,0 +1,23 @@
+[package]
+name = "jip-bench"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Native single-threaded timings of the JIP's host calls (#32), and K: PVM gas per native nanosecond for the same Rust code"
+
+[dependencies]
+p2 = { path = "../poseidon2-gas/p2" }
+kzg-verify = { path = "../kzg-gas/kzg" }
+ecrecover = { path = "../ecdsa-gas/ecrecover" }
+ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }
+ark-ec = { version = "0.5", default-features = false }
+ark-ff = { version = "0.5", default-features = false }
+ark-std = { version = "0.5", default-features = false }
+blst = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[workspace]

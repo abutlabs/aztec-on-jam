@@ -36,7 +36,9 @@ script):
 
 Compared as shares of the budget each check runs in, a JAM service pays about 50 times what an
 Ethereum contract pays for a precompiled check (KZG, ecrecover), and about 3 times for a whole
-UltraHonk verifier, which on Ethereum is contract code using the curve precompiles. That price falls on every privacy system, rollup
+UltraHonk verifier, which on Ethereum is contract code using the curve precompiles. Not all of
+that gap is JAM's to close: Ethereum's precompiles are priced generously against its slow EVM.
+What a host call can recover is the PVM's own overhead on this code (*Gas pricing*). That price falls on every privacy system, rollup
 settlement and cross-chain light client a JAM service could host. For example, settling the
 Aztec network on JAM needs about 812M gas an epoch proof and 981M a checkpoint (proof, blobs,
 attestations), most of it pairings and curve arithmetic (`docs/privacy/LESSONS.md`,
@@ -185,7 +187,27 @@ and the maximum across clients and hardware is taken. Today's measurements, for 
   in 15 of 30 runs (about 7–21 gas a nanosecond) and 0.41–0.56 s in 12, a variance whose cause
   is not yet known (jam-privacy-service#14).
 
-Native timings for each call: to be measured (this draft, next step).
+Native timings, one thread, Apple M-series (`spikes/jip-bench`):
+
+| Call | Library | Native |
+|---|---|---|
+| `bn254_pairing_check`, 2 / 4 pairs | arkworks | 796 / 1,161 µs |
+| `bn254_g1_msm`, 1 / 16 / 128 points | arkworks | 93 / 478 / 2,116 µs |
+| `bls12_381_pairing_check`, 2 pairs | blst | 772 µs |
+| `bls12_381_g1_msm`, 1 / 16 / 128 points | blst | 135 / 337 / 423 µs |
+| `kzg_point_evaluation` | zkcrypto (blst expected about 3× faster) | 2,990 µs |
+| `secp256k1_recover` | k256 | 137 µs |
+| `poseidon2_bn254_permute` | arkworks fields (`p2`) | 9.5 µs |
+
+**What this means for the gain.** Ethereum prices its precompiles far below the cost of EVM
+bytecode, because the EVM interprets 256-bit arithmetic slowly. The PVM's recompiler runs
+64-bit arithmetic close to native. So a host call priced consistently with PVM code saves only
+the recompiler's slowdown on this code (f ≈ 3.5–10 from CI's x86 runner, to be measured
+properly), times any library gain (blst's assembly against pure-Rust PVM code). That is
+roughly **2–10×** per call, not the 50× that Ethereum's precompile prices suggest. For
+example, Poseidon2 drops from 428,839 to about 200,000 gas, which brings a depth-40 tree
+insertion (about 8M) inside accumulate's 10M. The constants G_* are set from R measured on x86
+(jam-privacy-service#42).
 
 ## Determinism and consensus
 

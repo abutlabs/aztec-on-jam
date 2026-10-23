@@ -1362,3 +1362,20 @@ Ethereum's share for cryptography. That holds for checks Ethereum prices as prec
 of a 60M block), because Ethereum's verifier is contract code too. All three now say so.
 Issues: #40 closed. #29 closed: LESSONS.md is complete, every claim linked to evidence.
 Next: the JIP's native timings (#32), which fill the gas constants.
+
+## 2026-10-23 50 — #32: native timings; a host call saves about 2–10×, not Ethereum's 50×; #42 filed for the recompiler's R and f
+Why this issue: #32's draft lacked only its gas constants, and #33 waits on a complete draft.
+Did: `spikes/jip-bench`, native single-threaded timings of every proposed call, and K = PVM gas
+per native ns for the three operations whose same Rust code ran on PolkaJam.
+Evidence: `cargo run --release` → Poseidon2 9.5 µs (K 44.9); KZG point evaluation 2,989.8 µs
+(K 66.7); ecrecover 136.9 µs (K 95.8); BN254 pairing 2/4 pairs 795.9/1,161.0 µs; BN254 MSM
+1/16/128 92.5/478.3/2,115.8 µs; BLS12-381 pairing 2 pairs (blst) 772.1 µs; BLS MSM
+135.1/337.0/422.5 µs.
+Finding: the "about 50×" gap against Ethereum is mostly Ethereum's pricing. Its EVM is slow at
+256-bit arithmetic, so precompiles are priced low. The PVM's recompiler runs this code
+f ≈ 3.5–10× slower than native (CI's UltraHonk, ledger 26), so a host call priced consistently
+saves about 2–10×. Poseidon2 halves (about 200,000 gas), which brings a depth-40 insertion to
+about 8M, inside accumulate's 10M. The JIP draft's pricing section and motivation now say so.
+Issues: #42 filed (R and f on an x86 recompiler) and added to RALPH's table.
+Next: #42 in CI (x86 PolkaJam recompiler, the KZG, ecrecover and Poseidon2 spikes, native on
+the same runner); then #32 closes with constants.
