@@ -196,7 +196,7 @@ def toml_note_in(n, tree, sender, st):
 
 
 def toml_note_out(n):
-    return {"owner_pk": str(pk_of(n["owner"])), "value": str(n["value"]), "blinding": str(n["blinding"])}
+    return {"owner_pk": str(owner_pk(n["owner"])), "value": str(n["value"]), "blinding": str(n["blinding"])}
 
 
 def toml_table(name, d):
@@ -241,15 +241,32 @@ def enc_keys(owner):
     return notecrypt.keypair(owner.encode().ljust(32, b"\0")[:32])
 
 
-def directory_key(owner):
-    """The owner's note-encryption key: from PRIVACY_KEYS (a JSON map of owner -> hex, read
-    from the chain's directory by the caller) when it names the owner, else derived."""
+def _directory(owner):
+    """The owner's directory entry, 64 bytes (encryption key || spend public key), from
+    PRIVACY_KEYS (a JSON map of owner -> hex the caller read from the chain), or None."""
     path = os.environ.get("PRIVACY_KEYS")
     if path and Path(path).exists():
         k = json.loads(Path(path).read_text()).get(owner)
-        if k:
+        if k and len(k) == 128:
             return bytes.fromhex(k)
-    return enc_keys(owner)[1]
+    return None
+
+
+def directory_key(owner):
+    """The owner's note-encryption key: the directory's if it names the owner, else derived."""
+    d = _directory(owner)
+    return d[:32] if d else enc_keys(owner)[1]
+
+
+def owner_pk(owner):
+    """The owner's spend public key: the directory's if it names the owner, else derived."""
+    d = _directory(owner)
+    return int.from_bytes(d[32:], "big") if d else pk_of(owner)
+
+
+def directory_entry(owner):
+    """What `owner` publishes in the directory: encryption key || spend public key, hex."""
+    return enc_keys(owner)[1].hex() + f"{pk_of(owner):064x}"
 
 
 def seal_notes(outs, enc_pk_of):
@@ -422,4 +439,4 @@ def select_inputs(owner, amount):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex())}[a[0]](*a[1:])
+    {"pk": cmd_pk, "deposit": cmd_deposit, "transfer": cmd_transfer, "notes": cmd_notes, "root": cmd_root, "sync": cmd_sync, "scan": cmd_scan, "enckey": lambda o: print(enc_keys(o)[1].hex()), "directory": lambda o: print(directory_entry(o))}[a[0]](*a[1:])

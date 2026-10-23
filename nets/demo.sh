@@ -83,8 +83,8 @@ case "${1:-}" in
     [ "$NR0" = "(none)" ] && NR0=$(hex32 0)
     echo "  before: $N0 leaves, $T0 transfers, shielded $S0, unshielded $U0, bal:A $BA0, bal:B $BB0, root:note ${R0:0:16}…"
 
-    echo "== 0. A and B publish their note-encryption keys in the directory (public-balance)"
-    KA=$(asA enckey A); KB=$(asB enckey B)
+    echo "== 0. A and B publish how to pay them (encryption key, spend key) in the directory"
+    KA=$(asA directory A); KB=$(asB directory B)
     submit_until "$PB" "03$A$KA" "$PB" "6b65793a$A" "$KA" "key:A"
     submit_until "$PB" "03$B$KB" "$PB" "6b65793a$B" "$KB" "key:B"
     # A's client reads B's key from the chain, not from B
