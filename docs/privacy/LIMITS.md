@@ -8,7 +8,10 @@ propose a JIP.*
 **Decision: yes, a JIP is warranted, for one limit: the PVM has no cryptographic host
 functions.** It is spec-level (Gray Paper 0.8.0), it is measured, it costs every
 privacy system on JAM about 50 times what Ethereum charges, in share of the budget they run in,
-for checks Ethereum prices as precompiles (about 3 times for a whole proof verifier, #40), and it can be fixed without touching JAM's model. The other limits found
+for checks Ethereum prices as precompiles (about 3 times for a whole proof verifier, #40), and it can be eased without touching JAM's model. Not removed: a host call saves the
+recompiled PVM's overhead on this code (about 2–10× by native timings, `spikes/jip-bench`), not
+the whole gap, much of which is Ethereum pricing precompiles low against its slow EVM. Even 2×
+matters: it brings a depth-40 Poseidon2 tree insertion inside accumulate's 10M gas. The other limits found
 are either workable with service design, not spec-level, or belong to clients (below). #32
 drafts the JIP.
 
