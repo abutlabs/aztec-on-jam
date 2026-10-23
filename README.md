@@ -31,4 +31,4 @@ All four sit under `Aiden/submodules/`. Aztec's code is Apache-2.0; so is this.
 
 ## Status
 
-Scaffold. Nothing here runs yet; step 0 of the plan is the first thing to do.
+Scaffold. `jam-pvm-build -m service` in `services/privacy` builds a 16 KB blob whose refine rejects everything; step 0 of the plan is the first thing to do.
