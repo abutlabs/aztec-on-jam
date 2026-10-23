@@ -683,3 +683,35 @@ on the new. `dune test --force` → 72 suites "Test Successful", 0 `[FAIL]`;
 `scripts/quic-tests.sh` → 4 ok.
 Next: the conformance gate's result; images from main and from the branch; a lasair6 soak
 on each (one package a slot), counting expiries; then lasair#93 and #14.
+
+## 2026-10-23 22 — lasair#93 fixed for its main cause (lasair #95), measured; the rest is lasair#94
+Did: in ../lasair, intake now takes a builder's package only if we are on its core at the
+head's child (`Wp_intake.authorize ?earliest ?lookahead`, defaults 1 and 1; the co-signer
+keeps 0..3); two tests (refused at a rotation turn, red on the old window; a previous-rotation
+credential inside an epoch). Gate, images from main (`lasair:93-before`) and from the branch
+(`lasair:93-after`, Dockerfile.mesh), then the same 20-minute soak on a clean lasair6 with
+each (`out/ab93.sh`). PR #95 merged (5203a8f); lasair#93 closed; lasair#94 opened.
+Evidence: `dune test --force` → 72 "Test Successful", 0 `[FAIL]`; `scripts/quic-tests.sh` →
+4 ok; `scripts/conformance.sh` → 48 ok, 2 skip, exit 0.
+```
+| image        | submitted | landed | expired (resends) | pace  | latency p50 / p90 / p99 |
+| main         | 62        | 62     | 14 (lm0 12, lm1 2) | 0.31  | 21.9 / 44.9 / 62.5 s    |
+| main + fix   | 77        | 77     | 5  (lm0 4, lm3 1)  | 0.385 | 21.2 / 30.1 / 55.5 s    |
+| pj6 (ledger 19) | 600    | 600    | 0                  | 1.0   | 13.5 / 15.0 / 15.9 s    |
+```
+After the fix the nodes refused 58 packages `not_assigned` and the reader passed each to the
+next guarantor (lm0 17 taken, lm1 10, lm2 5, lm3 3, at mid-run). Both soaks "FAIL" the
+verdict on pace (under 90% of a slot) and resends, not on drops: every package landed.
+(reports: docs/soak-lasair6-main.md, docs/soak-lasair6-fix.md.)
+The five left: accepted on the core, two co-signatures within a second, but core 0 still
+held the previous report (the pipeline waits for a free core at the head); the rotation
+turned meanwhile and the re-shares went to guarantors it cannot sign with. Inside an epoch
+the previous-rotation credential covers that (the new test); across an epoch lasair does not
+time a guarantee in the previous rotation, though GP allows it (P(eta'_3, lambda')). I could
+not pin the five turns to slots (this chain's slots do not track wall time), so lasair#94
+says "consistent with", and pairs it with the pace gap the same wait causes.
+The price: the demo still pulls ghcr.io/abutlabs/lasair:2.1.3 (publishing a lasair image is
+Aodh's call) and keeps its resend after 36 s, which is safe (payloads apply once).
+Next: #14 and #17 together: the native nets jamboree launches (jb-pj6, jb-lasair6, jb-mixed)
+with `nets/jb.sh`, the demo's check on each, and refine wall time per client from the mixed
+net's logs; then the comparison table.

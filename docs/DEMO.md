@@ -31,7 +31,7 @@ one back whose memo names the receiving account (unshield).
 ```sh
 scripts/bootstrap.sh          # the pinned toolchain, the sibling checkouts, both services built
 nets/demo.sh up               # six lasair validators (or NET=pj6: six PolkaJam), services deployed
-nets/demo.sh check            # A shields, pays B, B finds it and unshields; 34+ byte-level assertions
+nets/demo.sh check            # A shields, pays B, B finds it and unshields; 37 byte-level assertions
 open http://localhost:19710/?user=A    # and ?user=B in another browser profile
 nets/demo.sh down
 ```
@@ -57,8 +57,8 @@ transfer itself with noir_js and bb.js. The server behind it only serves files.
 
 ## Where JAM fits, and where it strains
 
-- **Refine is the right place for the proof.** 169M of a package's 5,000M gas; thirty
-  proofs fit a full package. Accumulate stays cheap (about 100k gas a transfer).
+- **Refine is the right place for the proof.** 169M of a package's 5,000M gas; 29
+  proofs fit a full package (5 a tiny one). Accumulate stays cheap (about 100k gas a transfer).
 - **One tree takes one package a slot.** Each proof names the old root, so packages on one
   tree must land in order. The demo's builder sends the next package only once the previous
   is reported (a core holds one pending report), which still sustains about one a slot.

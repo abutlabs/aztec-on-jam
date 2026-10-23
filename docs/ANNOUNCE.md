@@ -12,8 +12,8 @@ lasair validators or six PolkaJam validators, same service blob on both:
 
 - **Client-side proofs, checked in refine.** A Noir join-split proved with Barretenberg
   (UltraHonk, zk, Keccak) on the sender's machine or in a browser tab; a pure-Rust verifier
-  inside the service blob checks it in refine for about 169M gas (6 fit a tiny package,
-  30 a full one).
+  inside the service blob checks it in refine for about 169M gas (5 fit a tiny package,
+  29 a full one).
 - **Accumulate keeps the trees.** Note tree and Aztec-style indexed nullifier tree, both
   depth 40; non-membership proven in the circuit; accumulate checks the old roots and size
   and records the rest. Shield and unshield are JAM deferred transfers between two services.
