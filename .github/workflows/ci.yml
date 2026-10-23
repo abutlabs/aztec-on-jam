@@ -39,13 +39,14 @@ jobs:
           ~/.nargo/versions/nargo-$NOIR --version | head -1 && ~/.bb/versions/bb-$BB --version
       - name: Python dependency (cryptography)
         run: python3 -m pip install -q "cryptography>=41"
-      - name: Poseidon2 and sealed notes against their vectors
+      - name: Poseidon2, sealed notes and the client's trees against their vectors
         working-directory: jam-privacy-service
         run: |
           python3 client/poseidon2.py
           python3 client/notecrypt.py
           node client/e2e/notecrypt-webcrypto.mjs
           python3 client/genesis_check.py
+          python3 client/tree_check.py
       - name: The wallet page's Poseidon2 and BLAKE2b
         working-directory: demo-wallet/jam
         run: |

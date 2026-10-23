@@ -19,7 +19,7 @@ client/state.json) of notes and the tree's leaves.
   privacy.py sync <leaves.json>                       take the tree's leaves and nullifier root
       from the chain ({"leaves": [hex...], "null_root": hex}, read by nets/demo.sh over JIP-2)
 """
-import hashlib, json, os, re, subprocess, sys
+import bisect, hashlib, json, os, re, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -161,45 +161,96 @@ class Tree:
             i >>= 1
         return sib
 
+    def set(self, index, leaf):
+        """Write leaf `index` (or append it at the end); only its ancestors are rehashed."""
+        if index == len(self.leaves):
+            self.leaves.append(leaf)
+        else:
+            self.leaves[index] = leaf
+        for level in range(1, self.depth + 1):
+            self.memo.pop((level, index >> level), None)
+
 
 class IndexedTree:
     """Aztec's indexed Merkle tree of nullifiers: leaf i = (value, next_index, next_value), a
     linked list sorted by value; leaf 0 is the zero leaf. Rebuilt from the chain's nullifiers
-    in insertion order (the service records them as nfl:<index>)."""
+    in insertion order (the service records them as nfl:<index>): the list is linked first and
+    hashed once, then each insert rehashes only its two leaves' paths."""
     def __init__(self, nullifiers=()):
         self.leaves = [(0, 0, 0)]
+        self.values = [0]                       # every leaf's value, ascending
+        self.at = {0: 0}                        # value -> leaf index
+        self.order = []                         # the nullifiers inserted, in order
+        self._tree = None
         for nf in nullifiers:
-            self.insert(nf)
+            self._link(nf)
 
     def low(self, nf):
         """The index of the leaf that brackets nf (its value the largest below nf)."""
-        best = 0
-        for i, (v, _, _) in enumerate(self.leaves):
-            if v < nf and v >= self.leaves[best][0]:
-                best = i
+        i = bisect.bisect_left(self.values, nf)
+        best = self.at[self.values[i - 1]] if i else 0
         v, ni, nv = self.leaves[best]
         if v == nf or (nv != 0 and not nf < nv):
             raise ClientError(f"nullifier {nf:#x} is already in the tree")
         return best
 
     def tree(self):
-        return Tree([h(*leaf) for leaf in self.leaves], NULL_DEPTH)
+        if self._tree is None:
+            self._tree = Tree([h(*leaf) for leaf in self.leaves], NULL_DEPTH)
+        return self._tree
 
     def root(self):
         return self.tree().root()
 
+    def _set(self, index, leaf):
+        if index == len(self.leaves):
+            self.leaves.append(leaf)
+        else:
+            self.leaves[index] = leaf
+        if self._tree is not None:
+            self._tree.set(index, h(*leaf))
+
+    def _link(self, nf, witness=False):
+        lo = self.low(nf)
+        v, ni, nv = self.leaves[lo]
+        low = witness and {"value": str(v), "next_index": str(ni), "next_value": str(nv), "index": str(lo),
+                           "path": [str(x) for x in self.tree().path(lo)]}
+        new = len(self.leaves)
+        self._set(lo, (v, new, nf))
+        slot = witness and [str(x) for x in self.tree().path(new)]
+        self._set(new, (nf, ni, nv))
+        bisect.insort(self.values, nf); self.at[nf] = new; self.order.append(nf)
+        return low, slot
+
     def insert(self, nf):
         """Insert nf; returns the circuit's witness for it: the low leaf, its path, and the
         new slot's path after the low leaf is rewritten."""
-        lo = self.low(nf)
-        v, ni, nv = self.leaves[lo]
-        low = {"value": str(v), "next_index": str(ni), "next_value": str(nv), "index": str(lo),
-               "path": [str(x) for x in self.tree().path(lo)]}
-        new = len(self.leaves)
-        self.leaves[lo] = (v, new, nf)
-        slot = [str(x) for x in self.tree().path(new)]
-        self.leaves.append((nf, ni, nv))
-        return low, slot
+        return self._link(nf, witness=True)
+
+
+# a long-lived prover (the soak, a builder) keeps its trees between proofs: only what the chain
+# added since is hashed. A tree is reused while the chain's list extends the one it was built from.
+_kept = {}
+
+
+def note_tree(leaves):
+    t = _kept.get("note")
+    if t is None or t.leaves != leaves[:len(t.leaves)]:
+        t = _kept["note"] = Tree([])
+    for x in leaves[len(t.leaves):]:
+        t.set(len(t.leaves), x)
+    return t
+
+
+def nullifier_tree(nullifiers):
+    """The indexed tree of these nullifiers. The caller's inserts mutate it; a proof that never
+    lands leaves the kept tree ahead of the chain's list, which rebuilds it."""
+    t = _kept.get("null")
+    if t is None or t.order != nullifiers[:len(t.order)]:
+        t = _kept["null"] = IndexedTree()
+    for nf in nullifiers[len(t.order):]:
+        t._link(nf)
+    return t
 
 
 def new_blinding(st):
@@ -324,7 +375,7 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
     """Prove a join-split; returns {"payload": bytes, "fields": [12 ints]} and records the
     client's view of the chain after it lands (inputs spent, outputs as leaves)."""
     st = load()
-    tree = Tree(st["leaves"])
+    tree = note_tree(st["leaves"])
     old_root = tree.root()
     ins = [pick(st, in_a), pick(st, in_b)]
     total_in = sum(n["value"] for n in ins if n)
@@ -347,7 +398,7 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, enc_pk_of=
         nh = h(pk_of(n["owner"]), n["value"], n["blinding"])
         return nh if n["kind"] == "deposit" else h(nh, sk_of(n["owner"]))
     nfs = [nullifier_of_input(n, j) for j, n in enumerate(ins)]
-    itree = IndexedTree(st.get("nullifiers", []))
+    itree = nullifier_tree(st.get("nullifiers", []))
     old_null, null_size = itree.root(), len(itree.leaves)
     witness = [itree.insert(nf) for nf in nfs]
     lows = [w[0] for w in witness]; slots = [w[1] for w in witness]

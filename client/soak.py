@@ -223,7 +223,7 @@ class Soak:
         rep = {"net": self.net, "seconds": round(time.time() - t_start), "slot_s": a.slot, "core": a.core,
                "submitted": len(self.txs), "landed": len(landed), "dropped": len(dropped),
                "latency_s": {"p50": q(0.5), "p90": q(0.9), "p99": q(0.99), "max": lat[-1] if lat else None},
-               "prove_s_p50": statistics.median([t["prove_s"] for t in self.txs]) if self.txs else None,
+               "prove_s_p50": round(statistics.median([t["prove_s"] for t in self.txs]), 3) if self.txs else None,
                "packages_per_minute": round(len(landed) / max(1, (time.time() - t_start) / 60), 2),
                "resends": sum(max(0, t.get("sends", 1) - 1) for t in self.txs),
                "prove_errors": prove_errors, "starved_slots": starved, "pace_vs_one_a_slot": round(pace, 3),
