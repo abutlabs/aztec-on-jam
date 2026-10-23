@@ -1284,3 +1284,15 @@ Issues: #31 closed. #41 filed (Poseidon2 in the PVM, for one tree shared by many
 added to RALPH's table.
 Next: #23's 2^24 when it finishes; then #40, #41 and #26 on PolkaJam, one testnet at a time;
 #32 (the JIP draft) can start meanwhile: its first step is researching the JIP format.
+
+## 2026-10-23 45 — #32 step 1: how JIPs are written and proposed
+Why this issue: #31 decided a JIP is warranted, and #33 and #34 wait on the draft. Its first
+step is the format, which needs no testnet.
+Did: `docs/jip/FORMAT.md`, from polkadot-fellows/JIPs at 5202db1: the README, JIP-1 to
+JIP-5, and the pull requests (#12 README, #13 and #14 JIP-6 and JIP-7 in flight, #17
+amendments).
+Evidence: `gh api repos/polkadot-fellows/JIPs/contents` → JIP-1..5 and README; JIP-1's
+host-call layout (Index 100, Name `log`, Gas usage, Input registers φ7…, Output registers
+φ'7 = WHAT, Side-effects).
+Next: `docs/jip/jip-draft.md` in JIP-1's layout, with gas pricing grounded in native timings
+measured here.
