@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The demo, one word a stage, against jamswap's lasair6 net (nets/lasair6.sh).
+# The demo, one word a stage, on a JAM tiny net: NET=lasair6 (default) or NET=pj6 (nets/net.sh).
 #   nets/demo.sh up         six validators, both services deployed, the indexer and the wallet
 #   nets/demo.sh check      no browser: A shields 100, A sends 40 to B, B unshields 40; asserts
 #                           the chain byte for byte; a replay of the send must change nothing
@@ -12,7 +12,7 @@
 # from the names (client/privacy.py). Service ids come from out/state/*.json.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd)
-L=$HERE/lasair6.sh; CLIENT=$ROOT/client/privacy.py
+L=$HERE/net.sh; export NET=${NET:-lasair6}; CLIENT=$ROOT/client/privacy.py
 export CLIENT_STATE=$ROOT/out/client-state.json
 sid() { python3 -c "import json;print(json.load(open('$ROOT/out/state/$1.json'))['service_id'])"; }
 hex32() { printf '%064x' "$1"; }

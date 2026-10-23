@@ -504,3 +504,22 @@ Next: #4: the demo on the PolkaJam-only net. `nets/pj6.sh` as the counterpart of
 `NET=` switch in `nets/demo.sh` so up, check and the stages run on lasair6 or pj6; run
 `check` on pj6. The hour's soak comes after.
 Blockers: none.
+
+## 2026-10-23 14 — #4, part one: the demo on six PolkaJam validators
+Did: `nets/lasair6.sh` became `nets/net.sh`, chosen by `NET=lasair6` (default) or `NET=pj6`
+(jamswap's `nets/compose/pj6.yml`: six PolkaJam validators and an ordinary PolkaJam node
+serving JIP-2). It uses jamswap's project names and reads the RPC node's network and the
+`/shared` volume from `docker compose config` instead of hard-coding them. `nets/demo.sh`
+passes `NET` through; the indexer reports the net and the wallet page shows it. Ran the
+demo on pj6, then on lasair6 again under the renamed project.
+Evidence: `NET=pj6 nets/demo.sh up` → `service 1 ready (created #9500015)`, `service 2
+ready (created #9500020)`, `indexer up on pj6`, 1 min 14 s. `NET=pj6 nets/demo.sh check` →
+`34 ok, 0 FAIL, 0 resends`, `PASS`, 1 min 46 s. `node client/e2e/e2e.mjs` on pj6 → `PASS: 5
+assertions`, 1 min 18 s (mint 10.1 s, shield 27.1 s, send 18.2 s, unshield 18.3 s). Then
+`nets/demo.sh up` (lasair6) 1 min 25 s, `check` → `34 ok, 0 FAIL, 0 resends`, 3 min 05 s.
+Issues: #4 (part one), #14 (first numbers: the same check, pj6 1:46, lasair6 3:05).
+Next: #4, part two: the hour's soak on pj6: `nets/soak.sh` sends one privacy package a slot
+(a pre-proven chain of sends between A and B, so proving never paces it), records every
+root change, package status and finalized slot, and ends with a verdict: zero dropped roots,
+finality advancing. Then close #4.
+Blockers: none. lasair6 left running.

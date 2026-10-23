@@ -36,6 +36,10 @@ nets/demo.sh unshield   # B unshields 40 to B's public account
 nets/demo.sh down       # stop everything, wipe the chain
 ```
 
+Every stage runs on either of two six-validator nets: `NET=lasair6` (the default: six
+[lasair](https://github.com/abutlabs/lasair) validators) or `NET=pj6` (six PolkaJam
+validators), e.g. `NET=pj6 nets/demo.sh up`. The service is the same blob on both.
+
 The wallet is at <http://localhost:19710/?user=A>; open `?user=B` in a second browser to
 watch the payment arrive. `send` and `unshield` take arguments (`nets/demo.sh send A B 25`).
 `node client/e2e/e2e.mjs` (after `npm install` in `client/e2e`) drives two browsers
@@ -78,8 +82,8 @@ Real:
   replayed proof is dropped.
 - **Shield and unshield.** JAM deferred transfers between two services: the shield's memo
   carries the note commitment, the unshield's carries the receiving account.
-- **The network.** Six lasair validators (an independent GP 0.8.0 client) on one tiny-spec
-  genesis, with GRANDPA finality; services deployed through the Bootstrap service over
+- **The network.** Six lasair validators (an independent GP 0.8.0 client), or six PolkaJam
+  validators, on one tiny-spec genesis, with GRANDPA finality; services deployed through the Bootstrap service over
   JIP-2; packages guaranteed by three co-signing validators.
 
 Reduced, each with an issue that names the price and the way back:
@@ -113,7 +117,7 @@ Reduced, each with an issue that names the price and the way back:
 | `client/wallet.py` | the wallet's backend: the page plus `/api/{state,mint,shield,send,unshield}` |
 | `client/e2e/` | two browsers, three moves, six screenshots |
 | `indexer/indexer.py` | follows the chain over JIP-2, serves it over HTTP |
-| `nets/` | `demo.sh` (the stages), `lasair6.sh`, `jamctl.py` |
+| `nets/` | `demo.sh` (the stages), `net.sh` (lasair6 or pj6), `jamctl.py` |
 | `spikes/ultrahonk-gas/` | the gate: the verifier's gas on the PVM |
 
 The services build with jamswap's `jam080-build` (GP 0.8.0); the crates.io `jam-pvm-build`

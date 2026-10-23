@@ -40,7 +40,7 @@ def refresh():
             at = head.hash
             n = u64(pv.read(b"leaves", at))
             leaves = [pv.read(b"leaf:" + struct.pack("<Q", i), at).hex() for i in range(n)]
-            s = {"ok": True, "slot": head.slot, "head": at.hex(), "privacy_id": PRIVACY, "public_id": PUBLIC,
+            s = {"ok": True, "net": os.environ.get("NET_NAME", ""), "slot": head.slot, "head": at.hex(), "privacy_id": PRIVACY, "public_id": PUBLIC,
                  "note_root": pv.read(b"root:note", at).hex(), "null_root": pv.read(b"root:null", at).hex(),
                  "leaves": leaves, "leaf_count": n, "transfers": u64(pv.read(b"transfers", at)),
                  "shielded": u64(pv.read(b"shielded", at)), "unshielded": u64(pv.read(b"unshielded", at)),

@@ -156,7 +156,7 @@ def state_for(user):
              for n in privacy.unspent(user)]
     return {"user": user, "account": ACCOUNTS.get(user), "public": public_balance(user),
             "private": sum(n["value"] for n in notes), "notes": notes,
-            "chain": {k: s.get(k) for k in ("slot", "note_root", "null_root", "leaf_count", "transfers",
+            "chain": {k: s.get(k) for k in ("net", "slot", "note_root", "null_root", "leaf_count", "transfers",
                                              "shielded", "unshielded", "privacy_id", "public_id")}}
 
 
