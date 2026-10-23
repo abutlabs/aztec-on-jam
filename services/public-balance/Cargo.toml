@@ -10,8 +10,3 @@ description = "The public side of the demo: a dev-chain balance per account to s
 jam-pvm-common = { path = "../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
 service-util = { path = "../../crates/service-util" }
-
-[profile.release]
-panic = "abort"
-lto = true
-opt-level = 'z'

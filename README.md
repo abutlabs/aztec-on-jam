@@ -45,17 +45,18 @@ unshield, both by deferred transfer; a replay of the send changes nothing.
 
 | What | Value | Where |
 | --- | --- | --- |
-| One UltraHonk verification in `refine` (the transfer circuit, zk, 12 public inputs, bb 5.0.0) | **167,281,732 gas**, under a second on lasair | in-process rig; [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
-| The verifier on a one-input circuit | bb 5.0.0: 286,136,021 gas zk, 272,022,666 plain; bb 3.0.3: 312,260,095 and 302,381,955 | `spikes/ultrahonk-gas/measure.sh`, #13 |
-| A rejected proof (tampered byte, altered public input) | 0.5 to 9.7 million gas | `services/privacy/check.sh`, the spike |
+| One UltraHonk verification in `refine` (the transfer circuit: zk, log n 14, 12 public inputs, bb 5.0.0) | **166,132,009 gas**, under a second on lasair | `services/privacy/check.sh`; [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
+| The verifier on a one-input circuit (log n 12) | bb 5.0.0: 161,500,875 gas zk, 152,871,367 plain; bb 3.0.3: 177,314,601 and 171,198,181 | `spikes/ultrahonk-gas/measure.sh` |
+| The same, built for size (`opt-level = "z"`) instead of speed | 286,136,021 gas zk: the PVM meters instructions, so the services build at opt-level 3 with LTO | #13 |
+| A rejected proof (tampered byte, altered public input) | 0.3 to 6.1 million gas | `services/privacy/check.sh`, the spike |
 | Accumulate for one complete send (roots, two nullifiers, two leaves, counters) | 103,167 gas, 1% of a report's 10 million | in-process rig |
 | Proving a transfer on a laptop | about 0.5 s (bb 5.0.0; 2.5 s on bb 3.0.3) | `client/privacy.py` |
 | A send, submit to on chain | about 15 to 20 s, two to three slots | wallet |
 | `nets/demo.sh up` from clean, images cached | 1 min 24 s to 1 min 40 s | ledger |
 | `nets/demo.sh check` on a fresh chain | 2 min 34 s to 3 min 13 s, 34 assertions | ledger |
 
-A tiny package's refine budget is 1 billion gas, so five verifications fit in one; a full
-package's 5 billion holds 29. The time is the chain's, not the proof's: a move waits two to
+A tiny package's refine budget is 1 billion gas, so six verifications fit in one; a full
+package's 5 billion holds 30. The time is the chain's, not the proof's: a move waits two to
 three slots, longer when lasair loses a package and the demo resends it.
 
 ## What is real and what is reduced

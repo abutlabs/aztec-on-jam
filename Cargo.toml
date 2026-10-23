@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
 members = ["services/privacy", "services/public-balance", "crates/service-util"]
+
+# The PVM meters instructions, so build for speed: opt-level 3 with LTO verifies an UltraHonk
+# proof for 159M gas where opt-level "z" takes 286M (#13). Member crates' profiles are ignored
+# in a workspace, so this is the only profile the services get.
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1

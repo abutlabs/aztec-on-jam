@@ -438,3 +438,23 @@ Next: #13: explain the spike's 286M against the service's 167M for the same veri
 spike's circuit is smaller), by metering both with log_n and public-input count varied;
 then the README's final gas table, and close #13.
 Blockers: none. Net, indexer and wallet left running on bb 5.
+
+## 2026-10-23 12 — #13: the verifier's gas explained, and the profile fixed
+Did: the spike (286M) and the service (167M) differed by build profile, not circuit: the
+spike built with `opt-level = "z"`, the service's profile was ignored by Cargo (`warning:
+profiles for the non root package will be ignored`) and it built at opt-level 3. Metered one
+bb 5 zk proof under five profiles. Moved the profile to the workspace root (opt-level 3,
+LTO, one codegen unit), removed the ignored member profiles, set the spike the same.
+Evidence: vks: spike `log_n 12 num_pub 9`, transfer `log_n 14 num_pub 20`. Profiles, zk gas:
+z+LTO 286,136,021 · s+LTO 238,812,374 · 2+LTO 161,038,053 · 3+LTO 159,389,725 · 3 no LTO
+162,842,117. After the change: no profile warning; `services/privacy/check.sh` → refine
+`166132009`, `PASS: 6 assertions`; `measure.sh` → bb5 zk 161,500,875, plain 152,871,367;
+bb3 zk 177,314,601, plain 171,198,181; rejections 0.33 to 6.1M. From clean: `up` 1 min 49 s,
+`check` → `34 ok, 0 FAIL`, `PASS`, 2 min 57 s.
+Issues: #13 closed.
+Next: #12: `scripts/bootstrap.sh`, which checks and installs the pinned toolchain on macOS
+and Linux (Rust + the riscv target, Noir rc.5 and bb 5.0.0 into the versioned paths, Node,
+Python, Docker present, the sibling checkouts, jam080-build and lasair's demo_deploy built),
+then `docs/TOOLS.md` generated from the same pins; run it here, and in a clean Linux
+container for everything but Docker.
+Blockers: none. Net, indexer and wallet left running.

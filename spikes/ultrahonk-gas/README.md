@@ -49,3 +49,32 @@ pairing-point object is 8 limbs (136 + 120 bits per coordinate) instead of 16 (4
 the 256 bytes; the ZK masking commitment moves to just after it; the padded proof constant
 drops from 28 to 25. A flipped byte early in a bb 5 proof now fails the limb range check at
 once (509 thousand gas).
+
+## Result, 2026-10-23: the build profile is most of the cost (#13)
+
+The spike's 286M against the service's 167M for the same verifier was the profile: the
+spike built with `opt-level = "z"` + LTO; the service, a workspace member, had its profile
+ignored by Cargo and built at opt-level 3. Same proof (bb 5, zk), five profiles:
+
+| opt-level | LTO | zk gas | plain gas | blob bytes |
+|---|---|---|---|---|
+| z | yes | 286,136,021 | 272,022,666 | 247,078 |
+| s | yes | 238,812,374 | 226,956,797 | 317,789 |
+| 2 | yes | 161,038,053 | 151,880,350 | 1,127,351 |
+| 3 | yes | 159,389,725 | 150,351,717 | 1,157,121 |
+| 3 | no | 162,842,117 | 153,808,685 | 1,183,381 |
+
+Circuit size matters far less: at the same profile the transfer circuit (log n 14, 20 public
+inputs with the 8 pairing limbs) costs 166.1M against this circuit's (log n 12, 9) 161.5M.
+Both the services and this spike now build at opt-level 3, LTO, one codegen unit:
+
+| bb | case | gas | output | proof bytes | steps |
+|---|---|---|---|---|---|
+| bb3 | plain | 171198181 | 01 | 6624 | 56095652 |
+| bb3 | zk | 177314601 | 01 | 7488 | 58287034 |
+| bb3 | zk, proof byte flipped (must be 00) | 6068625 | 00 | 7488 | 1587239 |
+| bb3 | zk, wrong public input (must be 00) | 6058058 | 00 | 7488 | 1585194 |
+| bb5 | plain | 152871367 | 01 | 6368 | 48981097 |
+| bb5 | zk | 161500875 | 01 | 7232 | 52181298 |
+| bb5 | zk, proof byte flipped (must be 00) | 331165 | 00 | 7232 | 84511 |
+| bb5 | zk, wrong public input (must be 00) | 5193873 | 00 | 7232 | 1290236 |

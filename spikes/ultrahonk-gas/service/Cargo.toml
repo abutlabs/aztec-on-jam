@@ -19,8 +19,10 @@ bb3 = ["dep:uh3"]
 bb5 = ["dep:uh5"]
 
 [profile.release]
+# as the services (the workspace root): opt-level 3 + LTO, the cheapest in gas (#13)
 panic = "abort"
 lto = true
-opt-level = 'z'
+opt-level = 3
+codegen-units = 1
 
 [workspace]
