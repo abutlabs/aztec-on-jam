@@ -1,0 +1,69 @@
+name: ci
+# Everything that needs no chain and no private repository: the cryptography against its
+# vectors, the circuits, both services built for the PVM (GP 0.8.0), and a real transfer
+# proved and verified against the key the service embeds. The live checks (nets/demo.sh check,
+# the two-browser run, the soak) need Docker nets and run on a machine; see docs/LEDGER.md.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: jam-privacy-service }
+      - uses: actions/checkout@v4
+        with: { repository: abutlabs/jamswap, path: jamswap }
+      - uses: actions/checkout@v4
+        with: { repository: abutlabs/demo-wallet, ref: jam, path: demo-wallet }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Rust (stable, and jam080-build's nightly with rust-src)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup toolchain install nightly-2025-05-10 --profile minimal --component rust-src
+      - name: Noir and Barretenberg at the pins
+        run: |
+          eval "$(grep -E '^(NOIR|BB)=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          curl -sL https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+          ~/.nargo/bin/noirup -v "$NOIR"
+          curl -sL https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
+          ~/.bb/bbup -v "$BB"
+          mkdir -p ~/.nargo/versions ~/.bb/versions
+          cp ~/.nargo/bin/nargo ~/.nargo/versions/nargo-$NOIR && cp ~/.bb/bb ~/.bb/versions/bb-$BB
+          ~/.nargo/versions/nargo-$NOIR --version | head -1 && ~/.bb/versions/bb-$BB --version
+      - name: Python dependency (cryptography)
+        run: python3 -m pip install -q "cryptography>=41"
+      - name: Poseidon2 and sealed notes against their vectors
+        working-directory: jam-privacy-service
+        run: |
+          python3 client/poseidon2.py
+          python3 client/notecrypt.py
+          node client/e2e/notecrypt-webcrypto.mjs
+      - name: The wallet page's Poseidon2 and BLAKE2b
+        working-directory: demo-wallet/jam
+        run: |
+          node --input-type=module -e 'import { load, selfTest } from "./lib/poseidon2.js"; await load(); selfTest(); console.log("poseidon2.js ok")'
+          node --input-type=module -e '
+            import { blake2b } from "./lib/blake2b.js";
+            const h = Buffer.from(blake2b(new TextEncoder().encode("abc"), 64)).toString("hex");
+            if (!h.startsWith("ba80a53f981c4d0d")) throw new Error(h); console.log("blake2b.js ok")'
+      - name: The circuits compile
+        working-directory: jam-privacy-service/circuits
+        run: for c in transfer hash_cli path_cli; do (cd $c && ~/.nargo/versions/nargo-1.0.0-rc.5 compile --silence-warnings); done
+      - name: A real transfer, proved and verified offline
+        working-directory: jam-privacy-service
+        run: scripts/offline-proof.sh
+      - name: Both services built for the PVM (jam080-build, GP 0.8.0)
+        run: |
+          cargo build --release -q --manifest-path jamswap/tools/jam080/builder/Cargo.toml
+          B=jamswap/tools/jam080/builder/target/release/jam080-build
+          mkdir -p out
+          $B jam-privacy-service/services/public-balance --out out
+          $B jam-privacy-service/services/privacy --out out
+          ls -la out
