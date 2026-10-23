@@ -1,0 +1,49 @@
+name: jip-pricing
+# #42: the JIP's gas pricing needs PolkaJam's recompiler (x86-64 only). On one runner: the KZG,
+# ecrecover and Poseidon2 spikes on a PolkaJam testnet, the same Rust natively (jip-bench),
+# and R (gas per ns of recompiled execution) and f (recompiled time over native) from both.
+on: workflow_dispatch
+
+jobs:
+  pricing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: jam-privacy-service }
+      - uses: actions/checkout@v4
+        with: { repository: abutlabs/jamswap, path: jamswap }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Rust (stable, and jam080-build's nightly with rust-src)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup toolchain install nightly-2025-05-10 --profile minimal --component rust-src
+      - name: jam080-build and jamboree
+        run: |
+          cargo build --release -q --manifest-path jamswap/tools/jam080/builder/Cargo.toml
+          git clone -q --branch lasair --depth 1 https://github.com/abutlabs/jamboree jamboree
+          cargo build --release --locked -q --manifest-path jamboree/Cargo.toml
+      - name: PolkaJam (x86-64, recompiler)
+        run: |
+          sudo sysctl -w vm.unprivileged_userfaultfd=1 kernel.apparmor_restrict_unprivileged_userns=0
+          eval "$(grep -E '^POLKAJAM_NATIVE=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          mkdir -p pj && curl -sfL "https://github.com/paritytech/polkajam-releases/releases/download/$POLKAJAM_NATIVE/polkajam-$POLKAJAM_NATIVE-linux-x86_64.tgz" | tar xz -C pj
+          echo "PJD=$PWD/pj/polkajam-$POLKAJAM_NATIVE-linux-x86_64" >> "$GITHUB_ENV"
+      - name: The three spikes on PolkaJam
+        run: |
+          set -o pipefail
+          for s in kzg-gas ecdsa-gas poseidon2-gas; do
+            echo "### $s" | tee -a "$GITHUB_STEP_SUMMARY"
+            jam-privacy-service/spikes/$s/measure.sh 2>&1 | grep -E "agree|recover|match|^\|" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          grep -m1 -o 'PVM backend: [a-z]*' jam-privacy-service/spikes/kzg-gas/out/testnet.log | tee backend.txt
+      - name: The same Rust natively, and R and f
+        run: |
+          set -o pipefail
+          cd jam-privacy-service/spikes/jip-bench
+          cargo run -q --release -- ../kzg-gas/vectors ../ecdsa-gas/vectors/inputs.txt 2> native.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "### R and f, $(nproc) vCPU, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" | tee -a "$GITHUB_STEP_SUMMARY"
+          ./pricing.py .. "$(sed 's/PVM backend: //' ../../../backend.txt)" < native.txt | tee -a "$GITHUB_STEP_SUMMARY"

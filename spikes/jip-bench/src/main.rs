@@ -28,9 +28,13 @@ fn main() {
     let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(32);
     println!("| operation | native (median of 25, one thread) | PVM gas (PolkaJam, same Rust) | K = gas / ns |");
     println!("|---|---|---|---|");
-    let row = |name: &str, ns: f64, gas: Option<f64>| match gas {
-        Some(g) => println!("| {name} | {:.1} µs | {} | {:.1} |", ns / 1e3, g as u64, g / ns),
-        None => println!("| {name} | {:.1} µs | | |", ns / 1e3),
+    // machine-readable too, for pricing.py: "NATIVE <name> <ns>"
+    let row = |name: &str, ns: f64, gas: Option<f64>| {
+        match gas {
+            Some(g) => println!("| {name} | {:.1} µs | {} | {:.1} |", ns / 1e3, g as u64, g / ns),
+            None => println!("| {name} | {:.1} µs | | |", ns / 1e3),
+        }
+        eprintln!("NATIVE {} {ns}", name.split(',').next().unwrap().replace(' ', "_"));
     };
 
     // Poseidon2: one hash of two elements (one permutation), PVM 428,839 a hash (#41)
