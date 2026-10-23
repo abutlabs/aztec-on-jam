@@ -43,7 +43,10 @@ an epoch's 192 cost about 27.2B gas, 5.4 full packages, against 10.1 checked one
 ## Open (#37)
 
 - [x] **The export path, measured on PolkaJam** (above).
-- [ ] **The import path:** a later package importing a blob's 32 segments and re-checking it.
+- [x] **The import path:** a later package imports a blob's 32 segments by segments root and
+  re-checks it (263,028,551 gas; about 27,000 a segment imported). Imports by work-package hash
+  are not reported on PolkaJam (#38); builders look the segments root up first
+  (`jamboree rpc report`).
 - [x] **Batch verification**, measured above.
 - [x] **Blobs as extrinsics, not payloads** (measured above). JAM-NP limits the work-package message (CE-133,
   CE-146) to 200 KiB, payloads included, so that a guarantor can check authorization before

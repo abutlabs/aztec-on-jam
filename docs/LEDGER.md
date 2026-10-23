@@ -1142,3 +1142,20 @@ Consequence: a checkpoint's 6 blobs fit a tiny package; an epoch's 192 cost abou
 (5.4 full packages) against 50.4B one by one.
 Next: #37's import path (a later package importing a blob's 32 segments), the last item
 before #37 closes.
+
+## 2026-10-23 38 — #37 closed: a blob exported by one package is imported and re-checked by another, on PolkaJam
+Why this issue: #37's import path was its last item. It is the round trip that keeps Aztec's
+data in JAM's DA for 28 days and readable by later packages.
+Did:
+- jamboree gained `submit --import root:<hash>:<i> | pkg:<hash>:<i>` (GP C.30, tested).
+- jamboree gained `report <hash>`: JIP-2 workReport's package spec, decoded per GP 0.8.0. My
+  first decode left out E2(erasure shards) (`serialization.tex:208-215`) and read 18,549
+  exports from the bytes; fixed, it reads exports 32, shards 6.
+- The kzg-gas service gained kind 5: import n segments, rebuild the blob, check it.
+Evidence: `spikes/kzg-gas/measure.sh` → imported by segments root: 263,028,551 gas, 3
+guarantors, verdict 01; with a wrong proof 00. Imported by work-package hash: refined once
+(primary only), "Not reported in time", node1 "Not enough signatures from secondary
+guarantors" (filed as #38). All earlier cases unchanged (batch of 6: 967,993,490).
+Issues: #37 closed. #38 opened, and added to RALPH's table.
+Next: by dependency order, #23 (the epoch proof at 2^24, with a heavy-opcode circuit), then
+#26 (the settlement service), now that its inputs are measured.

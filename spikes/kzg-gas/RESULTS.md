@@ -79,6 +79,19 @@ blobs fit one tiny package**, 34 fit a full one, and an epoch's 192 cost about 2
 (5.4 full packages), against 50.4B (10.1) checked one by one. The G1 multiplications are a
 naive sum; a multi-scalar multiplication would cut the per-blob part further.
 
+**Imported by a later package** (`jamboree rpc submit --import`), the exported blob's 32
+segments re-checked:
+
+| case | refine gas | PolkaJam refine | verdict |
+|---|---|---|---|
+| imported by segments root (from the exporter's report, `jamboree rpc report`) | 263,028,551 | 0.251 s, 3 guarantors | 01 |
+| the same, a wrong proof | 263,028,551 | 0.250 s, 3 guarantors | 00 |
+| imported by work-package hash (the tagged form) | 263,028,551 | 0.244 s, the primary only | not reported (#38) |
+
+Importing 32 segments adds about 0.87M gas over the same check from an extrinsic (27,000 a
+segment). By segments root, the round trip works: a blob checked and exported by one
+package, kept in the DA, is read back and re-checked by another.
+
 Exporting 32 segments adds 117,483 gas (about 3,700 a segment): binding a blob costs the
 check, not the export. Per package, gas is the limit, not size: three blobs fit a tiny
 package's 1e9 and four run out, so a full package (5e9) holds 19.

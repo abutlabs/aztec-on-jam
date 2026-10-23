@@ -7,6 +7,8 @@
 //!           with export 1, each checked blob is exported as 32 segments (28 days in the DA)
 //!   kind 4: [n][n × (C 48 || pi 48)], blob i in extrinsic i, all checked at once
 //!           (verify_blob_kzg_proof_batch: one pairing for the n)
+//!   kind 5: [n][C 48 || pi 48], the blob imported as the work-item's n segments (exported by
+//!           an earlier package, kept 28 days in the DA), its first 131,072 bytes checked
 //! Refine outputs [tag][1 all valid | 0 otherwise]; accumulate stores it at "v:" ++ tag.
 #![no_std]
 #![no_main]
@@ -76,6 +78,17 @@ fn extrinsic_batch(d: &[u8]) -> Option<bool> {
     Some(kzg_verify::verify_blob_kzg_proof_batch(&refs, &cs, &pis) == Ok(true))
 }
 
+fn imported_blob(d: &[u8]) -> Option<bool> {
+    let n = *d.first()? as usize;
+    let cp = d.get(1..97)?;
+    let mut blob = Vec::with_capacity(n * SEGMENT_LEN);
+    for i in 0..n {
+        blob.extend_from_slice(refine::import(i)?.as_ref());
+    }
+    blob.truncate(kzg_verify::BYTES_PER_BLOB);
+    Some(kzg_verify::verify_blob_kzg_proof(&blob, cp[..48].try_into().ok()?, cp[48..].try_into().ok()?) == Ok(true))
+}
+
 impl Service for Spike {
     fn refine(_core: CoreIndex, _item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
@@ -85,6 +98,7 @@ impl Service for Spike {
             (Some(1), Some(d)) => blobs(d).unwrap_or(false),
             (Some(3), Some(d)) => extrinsic_blobs(d).unwrap_or(false),
             (Some(4), Some(d)) => extrinsic_batch(d).unwrap_or(false),
+            (Some(5), Some(d)) => imported_blob(d).unwrap_or(false),
             _ => false,
         };
         alloc::vec![tag, ok as u8].into()

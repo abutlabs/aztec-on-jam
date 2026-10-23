@@ -80,6 +80,11 @@ def batch(t, names, bad=None):
         proofs += f["commitment"] + pi
     open(f"{out}/p{t}.bin", "wb").write(bytes([t, 4, len(names)]) + proofs)
 batch(14, correct[:3]); batch(15, correct[:3], bad=1); batch(16, correct[:2]); batch(17, correct[:6])
+# kind 5: re-check the blob case 11 exported, imported as its 32 segments; 19 with a wrong proof
+f = fields(f"{vec}/blob/{correct[0]}.yaml", ("commitment", "proof"))
+open(f"{out}/p18.bin", "wb").write(bytes([18, 5, 32]) + f["commitment"] + f["proof"])
+w = fields(f"{vec}/blob/{wrong[0]}.yaml", ("proof",))
+open(f"{out}/p19.bin", "wb").write(bytes([19, 5, 32]) + f["commitment"] + w["proof"])
 PY
 
 echo "== 2. on a PolkaJam testnet ($("$PJD/polkajam" --version | head -1))"
@@ -96,6 +101,19 @@ pj_send 14 "$O/p14.bin" $(xargs_for 14)
 pj_send 15 "$O/p15.bin" $(xargs_for 15)
 pj_send 16 "$O/p16.bin" $(xargs_for 16)
 pj_send 17 "$O/p17.bin" $(xargs_for 17)
+# imports: the 32 segments case 11's package exported. By segments root (from its work-report,
+# JIP-2 workReport) for 18 and 19; by package hash (the tagged form, which the guarantors
+# resolve) for 20, same payload as 18.
+sleep 12
+R11=$(python3 -c "import json,sys; print(json.loads(open(sys.argv[1]).read().splitlines()[-1])['status']['Reported']['report_hash'])" "$O/submit-11.json")
+pj_rpc report "$R11" > "$O/report-11.json"
+ROOT11=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['segments_root'])" "$O/report-11.json")
+P11=$(python3 -c "import json,sys; print(json.loads(open(sys.argv[1]).readline())['package_hash'])" "$O/submit-11.json")
+by_root=(); by_pkg=(); for i in $(seq 0 31); do by_root+=(--import "root:$ROOT11:$i"); by_pkg+=(--import "pkg:$P11:$i"); done
+pj_send 18 "$O/p18.bin" "${by_root[@]}"
+pj_send 19 "$O/p19.bin" "${by_root[@]}"
+cp "$O/p18.bin" "$O/p20.bin"; printf '\x14' | dd of="$O/p20.bin" bs=1 seek=0 count=1 conv=notrunc 2>/dev/null
+pj_send 20 "$O/p20.bin" "${by_pkg[@]}"
 sleep 12
 echo
 echo "| case | refine gas | of a tiny package (1e9) | PolkaJam refine ($(pj_backend), $(uname -sm)) | accumulate's verdict |"
@@ -106,8 +124,10 @@ names=("" "point evaluation: geth pointEvaluation1" "point evaluation: c-kzg cor
        "1 blob as an extrinsic" "1 blob as an extrinsic, exported (32 segments)" "3 blobs as extrinsics, exported (96 segments)"
        "4 blobs as extrinsics (past a tiny package's gas)" "3 blobs as extrinsics, batch-checked"
        "3 blobs, batch-checked, one wrong proof (must fail)" "2 blobs as extrinsics, batch-checked"
-       "6 blobs (an Aztec checkpoint) as extrinsics, batch-checked")
-for t in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17; do
+       "6 blobs (an Aztec checkpoint) as extrinsics, batch-checked"
+       "the blob case 11 exported, imported by segments root (32 segments) and re-checked" "the same, with a wrong proof (must fail)"
+       "the same as 18, imported by package hash (the tagged form)")
+for t in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   rows=$(pj_refines "$t" || true)
   if [ -z "$rows" ]; then
     printf '| %s | refused (#36) | | | %s |\n' "${names[$t]}" "$(pj_read "763a$(printf '%02x' "$t")")"; continue

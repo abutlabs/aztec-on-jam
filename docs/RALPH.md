@@ -229,6 +229,7 @@ submit later.
 | #27 tracking Aztec's releases | `docs/aztec/RELEASES.md`: the v5 → v6 diff across the four boundary items. |
 | #36 PolkaJam's package cap | The threshold pinned by probing sizes, where it applies (payload, item or package; RPC or CE-133) as far as a binary-only client lets us see, and recorded as PolkaJam behaviour against the Gray Paper's W_B. |
 | #37 blob export path and batching | On PolkaJam: a blob exported as segments by refine and imported by a later package (gas, time), and batch verification against single checks. |
+| #38 PolkaJam's tagged imports | The cause located as far as a binary-only client allows (the CE-134 share's segments-root mappings, or the secondaries' history), recorded with the workaround (import by segments root). |
 | #21 the per-transaction kernel port | Closed as superseded by #28 once #23 and #26 hold, with a comment saying which of its parts survive. |
 | #29 lessons | `docs/privacy/LESSONS.md` committed, each claim linked to evidence. |
 | #30 architectures | `docs/privacy/ARCHITECTURES.md` committed with a recommendation; claims measured or marked as reasoning; at least the "proving inside JAM" candidate measured (fold or verify N proofs in refine). |
