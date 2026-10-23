@@ -1,95 +1,135 @@
-//! The privacy service. Scaffold: the entry points and the item layout, no verifier yet.
-//! Step 0 of docs/PLAN.md (the verifier measurement) decides what refine verifies.
+//! The privacy service, step 1: refine verifies one UltraHonk proof of the transfer
+//! circuit (zk, Keccak transcript) against the embedded verification key and hands its
+//! public inputs to accumulate; accumulate checks the old roots against the stored ones,
+//! refuses a spent nullifier, then writes the nullifiers, the note hashes and the new roots.
+//!
+//! Work-item payload: `[pubs_len: u16 LE][pubs: pubs_len bytes, 32 each][proof: the rest]`.
+//! Refine output: `[1][pubs]` when the proof verifies, `[0]` otherwise.
+//! Public inputs, in circuit order (circuits/transfer_stub): old note root, old nullifier
+//! root, new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1.
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
+use ultrahonk_no_std::{verify, ProofType};
+
+// BN254 pairings overflow polkavm's default stack (spikes/ultrahonk-gas).
+polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 
 declare_service!(Privacy);
 struct Privacy;
 
-/// Storage keys. Roots are 32 bytes; a nullifier key is its 32 bytes behind `nf:`.
+/// The transfer circuit's verification key (bb 3.0.3, `--oracle_hash keccak`). A preimage later.
+const VK: &[u8] = include_bytes!("../fixtures/transfer_stub.vk");
+
+const HASH_LEN: usize = 32;
+const N_PUBS: usize = 8;
+const OLD_NOTE_ROOT: usize = 0;
+const OLD_NULL_ROOT: usize = 1;
+const NEW_NOTE_ROOT: usize = 2;
+const NEW_NULL_ROOT: usize = 3;
+const NULLIFIERS: core::ops::Range<usize> = 4..6;
+const NOTE_HASHES: core::ops::Range<usize> = 6..8;
+
 const KEY_NOTE_ROOT: &[u8] = b"root:note";
 const KEY_NULL_ROOT: &[u8] = b"root:null";
-const HASH_LEN: usize = 32;
-
-/// Refine's output, read by accumulate:
-/// `[ok:1][old note root:32][old null root:32][new note root:32][new null root:32][n:2][nullifiers: n*32]`
-const HEADER_LEN: usize = 1 + 4 * HASH_LEN + 2;
+const KEY_TRANSFERS: &[u8] = b"transfers";
 
 fn invalid() -> WorkOutput {
     vec![0u8].into()
 }
 
+fn key(prefix: &[u8], hash: &[u8]) -> Vec<u8> {
+    let mut k = Vec::with_capacity(prefix.len() + hash.len());
+    k.extend_from_slice(prefix);
+    k.extend_from_slice(hash);
+    k
+}
+
+fn le_u64(b: &[u8]) -> u64 {
+    let mut x = [0u8; 8];
+    let n = core::cmp::min(8, b.len());
+    x[..n].copy_from_slice(&b[..n]);
+    u64::from_le_bytes(x)
+}
+
 impl Service for Privacy {
-    /// Verify the builder's folded proof against its public inputs and pass the state
-    /// change on. Until step 0 lands there is no verifier: every item is invalid.
     fn refine(
         _core_index: CoreIndex,
         _item_index: usize,
         _service_id: ServiceId,
-        _payload: WorkPayload,
+        payload: WorkPayload,
         _package_hash: WorkPackageHash,
     ) -> WorkOutput {
-        invalid()
+        let data = payload.take();
+        if data.len() < 2 {
+            return invalid();
+        }
+        let pubs_len = u16::from_le_bytes([data[0], data[1]]) as usize;
+        if pubs_len % HASH_LEN != 0 || data.len() < 2 + pubs_len {
+            return invalid();
+        }
+        let pubs_bytes = &data[2..2 + pubs_len];
+        let proof = &data[2 + pubs_len..];
+        let pubs: Vec<[u8; HASH_LEN]> = pubs_bytes
+            .chunks_exact(HASH_LEN)
+            .map(|c| c.try_into().unwrap())
+            .collect();
+        let proof = ProofType::ZK(Box::from(proof));
+        if verify::<()>(VK, &proof, &pubs).is_err() {
+            return invalid();
+        }
+        let mut out = Vec::with_capacity(1 + pubs_len);
+        out.push(1u8);
+        out.extend_from_slice(pubs_bytes);
+        out.into()
     }
 
-    /// Old roots must match the stored ones and every nullifier must be new; then write
-    /// the nullifiers and the new roots. Anything else drops the item.
     fn accumulate(_slot: Slot, _service_id: ServiceId, _item_count: usize) -> Option<Hash> {
         for item in accumulate_items() {
             let rec = match item {
                 AccumulateItem::WorkItem(r) => r,
-                _ => continue, // transfers (shield) come in step 1
+                _ => continue, // deferred transfers (shield) arrive in a later step
             };
             let out = match rec.result {
                 Ok(o) => o.0,
                 Err(_) => continue,
             };
-            if out.len() < HEADER_LEN || out[0] != 1u8 {
+            if out.len() != 1 + N_PUBS * HASH_LEN || out[0] != 1u8 {
                 continue;
             }
-            let old_note = &out[1..1 + HASH_LEN];
-            let old_null = &out[1 + HASH_LEN..1 + 2 * HASH_LEN];
-            let new_note = &out[1 + 2 * HASH_LEN..1 + 3 * HASH_LEN];
-            let new_null = &out[1 + 3 * HASH_LEN..1 + 4 * HASH_LEN];
-            let n = u16::from_le_bytes([out[1 + 4 * HASH_LEN], out[2 + 4 * HASH_LEN]]) as usize;
-            if out.len() < HEADER_LEN + n * HASH_LEN {
-                continue;
-            }
+            let pubs: Vec<&[u8]> = out[1..].chunks_exact(HASH_LEN).collect();
+
+            // The proof must start from the roots the chain holds (an empty chain accepts any).
             let stored_note = get_storage(KEY_NOTE_ROOT).unwrap_or_default();
             let stored_null = get_storage(KEY_NULL_ROOT).unwrap_or_default();
-            if (!stored_note.is_empty() && stored_note.as_slice() != old_note)
-                || (!stored_null.is_empty() && stored_null.as_slice() != old_null)
+            if (!stored_note.is_empty() && stored_note.as_slice() != pubs[OLD_NOTE_ROOT])
+                || (!stored_null.is_empty() && stored_null.as_slice() != pubs[OLD_NULL_ROOT])
             {
                 continue; // stale root: another package moved the tree first
             }
-            let nullifiers: Vec<&[u8]> = (0..n)
-                .map(|i| &out[HEADER_LEN + i * HASH_LEN..HEADER_LEN + (i + 1) * HASH_LEN])
-                .collect();
-            if nullifiers.iter().any(|nf| get_storage(&key_for(nf)).is_some()) {
-                continue; // double spend
+            if pubs[NULLIFIERS].iter().any(|nf| get_storage(&key(b"nf:", nf)).is_some()) {
+                continue; // a spent note: double spend
             }
-            for nf in nullifiers {
-                set_storage(&key_for(nf), &[1u8]).ok();
+            for nf in &pubs[NULLIFIERS] {
+                set_storage(&key(b"nf:", nf), &[1u8]).ok();
             }
-            set_storage(KEY_NOTE_ROOT, new_note).ok();
-            set_storage(KEY_NULL_ROOT, new_null).ok();
+            for nh in &pubs[NOTE_HASHES] {
+                set_storage(&key(b"nh:", nh), &[1u8]).ok(); // the encrypted note goes here later
+            }
+            set_storage(KEY_NOTE_ROOT, pubs[NEW_NOTE_ROOT]).ok();
+            set_storage(KEY_NULL_ROOT, pubs[NEW_NULL_ROOT]).ok();
+            let n = get_storage(KEY_TRANSFERS).map(|v| le_u64(&v)).unwrap_or(0);
+            set_storage(KEY_TRANSFERS, &(n + 1).to_le_bytes()).ok();
         }
         None
     }
-}
-
-fn key_for(nullifier: &[u8]) -> Vec<u8> {
-    let mut key = Vec::with_capacity(3 + HASH_LEN);
-    key.extend_from_slice(b"nf:");
-    key.extend_from_slice(nullifier);
-    key
 }

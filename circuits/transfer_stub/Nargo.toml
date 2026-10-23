@@ -1,0 +1,6 @@
+[package]
+name = "transfer_stub"
+type = "bin"
+authors = [""]
+
+[dependencies]
