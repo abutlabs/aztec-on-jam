@@ -124,7 +124,7 @@ Reduced:
 | `../demo-wallet/jam/` | the wallet page (branch `jam` of our demo-wallet fork) |
 | `indexer/` | follows the chain over JIP-2 and serves it over HTTP; relays submissions |
 | `nets/` | `demo.sh` (the stages), `net.sh` (lasair6, pj6), `jb.sh` (nets jamboree launches) |
-| `scripts/` | `bootstrap.sh` (the pinned toolchain), `offline-proof.sh`, `fetch-crs.sh`, `bench-refine-polkajam.sh` |
+| `scripts/` | `bootstrap.sh` (the pinned toolchain; `bootstrap-clean.sh` runs it from nothing in a container), `offline-proof.sh`, `fetch-crs.sh`, `bench-refine-polkajam.sh` |
 | `spikes/` | the measurements behind the numbers |
 | `docs/` | `DEMO.md`, `LEDGER.md` (every step with its evidence), `TOOLS.md`, the soak reports |
 
