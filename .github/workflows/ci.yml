@@ -68,3 +68,13 @@ jobs:
           $B jam-privacy-service/services/public-balance --out out
           $B jam-privacy-service/services/privacy --out out
           ls -la out
+      - name: jamboree (our fork) for `jamboree rpc`
+        run: |
+          git clone -q --branch lasair --depth 1 https://github.com/abutlabs/jamboree jamboree
+          cargo build --release --locked -q --manifest-path jamboree/Cargo.toml
+      - name: The privacy service live on PolkaJam, and its refine timed by PolkaJam (x86-64, recompiler)
+        run: |
+          eval "$(grep -E '^POLKAJAM_NATIVE=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          mkdir -p pj && curl -sfL "https://github.com/paritytech/polkajam-releases/releases/download/$POLKAJAM_NATIVE/polkajam-$POLKAJAM_NATIVE-linux-x86_64.tgz" | tar xz -C pj
+          N=5 JAMBOREE=$PWD/jamboree/target/release/jamboree jam-privacy-service/scripts/bench-refine-polkajam.sh \
+            pj/polkajam-$POLKAJAM_NATIVE-linux-x86_64 jam-privacy-service/out/offline/tx.hex out/privacy-service.jam | tee -a "$GITHUB_STEP_SUMMARY"
