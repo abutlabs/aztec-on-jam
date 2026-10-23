@@ -23,6 +23,12 @@ if [ ! -f "$V/geth-pointEvaluation.json" ]; then
     curl -sfL "https://raw.githubusercontent.com/ethereum/c-kzg-4844/$CKZG/tests/verify_kzg_proof/kzg-mainnet/$n/data.yaml" -o "$V/ckzg/$n.yaml"
   done
 fi
+if [ ! -d "$V/batch" ]; then
+  mkdir -p "$V/batch"
+  gh api "repos/ethereum/c-kzg-4844/contents/tests/verify_blob_kzg_proof_batch/kzg-mainnet?ref=$CKZG" --jq '.[].name' | while read -r n; do
+    curl -sfL "https://raw.githubusercontent.com/ethereum/c-kzg-4844/$CKZG/tests/verify_blob_kzg_proof_batch/kzg-mainnet/$n/data.yaml" -o "$V/batch/$n.yaml"
+  done
+fi
 if [ ! -d "$V/blob" ]; then
   mkdir -p "$V/blob"
   gh api "repos/ethereum/c-kzg-4844/contents/tests/verify_blob_kzg_proof/kzg-mainnet?ref=$CKZG" --jq '.[].name' | while read -r n; do
