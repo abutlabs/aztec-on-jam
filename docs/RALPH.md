@@ -234,6 +234,8 @@ submit later.
 | #40 UltraHonk verifier gas on Ethereum | bb 6's Solidity verifier run in Foundry on #23's proofs, gas recorded beside refine's. |
 | #41 Poseidon2 in the PVM | One Poseidon2 hash and a depth-40 insertion measured on PolkaJam against reference vectors, and how many insertions fit accumulate's 10M. |
 | #42 recompiler R and f | R (gas per ns, recompiled) and f (slowdown against native) per JIP operation, measured on one x86-64 machine (CI), feeding the JIP's gas constants. |
+| #44 UltraHonk's gain | The verifier's refine gas on PolkaJam split into MSM, scalar multiplication, pairing and the rest at 2^16 to 2^24, and the projected gas with the core calls, used by #34. |
+| #45 end-to-end benchmark | Calls 101–104 timed from encoded bytes with every validity check, random and adversarial inputs, median, p99 and max, on x86 CI, feeding #34's constants in the GP's unit. |
 | #21 the per-transaction kernel port | Closed as superseded by #28 once #23 and #26 hold, with a comment saying which of its parts survive. |
 | #29 lessons | `docs/privacy/LESSONS.md` committed, each claim linked to evidence. |
 | #30 architectures | `docs/privacy/ARCHITECTURES.md` committed with a recommendation; claims measured or marked as reasoning; at least the "proving inside JAM" candidate measured (fold or verify N proofs in refine). |

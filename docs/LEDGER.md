@@ -1493,3 +1493,15 @@ Evidence:
   exit 0.
 Issues: #33 closed; #44–#47 filed.
 Next: #44's measurement, #45's benchmark, then #34's final JIP.
+
+## 2026-10-23 57 — #44 closed: an UltraHonk verification is 77% curve work, 23% the rest; with the core calls about 2.2–3.3× cheaper; 14% is free today
+Why this issue: #34's motivation needs it (GW-10, ZW-1), and the testnet was free.
+Did: `spikes/verifier-profile` verifies #23's every-relation proofs at 2^16, 2^20 and 2^24 with
+the default hooks and with `Gauge`, which converts points field by field and meters each hook
+with the gas host call. It projects the gas with calls 101–102 under the draft's pricing and
+under the GP's sizing. Filed #48 to use such hooks in the services.
+Evidence: at 2^24, `()` 181,113,874 and `Gauge` 155,924,836, both verdict 01. Gauge's split: MSM
+71,158,380 (62 points), Miller loop 29,621,556, final exponentiation 19,051,852, rest
+35,819,314. Projected 81.4M (R = 8) or 54.8M (R = 3.33), m = 2 in both.
+Issues: #44 closed; #48 filed.
+Next: #45's end-to-end benchmark, then #34.

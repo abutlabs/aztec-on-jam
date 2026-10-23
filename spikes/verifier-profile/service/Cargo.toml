@@ -1,0 +1,25 @@
+[package]
+name = "verifier-profile-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "Spike (#44): the bb 6.0.0 UltraHonk verifier with curve hooks that meter their own gas, so refine splits a verification into MSM, scalar multiplication, pairing and the rest"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+# the same verifier as the epoch-proof and settlement spikes
+ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }
+ark-bn254-ext = { git = "https://github.com/zkVerify/accelerated-bn-cryptography.git", default-features = false, tag = "v0.6.0" }
+ark-bn254 = { version = "0.5.0", default-features = false, features = ["curve"] }
+ark-ec = { version = "0.5.0", default-features = false }
+ark-ff = { version = "0.5.0", default-features = false }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]
