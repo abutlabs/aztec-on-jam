@@ -616,3 +616,42 @@ Next: the live runs held back by the soak, on a clean pj6 and lasair6: the new c
 service (indexed nullifier tree, depth 40, sealed notes), `check` with two clients, the
 stage commands, and the self-custodial browser run; then #14's lasair runs (reader against
 builder, testing lasair#93's cause), the jamboree native net, and the Aztec kernel spike.
+
+## 2026-10-23 20 — the new circuit and service live on pj6; the browser's first proof no longer waits on a CDN (#19)
+Did: pj6 down and up from clean with the depth-40, indexed-nullifier-tree service (1,028,608
+bytes) and the self-custodial wallet, then `check`, the stage commands and the recorded
+two-browser run. Four things the runs found, fixed:
+- `down` returned while the observability stack's collectors still held the net's Docker
+  network; the next `up` created nodes on a network netjoin then removed ("network pj6_net not
+  found"). `nets/net.sh down` now detaches whatever is left and removes the network itself.
+- The stage client counted notes `check` had spent (same name-derived keys): scan marked spent
+  only from a `spent` list the indexer never sends. It now uses the indexer's nullifiers and
+  re-marks known notes whose nullifiers are on chain. ("A holds 260" became the true 160.)
+- `send` scanned for the receiver before the indexer had polled the block ("B holds 0"):
+  each proved stage now waits for the indexer to reach the root it just checked.
+- The wallet's first proof took ~80 s of a 108.6 s shield: bb.js fetched 20 MB of CRS from
+  Aztec's CDN, single-threaded because the page was not cross-origin isolated. Now
+  `scripts/fetch-crs.sh` caches exactly the ranges bb.js 5.0.0 asks for (sha256-pinned, the
+  first 4 MB equal to bb's native cache), the wallet server serves them at /crs/ with byte
+  ranges and COOP/COEP, and demo-wallet's `build.mjs` points bb.js at the page's origin (Aztec's
+  S3 kept as fallback). Barretenberg.new 13.9 s → 2.3 s; vk 853 → 262 ms; no request leaves
+  the machine.
+Also: each client lists only its own notes with value; `client/genesis_check.py` (in CI)
+asserts the client's empty trees equal the service's genesis constants.
+Evidence:
+`NET=pj6 nets/demo.sh check` → `PASS` in 2 min 11 s (three root changes each rebuilt from the
+chain's leaves, six nullifiers, nullifier root chaining, B finds exactly its 40, replay
+changes nothing). Stages: `send` → "B's client scans the chain: found note 6: B 40 at leaf 12 /
+A holds 80, B holds 40 privately"; `unshield A 20` → "A holds 60 privately, 20 publicly".
+`RECORD=1 node client/e2e/e2e.mjs` → before: shield 108.6 s, run 3:32; after:
+```
+done: mint 100 in 12.1 s / shield 100 in 25.8 s / send 40 in 13.3 s / unshield 40 in 13.9 s
+PASS: 5 assertions, 6 screenshots; every proof made in its own browser
+recording docs/images/demo.mp4 and demo.gif (both browsers side by side)   (1:37 total)
+```
+`scripts/bootstrap.sh --check` → every row ok incl. "prover CRS … cached, hashes match".
+Commits: demo-wallet 9db6880; this repo (below).
+Issues: #19 closed (the browser holds its key, proves in the page, receives by scanning
+sealed notes; two contexts share only the chain; wallet.py is a static server).
+Next: the same on a clean lasair6 (check, stages, e2e); then #14's lasair runs testing
+lasair#93's cause, the jamboree native net (#17), the Aztec kernel spike (#18).

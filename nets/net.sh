@@ -35,7 +35,17 @@ PY="docker run --rm -i --network $NETWORK -v $JAMSWAP/offchain:/offchain:ro -v $
 sid() { python3 -c "import json;print(json.load(open('$ROOT/out/state/$1.json'))['service_id'])"; }
 case "${1:-}" in
   up)   (cd "$JAMSWAP" && $COMPOSE up -d $UP) ;;
-  down) docker rm -f jam-privacy-indexer >/dev/null 2>&1 || true; (cd "$JAMSWAP" && $COMPOSE down -v) ;;
+  down) docker rm -f jam-privacy-indexer >/dev/null 2>&1 || true; (cd "$JAMSWAP" && $COMPOSE down -v --remove-orphans) || true
+    # Containers outside the project (an observability stack's collectors) can hold the network
+    # past `compose down`; an `up` then creates nodes on a network about to vanish. Detach them
+    # and remove it here, so down returns only once the network is gone.
+    if docker network inspect "$NETWORK" >/dev/null 2>&1; then
+      for c in $(docker network inspect "$NETWORK" --format '{{range .Containers}}{{.Name}} {{end}}'); do
+        docker network disconnect -f "$NETWORK" "$c" >/dev/null 2>&1 || true
+      done
+      docker network rm "$NETWORK" >/dev/null 2>&1 || true
+    fi
+    ! docker network inspect "$NETWORK" >/dev/null 2>&1 || { echo "network $NETWORK is still there" >&2; exit 1; } ;;
   build) mkdir -p "$ROOT/out"; "$BUILD" "$ROOT/services/public-balance" --out "$ROOT/out"; "$BUILD" "$ROOT/services/privacy" --out "$ROOT/out" ;;
   deploy)
     "$0" build; mkdir -p "$ROOT/out/state"

@@ -149,7 +149,7 @@ case "${1:-}" in
     read_eq "$PV" leaves "$(le64 $((N0 + 6)))" "leaves unchanged"
     read_eq "$PV" transfers "$(le64 $((T0 + 3)))" "transfers unchanged"
     read_eq "$PB" "62616c3a$B" "$(le64 $((BB0 + 40)))" "bal:B unchanged"
-    echo "== what each client holds"; echo "  A:"; CLIENT_STATE=$SA "$CLIENT" notes; echo "  B:"; CLIENT_STATE=$SB "$CLIENT" notes
+    echo "== what each client holds"; echo "  A:"; CLIENT_STATE=$SA "$CLIENT" notes A | sed 's/^/    /'; echo "  B:"; CLIENT_STATE=$SB "$CLIENT" notes B | sed 's/^/    /'
     echo "PASS" ;;
   shield|send|unshield)
     # the stages as the Python client: named users A and B (accounts 1 and 2), each with its own
@@ -165,7 +165,9 @@ case "${1:-}" in
     scan() { view; as "$1" scan "$1" "$T/stage-chain.json" | sed 's/^/  /'; }
     prove_send() { # <user> <a> <b> <to> <value> <unshield> <receiver> <label>
       as "$1" transfer "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$PB" "$T/stage.hex" > "$T/stage.txt"
-      submit_until "$PV" "$(cat "$T/stage.hex")" "$PV" root:note "$(field "$T/stage.txt" new_note_root 2)" "$8"; }
+      local root; root=$(field "$T/stage.txt" new_note_root 2)
+      submit_until "$PV" "$(cat "$T/stage.hex")" "$PV" root:note "$root" "$8"
+      seen "$root" || { echo "  FAIL the indexer never reached root $root"; exit 1; }; }  # so a scan sees it
     publish A; publish B; keys
     case "$1" in
       shield) U=${2:-A}; N=${3:-100}; scan "$U"

@@ -406,9 +406,16 @@ def cmd_transfer(sender, in_a, in_b, to, value, unshield, receiver, dest, out):
 
 
 def cmd_notes(owner=None):
-    for n in load()["notes"]:
-        if not n["spent"] and (owner is None or n["owner"] == owner):
+    """Unspent notes with value (of <owner>, if given); zero-value padding notes are counted."""
+    mine = [n for n in load()["notes"] if not n["spent"] and (owner is None or n["owner"] == owner)]
+    for n in mine:
+        if n["value"] > 0:
             print(f"note {n['id']}: {n['owner']} {n['value']} ({n['kind']}, leaf {n['leaf']})")
+    zero = sum(1 for n in mine if n["value"] == 0)
+    if len(mine) == zero:
+        print("(no notes with value)")
+    if zero:
+        print(f"({zero} zero-value padding note{'s' if zero > 1 else ''})")
 
 
 def cmd_root():
@@ -455,14 +462,21 @@ def scan(owner, chain_state, is_spent=None):
         if is_spent is not None and is_spent(f"{h(nh, sk_of(owner)):064x}"):
             n["spent"] = True
         st["notes"].append(n); found.append(n)
+    if is_spent is not None:           # a note known earlier may have been spent elsewhere since
+        for n in st["notes"]:          # (another client holding the same key)
+            if n["owner"] == owner and not n["spent"] and n.get("leaf") is not None and \
+                    is_spent(f"{h(h(pk, n['value'], n['blinding']), sk_of(owner)):064x}"):
+                n["spent"] = True
     save(st)
     return found
 
 
 def cmd_scan(owner, path):
     d = json.loads(Path(path).read_text())
-    spent = set(d.get("spent", []))
-    for n in scan(owner, d, (lambda nf: nf in spent) if "spent" in d else None):
+    # the chain's nullifiers: the indexer's /state lists them ("nullifiers"); a test file may say "spent"
+    have = "nullifiers" in d or "spent" in d
+    spent = {x.lower().removeprefix("0x") for x in d.get("nullifiers", []) + d.get("spent", [])}
+    for n in scan(owner, d, (lambda nf: nf in spent) if have else None):
         print(f"found note {n['id']}: {owner} {n['value']} at leaf {n['leaf']}{' (spent)' if n['spent'] else ''}")
 
 

@@ -45,6 +45,7 @@ jobs:
           python3 client/poseidon2.py
           python3 client/notecrypt.py
           node client/e2e/notecrypt-webcrypto.mjs
+          python3 client/genesis_check.py
       - name: The wallet page's Poseidon2 and BLAKE2b
         working-directory: demo-wallet/jam
         run: |

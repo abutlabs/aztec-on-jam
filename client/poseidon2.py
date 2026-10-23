@@ -61,4 +61,5 @@ if __name__ == "__main__":
     for _ in range(16):
         z = hash([z, z])
     assert z == 0x14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3, hex(z)   # the empty tree
+    # (depth 40, the trees the service keeps, is client/genesis_check.py's: against lib.rs)
     print(f"poseidon2: {len(_C['permutation_vectors'])} permutation vectors, hash_cli's H(7,11,13) and H(0,0), and the empty depth-16 root all match")
