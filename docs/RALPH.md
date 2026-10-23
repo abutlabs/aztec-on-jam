@@ -99,6 +99,20 @@ the ledger.
   hypotheses in the ledger, and take the next step that doesn't depend on it.
 - Write for Aodh: short, specific, with the command and the numbers.
 
+## GitHub issues: the work is visible there
+
+The repo `abutlabs/jam-privacy-service` tracks everything as issues, so Aodh can follow
+and so later sessions can pick up where this one stopped:
+
+- One `milestone` issue per milestone, one `step` issue per plan step (they exist; `gh
+  issue list -R abutlabs/jam-privacy-service`). A new piece of work gets a new issue
+  before it starts; a finding that decides something goes on a `research` issue as a
+  comment with the evidence; a choice made under *Liberties* gets a `decision` issue
+  naming its price and the way back; anything that stops a step gets a `blocker` issue.
+- Every iteration comments on the issue it worked, with the command and output, and
+  closes the issue when its check passes. Commits name the issue (`#12`).
+- The ledger stays the sequential record; the issues are the map. Both, every iteration.
+
 ## The ledger entry
 
 Append to `docs/LEDGER.md` at the end of every iteration:
