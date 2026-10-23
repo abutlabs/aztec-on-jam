@@ -1181,3 +1181,22 @@ pxe/src/entrypoints/server/utils.ts:40; the method lists come from grep over
 `sequencer-client/src/{sequencer,client}` and the Rollup callers.
 Issues: #25 closed.
 Next: #23's 2^23 result (running), then #26.
+
+## 2026-10-23 40 — #27 closed: v5.2.1 → v6.0.0 at the boundary, measured
+Why this issue: an independent step while #23's 2^23 proof runs. It is network reads and
+diffs, and #26 needs to know how fast the Rollup's logic moves.
+Did: `docs/aztec/RELEASES.md`. The boundary files fetched at v5.2.1 and v6.0.0 from
+aztec-packages, and the TypeScript from v5.2.1's yarn-project against aztec-node 1ac42dc
+(aztec-node has no tags, and 1ac42dc is its last commit before v6.0.0), then diffed.
+Evidence:
+- `HonkVerifier.sol`: v5.2.1 29 subrelations, 111+8 public inputs; v6.0.0 31, 113+8;
+  `LOG_N = 24` in both.
+- The two new inputs are previous and end inbox rolling hash (`ROOT_ROLLUP_PUBLIC_INPUTS_LENGTH`).
+- Changed lines: ProposeLib 182, EpochProofLib 360, RollupCore 182, Inbox 273, Outbox 0,
+  rollup.ts 80, sequencer-publisher.ts 379 (same methods), and `RollupContract` gains
+  `getAttesterCountAtTime`.
+- v6's main change is a streaming Inbox (a rolling-hash bucket ring).
+Conclusion: the prover changes every major release (a small verifier port each time, done for
+v6 in #22), the Rollup's logic changes most, and the node's TypeScript boundary barely moves.
+Issues: #27 closed.
+Next: #23's 2^23 result, then #26.
