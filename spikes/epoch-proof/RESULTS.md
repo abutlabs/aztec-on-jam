@@ -78,13 +78,17 @@ selector commitment is zero, as in a real root rollup):
 | 2^22 | 9,888 B | 21.30 s | 178,078,520 | 17.8% | 3.6% | 0.203 s | accepted |
 | 2^23 | 10,240 B | 50.32 s (peak 5,311 MB) | 179,184,883 | 17.9% | 3.6% | 0.184 s | accepted |
 | 2^23, a public input altered | | | 9,631,420 | | | 0.010 s | rejected |
+| **2^24 (Aztec's size), 716 blocks** | **10,592 B** (331 fields, Aztec's `ULTRA_KECCAK_PROOF_LENGTH`) | 127.77 s (peak 7,256 MB) | **180,791,299** | 18.1% | 3.6% | 0.424 s (the machine in swap) | accepted |
+| 2^24, a public input altered | | | 9,831,418 | | | 0.012 s | rejected |
 
 That confirms the gate-mix reading: the same sizes cost about 12M more than with squarings
 (178.1M against 166.4M at 2^22), and still about 1.2M more per doubling. **Aztec's 2^24 epoch
-proof should cost about 180M gas**, 3.6% of a full package.
+proof costs 180,791,299 gas in refine on PolkaJam**, 3.6% of a full package, measured at its
+real size and proof length.
 
-2^24 itself (Aztec's size) was not proved here: on this 16 GB machine the synthetic circuit's
-witness build swapped for 50 minutes before proving began (a loop of 16.7M unrolled steps; #23).
+An earlier 2^24 attempt with squarings swapped for 50 minutes in `nargo execute` (a loop of
+16.7M unrolled steps) and was stopped; the keccak and every-relation circuits keep the program
+small (#23).
 
 Gas grows by about 1.3 million per doubling of the circuit (sumcheck and Gemini each gain a
 round). Checking Aztec's epoch proof costs refine about a sixth of a tiny package and a

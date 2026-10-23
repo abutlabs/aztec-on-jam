@@ -24,7 +24,7 @@ v0.8.0 testnet with PolkaJam's own telemetry. Each one names its source.
 | A user's zero-knowledge proof, made in a browser, is checked by every validator that audits the package | UltraHonk verified in refine, 169,112,761 gas (`services/privacy/check.sh`); a browser proves in 1.0 s (README) |
 | Private state is kept correctly and cheaply | Accumulate writes a transfer for 103,089 gas, 1% of a report's 10M (README); a replayed or stale proof changes nothing (`nets/demo.sh check`, 37 assertions) |
 | It runs for an hour without losing anything | 600 of 600 packages, one a slot, median 13.4 s from submission to state, finality never stalled (#4, ledger 28) |
-| Aztec's own proofs can be checked: its epoch (root rollup) proof | Aztec's proof shape (plain UltraHonk, Keccak, 113 public inputs) verified in refine; with every gate type in use, 170,364,998 gas at 2^16 to 179,184,883 at 2^23, about 180M at Aztec's 2^24 (#23) |
+| Aztec's own proofs can be checked: its epoch (root rollup) proof | Aztec's proof shape (plain UltraHonk, Keccak, 113 public inputs) verified in refine; with every gate type in use, 170,364,998 gas at 2^16 to 180,791,299 at Aztec's 2^24, proof of 331 fields as Aztec's (#23) |
 | Aztec's data can be kept: its blobs | EIP-4844 point evaluation 199,473,075 gas; one blob against its commitment 262M; an Aztec checkpoint's 6 blobs batch-checked in one tiny package (967,993,405); exported as segments, kept 28 days, re-read and re-checked by a later package (#24, #37) |
 | Aztec's software needs few changes | The PXE runs unchanged; the node's Ethereum code (about 11k lines) sits mostly behind interfaces; 4 seams would make a JAM backend a plug-in (#25); one Aztec release moved that boundary little (#27) |
 
@@ -53,7 +53,7 @@ the mainnet limit since Fusaka's EIP-7935):
 | One KZG point evaluation | 199,473,075 (#24) | 4.0% | 50,000 (EIP-4844 precompile) | 0.083% | about 48× |
 | One ECDSA recovery | 13,119,449 (#39) | 0.26% | 3,000 (precompile 0x01) | 0.005% | about 52× |
 | 33 ECDSA recoveries (an epoch's attestations) | 432,756,815 (#39) | 8.7% | 99,000 | 0.17% | about 52× |
-| One UltraHonk verification (Aztec's epoch proof) | about 180M at 2^24 (#23) | 3.6% | Solidity on both sides; measured in #40 | | |
+| One UltraHonk verification (Aztec's epoch proof) | 180,791,299 at 2^24 (#23) | 3.6% | Solidity on both sides; measured in #40 | | |
 
 **But per chain, JAM has more room.** JAM has 341 cores, each with a full package every 6
 s; Ethereum has one 60M block every 12 s. Taking the point evaluation alone: JAM could run

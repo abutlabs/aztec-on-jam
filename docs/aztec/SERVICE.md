@@ -47,7 +47,7 @@ about 10.6 KB), its 113 public inputs, the batched blob opening, and the last ch
 attestations.
 
 - *Refine*:
-  - verify the UltraHonk proof against `cfg`'s key: about 169M gas at 2^24 by extrapolation
+  - verify the UltraHonk proof against `cfg`'s key: 180,791,299 gas at 2^24, measured on PolkaJam
     (#23);
   - verify the batched blob point evaluation (199,473,075 gas);
   - verify the attestations (#39).

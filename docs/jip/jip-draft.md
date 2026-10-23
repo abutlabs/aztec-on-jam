@@ -27,7 +27,7 @@ script):
 
 | Check | PVM gas in refine | Share of a full package (5e9) | Ethereum (precompile) | Share of a 60M block |
 |---|---|---|---|---|
-| UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^23 gates, every gate type in use) | 170,364,998 – 179,184,883 | 3.4–3.6% | Solidity verifier (being measured) | |
+| UltraHonk proof (Noir/Barretenberg, Keccak transcript, 2^16–2^24 gates, every gate type in use; 2^24 is Aztec's epoch proof's size) | 170,364,998 – 180,791,299 | 3.4–3.6% | Solidity verifier (being measured) | |
 | EIP-4844 KZG point evaluation | 199,473,075 | 4.0% | 50,000 | 0.083% |
 | One blob checked against its commitment | 262,430,040 | 5.2% | free to contracts (consensus) | |
 | secp256k1 public-key recovery | 13,119,449 | 0.26% | 3,000 | 0.005% |

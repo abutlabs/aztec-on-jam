@@ -1314,3 +1314,22 @@ Two draft claims were wrong and are fixed: the c-kzg vectors agreed with the cod
 natively, and the recompiler's 8–24 ms held in 15 of 30 runs, not "most".
 Next: native timings of each call (blst, arkworks, k256, c-kzg) to fill the gas table; then
 #32 closes.
+
+## 2026-10-23 47 — #23 closed: Aztec's epoch proof at its real size, 2^24, costs refine 180,791,299 gas on PolkaJam
+Why this issue: the 2^24 run finished. #23's row is the cost at 2^24, measured.
+Did: `CIRCUIT=rich LOGS=24 spikes/epoch-proof/measure.sh`, 716 blocks of every relation, a
+60-minute watchdog (not needed). Meanwhile, `spikes/poseidon2-gas` (#41) was written and
+checked on the host, its PolkaJam run still to come.
+Evidence:
+- "2^24 proof 10592 B, 113 public inputs, prove 127.77 s, peak 7256 MB; bb and our verifier
+  accept". 10,592 B = 331 fields, Aztec's `ULTRA_KECCAK_PROOF_LENGTH`.
+- PolkaJam: 180,791,299 gas (3.6% of a full package, 18.1% of a tiny one), 0.424 s with the
+  machine in swap, verdict 01; a public input altered 9,831,418, 00.
+- The every-relation line predicted about 180M.
+- `spikes/poseidon2-gas/host` → "p2: 5 permutation vectors, hash_cli's H(7,11,13) and
+  H(0,0), and the empty depth-16 root all match".
+Updated: RESULTS.md, LESSONS.md, the JIP draft and SERVICE.md now say 180,791,299 (measured)
+where they said about 169M or 180M.
+Issues: #23 closed.
+Next: #41 (Poseidon2 on PolkaJam), #40 (the Solidity verifier in Foundry), then the JIP's
+native timings (#32).
