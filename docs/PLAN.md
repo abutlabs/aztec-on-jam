@@ -29,6 +29,10 @@ tampered proof and wrong public input rejected at about 12.8M. Verifier: zkVerif
 tiny package, sixteen a full one; no folding is forced. Price: the verifier parses bb 3.0.x
 proofs, so Noir beta.16 and bb 3.0.3 are pinned (#15). Tree-insert gas: still to measure.
 
+**Moved to bb 5.0.0, 2026-10-23 (#15):** 286,136,021 gas zk for the same circuit, and
+167,281,732 for the transfer circuit in the service. Noir rc.5, bb 5.0.0, the verifier from
+zkVerify's PR #9 pinned in our fork.
+
 ## Step 1: the service (`services/privacy/`)
 
 Refine takes one work-item: `[folded proof][public inputs]`, where the public inputs are

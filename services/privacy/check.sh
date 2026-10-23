@@ -11,7 +11,7 @@ OUT=${OUT:-$HERE/out}; mkdir -p "$OUT"
 JAM=$("$BUILD" "$HERE" --out "$OUT" | awk '{print $1}')
 echo "blob: $(wc -c < "$JAM") bytes"
 PAY=$(cat "$HERE/../../out/tx1.hex")                        # client/privacy.py's first transfer
-PUBS=${PAY:4:768}; PROOF=${PAY:772}; LENHEX=${PAY:0:4}
+PUBS=${PAY:4:768}; PROOF=${PAY:772}; LENHEX=${PAY:0:4}   # 12 public inputs, then the proof
 f() { echo "${PUBS:$(( $1 * 64 )):64}"; }                   # public input i as 64 hex chars
 run() { (cd "$SUB/lasair" && LASAIR_REFINE_GAS=${LASAIR_REFINE_GAS:-1000000000} "$DEMO" "$JAM" "$1"); }
 pass=0

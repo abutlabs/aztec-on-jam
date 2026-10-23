@@ -46,10 +46,10 @@ fn hash2(a: Field, b: Field) -> Field {
 
 // The root of a depth-DEPTH tree from a leaf, its index and the siblings from the leaf up.
 fn merkle_root(leaf: Field, index: Field, path: [Field; DEPTH]) -> Field {
-    let bits: [u1; DEPTH] = index.to_le_bits();
+    let bits: [bool; DEPTH] = index.to_le_bits();
     let mut node = leaf;
     for i in 0..DEPTH {
-        let (l, r) = if bits[i] == 1 { (path[i], node) } else { (node, path[i]) };
+        let (l, r) = if bits[i] { (path[i], node) } else { (node, path[i]) };
         node = hash2(l, r);
     }
     node
@@ -58,10 +58,10 @@ fn merkle_root(leaf: Field, index: Field, path: [Field; DEPTH]) -> Field {
 // The root from a level-1 node (the parent of two leaves), its index at level 1 and the
 // siblings from level 1 up.
 fn root_from_level1(node1: Field, index1: Field, path: [Field; DEPTH - 1]) -> Field {
-    let bits: [u1; DEPTH - 1] = index1.to_le_bits();
+    let bits: [bool; DEPTH - 1] = index1.to_le_bits();
     let mut node = node1;
     for i in 0..DEPTH - 1 {
-        let (l, r) = if bits[i] == 1 { (path[i], node) } else { (node, path[i]) };
+        let (l, r) = if bits[i] { (path[i], node) } else { (node, path[i]) };
         node = hash2(l, r);
     }
     node

@@ -9,7 +9,14 @@ description = "Gas spike: one UltraHonk (Keccak, BN254) verification inside a JA
 [dependencies]
 jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
-ultrahonk-no-std = { git = "https://github.com/zkVerify/ultrahonk_verifier", rev = "986b79b232d0f44c52fe50cd85ba8c3f505fc3c8", default-features = false }
+# the verifier for bb 3.0.x proofs (zkVerify main) and for bb 5.0.x (zkVerify PR #9, pinned in our fork)
+uh3 = { package = "ultrahonk-no-std", git = "https://github.com/zkVerify/ultrahonk_verifier", rev = "986b79b232d0f44c52fe50cd85ba8c3f505fc3c8", default-features = false, optional = true }
+uh5 = { package = "ultrahonk-no-std", git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "a4b2a4af5d", default-features = false, optional = true }
+
+[features]
+default = ["bb5"]
+bb3 = ["dep:uh3"]
+bb5 = ["dep:uh5"]
 
 [profile.release]
 panic = "abort"

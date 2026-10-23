@@ -413,3 +413,28 @@ Next: #15 first, since #19 and #18 move the circuit and the toolchain: fork zkVe
 verifier, find what bb 5.0.0 changed in the UltraHonk proof (7,232 bytes zk against 7,488),
 accept it, measure it on the PVM, and move the toolchain to Noir 1.0.0-rc.5 + bb 5.0.0.
 Blockers: none.
+
+## 2026-10-23 11 — #15: bb 5.0.0 proofs, verified on the PVM; the toolchain moves
+Did: generated bb 3.0.3's and bb 5.0.0's Solidity verifiers for one circuit and diffed them
+(normalised: 126 hunks): the pairing-point object is 8 limbs instead of 16 (the 256 bytes),
+the ZK masking commitment moves, the padding constant is 25 instead of 28. Found zkVerify's
+open PR #9 "Update to Barretenberg v5.0.0" (branch lg/bb-v5, 14 commits, head a4b2a4af5d);
+forked the verifier to abutlabs/ultrahonk_verifier with that head on `bb-v5`. Verified bb 5
+proofs on the host, then parametrised the spike over both verifiers (`bb3`, `bb5` features)
+and metered both on lasair's rig. Moved everything to Noir 1.0.0-rc.5 + bb 5.0.0: Poseidon
+library v0.4.0 (same hashes: `H(7,11,13)` = `0x1c7467e2…` under both compilers), `u1` bits →
+`bool` in the circuit, the client calls pinned binaries (`~/.nargo/versions`, `~/.bb/versions`,
+overridable) and bb 5's flow (`write_vk -t evm` once, `prove -t evm -k`), the service
+depends on the fork. Re-ran phase 1 from clean.
+Evidence: host: `bb5 zk: Ok(()) in 5.67ms`, `bb5 plain: Ok(())`, tampered `ok=false` both.
+`spikes/ultrahonk-gas/measure.sh` → bb5 zk 286,136,021 (01), plain 272,022,666 (01), flipped
+509,110 (00), wrong input 9,748,240 (00); bb3 zk 312,260,095, plain 302,381,955.
+`services/privacy/check.sh` → `PASS: 6 assertions`, refine `gas used : 167281732 steps:
+53793187`. Proving a transfer: 0.5 s (was 2.5 s); payload 8,386 bytes. From clean on lasair6:
+`nets/demo.sh up` 1 min 47 s → `services: public-balance 1, privacy 2`; `check` → `34 ok,
+0 FAIL`, `PASS`, 2 min 34 s; `node client/e2e/e2e.mjs` → `PASS: 5 assertions, 6 screenshots`.
+Issues: #15 closed, #11 closed, #13 (run 4).
+Next: #13: explain the spike's 286M against the service's 167M for the same verifier (the
+spike's circuit is smaller), by metering both with log_n and public-input count varied;
+then the README's final gas table, and close #13.
+Blockers: none. Net, indexer and wallet left running on bb 5.

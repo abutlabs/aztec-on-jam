@@ -16,7 +16,7 @@ Aztec](https://abutlabs.github.io/the-gray-tutor/jam-beside-aztec). How it got h
 
 ## Demo
 
-You need Docker (running), Rust, Python 3, Node, Noir `1.0.0-beta.16` and bb `3.0.3`
+You need Docker (running), Rust, Python 3, Node, Noir `1.0.0-rc.5` and bb `5.0.0`
 (install lines in [docs/TOOLS.md](docs/TOOLS.md)), and these sibling checkouts:
 `../jamswap` (the testnet compose files and JIP-2 tooling), `../lasair` and
 `../demo-wallet` on its `jam` branch. One word a stage:
@@ -45,24 +45,24 @@ unshield, both by deferred transfer; a replay of the send changes nothing.
 
 | What | Value | Where |
 | --- | --- | --- |
-| One UltraHonk verification in `refine` (the transfer circuit, zk, 12 public inputs) | **about 182 million gas** (181,910,244 to 182,188,752 measured), about 1 s on lasair | lasair6 guarantor logs and the in-process rig; [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
-| The same verifier on a one-input circuit | 312,279,376 gas zk, 302,381,955 plain; polkavm agrees to the gas | `spikes/ultrahonk-gas`, #13 |
-| A rejected proof (tampered byte, altered public input) | about 7.5 to 12.8 million gas | `services/privacy/check.sh` |
+| One UltraHonk verification in `refine` (the transfer circuit, zk, 12 public inputs, bb 5.0.0) | **167,281,732 gas**, under a second on lasair | in-process rig; [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
+| The verifier on a one-input circuit | bb 5.0.0: 286,136,021 gas zk, 272,022,666 plain; bb 3.0.3: 312,260,095 and 302,381,955 | `spikes/ultrahonk-gas/measure.sh`, #13 |
+| A rejected proof (tampered byte, altered public input) | 0.5 to 9.7 million gas | `services/privacy/check.sh`, the spike |
 | Accumulate for one complete send (roots, two nullifiers, two leaves, counters) | 103,167 gas, 1% of a report's 10 million | in-process rig |
-| Proving a transfer on a laptop | about 2.5 s | `client/privacy.py` |
+| Proving a transfer on a laptop | about 0.5 s (bb 5.0.0; 2.5 s on bb 3.0.3) | `client/privacy.py` |
 | A send, submit to on chain | about 15 to 20 s, two to three slots | wallet |
 | `nets/demo.sh up` from clean, images cached | 1 min 24 s to 1 min 40 s | ledger |
-| `nets/demo.sh check` on a fresh chain | 3 min 13 s, 34 assertions | ledger |
+| `nets/demo.sh check` on a fresh chain | 2 min 34 s to 3 min 13 s, 34 assertions | ledger |
 
 A tiny package's refine budget is 1 billion gas, so five verifications fit in one; a full
-package's 5 billion holds 27. The time is the chain's, not the proof's: a move waits two to
+package's 5 billion holds 29. The time is the chain's, not the proof's: a move waits two to
 three slots, longer when lasair loses a package and the demo resends it.
 
 ## What is real and what is reduced
 
 Real:
 
-- **The proofs.** Barretenberg UltraHonk (Keccak transcript, zero-knowledge) of a Noir
+- **The proofs.** Barretenberg 5.0.0 UltraHonk (Keccak transcript, zero-knowledge) of a Noir
   join-split, made on the sending side, verified in `refine` on the PVM by a pure-Rust
   verifier compiled into the service. A tampered proof or an altered public input is
   rejected.
@@ -87,8 +87,6 @@ Reduced, each with an issue that names the price and the way back:
   same process made it.
 - **No folding.** One proof per package. The "builder" is the indexer's submit path,
   which wraps a payload in a work-package; Aztec's tx-base and merge circuits are not used.
-- **Pinned to bb 3.0.3** ([#15](https://github.com/abutlabs/jam-privacy-service/issues/15)).
-  The verifier parses bb 3.0.x proofs; Aztec v6 ships a newer bb.
 - **Dev-chain money.** The public-balance service has a faucet anyone may call.
 - **lasair's lost packages** ([lasair#93](https://github.com/abutlabs/lasair/issues/93)).
   A package can go Ready on JIP-2 and still expire before it is reported; the demo resends

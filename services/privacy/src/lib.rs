@@ -36,7 +36,7 @@ polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 declare_service!(Privacy);
 struct Privacy;
 
-/// circuits/transfer's verification key (bb 3.0.3, `--oracle_hash keccak`). A preimage later.
+/// circuits/transfer's verification key (bb 5.0.0, `write_vk -t evm`: zk, Keccak). A preimage later.
 const VK: &[u8] = include_bytes!("../fixtures/transfer.vk");
 
 const HASH_LEN: usize = 32;

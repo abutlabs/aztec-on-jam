@@ -26,6 +26,18 @@ STATE = Path(os.environ.get("CLIENT_STATE", HERE / "state.json"))
 DEPTH = 16
 P = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 ENV = dict(os.environ, PATH=f"{Path.home()}/.nargo/bin:{Path.home()}/.bb:{os.environ.get('PATH', '')}")
+# the pinned toolchain (docs/TOOLS.md; scripts/bootstrap.sh installs it), overridable
+NOIR_VERSION, BB_VERSION = "1.0.0-rc.5", "5.0.0"
+
+
+def _tool(env, versioned, plain):
+    if os.environ.get(env):
+        return os.environ[env]
+    return str(versioned) if versioned.exists() else plain
+
+
+NARGO = _tool("NARGO", Path.home() / ".nargo" / "versions" / f"nargo-{NOIR_VERSION}", "nargo")
+BB = _tool("BB", Path.home() / ".bb" / "versions" / f"bb-{BB_VERSION}", "bb")
 
 
 class ClientError(Exception):
@@ -50,7 +62,7 @@ def h(*vals):
     vals3 = list(vals) + [0] * (3 - len(vals))
     prover = CIRCUITS / "hash_cli" / "Prover.toml"
     prover.write_text(f'a = "{field(vals3[0])}"\nb = "{field(vals3[1])}"\nc = "{field(vals3[2])}"\nn = "{len(vals)}"\n')
-    out = subprocess.run(["nargo", "execute", "--silence-warnings"], cwd=CIRCUITS / "hash_cli",
+    out = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=CIRCUITS / "hash_cli",
                          capture_output=True, text=True, env=ENV)
     m = re.search(r"Circuit output: (0x[0-9a-fA-F]+)", out.stdout + out.stderr)
     if not m:
@@ -188,6 +200,23 @@ def pick(st, ref):
     return n
 
 
+def transfer_vk():
+    """The transfer circuit's verification key for bb's evm target (zk, Keccak), written once
+    per circuit build. The service embeds the same key (services/privacy/fixtures)."""
+    cdir = CIRCUITS / "transfer"; art = cdir / "target" / "transfer.json"; vdir = cdir / "target" / "vk"
+    if not art.exists():
+        r = subprocess.run([NARGO, "compile", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
+        if r.returncode != 0:
+            raise ClientError(f"nargo compile failed:\n{r.stdout}\n{r.stderr}")
+    vk = vdir / "vk"
+    if not vk.exists() or vk.stat().st_mtime < art.stat().st_mtime:
+        vdir.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run([BB, "write_vk", "-t", "evm", "-b", str(art), "-o", str(vdir)], capture_output=True, text=True, env=ENV)
+        if r.returncode != 0:
+            raise ClientError(f"bb write_vk failed:\n{r.stdout}\n{r.stderr}")
+    return vk
+
+
 def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
     """Prove a join-split; returns {"payload": bytes, "fields": [12 ints]} and records the
     client's view of the chain after it lands (inputs spent, outputs as leaves)."""
@@ -214,14 +243,15 @@ def transfer(sender, in_a, in_b, to, value, unshield, receiver, dest):
         toml_table("outs", toml_note_out(outs[0])), toml_table("outs", toml_note_out(outs[1])), ""])
     cdir = CIRCUITS / "transfer"
     (cdir / "Prover.toml").write_text(prover)
-    r = subprocess.run(["nargo", "execute", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
+    r = subprocess.run([NARGO, "execute", "--silence-warnings"], cwd=cdir, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
         raise ClientError(f"nargo execute failed:\n{r.stdout}\n{r.stderr}")
     pdir = cdir / "target" / "proof"; pdir.mkdir(parents=True, exist_ok=True)
     for f in ("proof", "public_inputs", "vk", "vk_hash"):
         (pdir / f).unlink(missing_ok=True)
-    r = subprocess.run(["bb", "prove", "-s", "ultra_honk", "--oracle_hash", "keccak", "-b", "target/transfer.json",
-                        "-w", "target/transfer.gz", "-o", "target/proof", "--write_vk"], cwd=cdir, capture_output=True, text=True, env=ENV)
+    vk = transfer_vk()
+    r = subprocess.run([BB, "prove", "-t", "evm", "-b", "target/transfer.json", "-w", "target/transfer.gz",
+                        "-k", str(vk), "-o", "target/proof"], cwd=cdir, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
         raise ClientError(f"bb prove failed:\n{r.stdout}\n{r.stderr}")
     pubs = (pdir / "public_inputs").read_bytes(); proof = (pdir / "proof").read_bytes()

@@ -13,7 +13,10 @@ use alloc::vec::Vec;
 
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
-use ultrahonk_no_std::{verify, ProofType};
+#[cfg(feature = "bb3")]
+use uh3::{verify, ProofType};
+#[cfg(all(feature = "bb5", not(feature = "bb3")))]
+use uh5::{verify, ProofType};
 
 // BN254 pairings overflow polkavm's default stack (zk-jam-service/spikes/groth16-gas).
 polkavm_derive::min_stack_size!(8 * 1024 * 1024);
@@ -21,12 +24,17 @@ polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 declare_service!(Spike);
 struct Spike;
 
-const PLAIN_PROOF: &[u8] = include_bytes!("../../circuit/target/plain/proof");
-const PLAIN_VK: &[u8] = include_bytes!("../../circuit/target/plain/vk");
-const PLAIN_PUBS: &[u8] = include_bytes!("../../circuit/target/plain/public_inputs");
-const ZK_PROOF: &[u8] = include_bytes!("../../circuit/target/zk/proof");
-const ZK_VK: &[u8] = include_bytes!("../../circuit/target/zk/vk");
-const ZK_PUBS: &[u8] = include_bytes!("../../circuit/target/zk/public_inputs");
+// artifacts/<bb>/<flavour>/: made by measure.sh with that bb version
+#[cfg(feature = "bb3")]
+macro_rules! art { ($f:literal) => { include_bytes!(concat!("../../artifacts/bb3/", $f)) }; }
+#[cfg(all(feature = "bb5", not(feature = "bb3")))]
+macro_rules! art { ($f:literal) => { include_bytes!(concat!("../../artifacts/bb5/", $f)) }; }
+const PLAIN_PROOF: &[u8] = art!("plain/proof");
+const PLAIN_VK: &[u8] = art!("plain/vk");
+const PLAIN_PUBS: &[u8] = art!("plain/public_inputs");
+const ZK_PROOF: &[u8] = art!("zk/proof");
+const ZK_VK: &[u8] = art!("zk/vk");
+const ZK_PUBS: &[u8] = art!("zk/public_inputs");
 
 fn pubs(bytes: &[u8]) -> Vec<[u8; 32]> {
     bytes.chunks_exact(32).map(|c| c.try_into().unwrap()).collect()
