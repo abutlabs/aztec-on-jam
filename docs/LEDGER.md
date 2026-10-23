@@ -762,3 +762,26 @@ Not yet: the demo's check on jb-pj6 since PolkaJam moved to GRANDPA (the head ch
 the final verification will run it.
 Issues: #17 (all but the upstream offer, next); #14 gets these numbers.
 Next: the upstream issue on jamixir/jamboree; then #14's table and the README; then #18.
+
+## 2026-10-23 24 — #17 closed: every net through jamboree, the offer upstream
+Did: the Docker nets now use the same tooling as the native ones. jamboree built for Linux
+(`scripts/jamboree-linux.sh`, rust:1.88-bookworm, rebuilt when ../jamboree moves) runs
+`jamboree rpc` in a container on the net, whose JIP-2 endpoint is not published to the host;
+the indexer has one backend (indexer/jip2.py reads; submissions through `jamboree rpc
+submit`, or lasair's builder with SUBMIT_VIA_BUILDER); `nets/ctl.sh` holds the head, read and
+submit both net scripts use. `nets/jamctl.py` and the indexer's jamswap backend are deleted:
+`git grep offchain` finds only the plan's history. Two things the switch exposed: `up` must
+wait for finality to leave genesis (jamswap's deploy.py had waited; `jamboree rpc` does not),
+and JIP-2 calls a landed package `Reported` where jamswap said `Ready`.
+The jamboree fork's README has lasair and mixed recipes (run as written: "same head on 6 nodes
+after 120s"), its tests pass (`cargo test --locked`: 31), and the offer is
+jamixir/jamboree#49 (the one public post the loop makes).
+Evidence:
+`NET=pj6 nets/demo.sh up` → ready in 1:05; `check` → PASS 1:51 (37); stages → "A holds 120,
+B holds 40 privately … B holds 0 privately, 80 publicly"; `node client/e2e/e2e.mjs` → PASS
+(mint 12.1 s, shield 23.9, send 11.2, unshield 11.8; 1:22); indexer: "submit via jamboree rpc".
+`NET=lasair6 nets/demo.sh up` → 1:43; `check` → PASS 3:38 (37), no resend.
+`scripts/bootstrap.sh --check` → "jamboree (Linux) for the Docker nets built ok".
+Issues: #17 closed; jamixir/jamboree#49 opened.
+Next: #14 (the comparison table), the README, #18 (the Aztec kernel spike), then the final
+verification on every net.
