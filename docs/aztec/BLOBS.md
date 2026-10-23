@@ -34,7 +34,7 @@ for #30, not taken.
 ## Measured (#37, ledger 36)
 
 Blobs travel as extrinsics, beside a package of a few hundred bytes. Refine checks each one
-(262M gas) and exports it as 32 segments (+117,483 gas for all 32). Gas sets the count: 3
+(262M gas) and exports it as 32 segments (+117,465 gas for all 32). Gas sets the count: 3
 blobs a tiny package (786M, 0.73 s on PolkaJam), 19 a full one. Batch-checked (one pairing
 for many, c-kzg's `verify_blob_kzg_proof_batch`), 122.3M fixed plus 140.9M a blob: **a
 checkpoint's 6 blobs fit one tiny package** (967,993,490 gas measured), 34 fit a full one, and
@@ -45,7 +45,8 @@ an epoch's 192 cost about 27.2B gas, 5.4 full packages, against 10.1 checked one
 - [x] **The export path, measured on PolkaJam** (above).
 - [x] **The import path:** a later package imports a blob's 32 segments by segments root and
   re-checks it (263,028,551 gas; about 27,000 a segment imported). Imports by work-package hash
-  are not reported on PolkaJam (#38); builders look the segments root up first
+  work only within 8 blocks of the export, the GP's recent-history window for segment-root
+  lookups (#38, measured). After that, builders import by segments root, looked up first
   (`jamboree rpc report`).
 - [x] **Batch verification**, measured above.
 - [x] **Blobs as extrinsics, not payloads** (measured above). JAM-NP limits the work-package message (CE-133,

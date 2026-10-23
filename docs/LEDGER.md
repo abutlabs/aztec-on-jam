@@ -1461,3 +1461,17 @@ For #34: jip-draft.md's Poseidon2 motivation ("without it, every tree update mus
 and applied in order, one package a slot") is now wrong. The final corrects it.
 Issues: #43 closed.
 Next: #38's control run; #33's cross-responses when the reviews land.
+
+## 2026-10-23 55 — #38 closed: imports by package hash follow the GP's 8-block recent history; PolkaJam is right
+Why this issue: it needed only the testnet, free between #43 and #33's cross-responses.
+Did: `spikes/kzg-gas/tagged-import.sh` exports a blob's 32 segments, imports them by package
+hash at once, again after 11 slots, and by segments root after the same wait. The JIP-3
+telemetry names the failure. kzg-gas's RESULTS and BLOBS.md record the cause and the rule
+for builders. The export overhead is corrected to 117,465 at the current code.
+Evidence: package 21 (by hash, 1 slot after) was reported with verdict 01 from 3 refines.
+Package 22 (by hash, 13 slots after) got "Not reported in time", with both secondaries logging
+`WorkPackageFailed { reason: "Segment-root lookup is invalid" }`. Package 23 (by root) was
+reported with 01. GP 0.8.0 `reporting_assurance.tex:401-423` and H = 8
+(`definitions.tex:269`).
+Issues: #38 closed.
+Next: #33's cross-responses (Gavin Wood's review is in; Zac Williamson's is pending).

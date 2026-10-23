@@ -91,13 +91,31 @@ segments re-checked:
 |---|---|---|---|
 | imported by segments root (from the exporter's report, `jamboree rpc report`) | 263,028,551 | 0.251 s, 3 guarantors | 01 |
 | the same, a wrong proof | 263,028,551 | 0.250 s, 3 guarantors | 00 |
-| imported by work-package hash (the tagged form) | 263,028,551 | 0.244 s, the primary only | not reported (#38) |
+| imported by work-package hash (the tagged form), 11 slots after the export | 263,028,551 | 0.244 s, the primary only | not reported (#38, below) |
+
+**Why the tagged form failed (#38).** `tagged-import.sh` imports the same 32 segments by
+package hash right after the export (package 21), by package hash again 11 slots later (22), and
+by segments root after the same wait (23):
+
+| package | imports | anchor slot (exporter's 9509450) | refines | outcome |
+|---|---|---|---|---|
+| 21 | by package hash, at once | 9509451 | 3 | reported at 9509453, verdict 01 |
+| 22 | by package hash, after 11 slots | 9509463 | 1 | "Not reported in time" |
+| 23 | by segments root, after 11 slots | 9509470 | 3 | reported at 9509472, verdict 01 |
+
+For 22, both secondaries log `WorkPackageFailed { reason: "Segment-root lookup is invalid" }`
+(JIP-3) and drop the primary's share. The primary then fails: "Not enough signatures from
+secondary guarantors". This is the GP's rule, not a fault: a report's segment-root lookup may
+name only packages in the recent history (`reporting_assurance.tex:401-423`), the last H = 8
+blocks (`definitions.tex:269`). The primary alone resolves the older mapping, from its own
+store. **So a builder imports by package hash only within 8 blocks of the export, and by
+segments root after that.** Segments stay in the DA for 28 days either way.
 
 Importing 32 segments adds about 0.87M gas over the same check from an extrinsic (27,000 a
 segment). By segments root, the round trip works: a blob checked and exported by one
 package, kept in the DA, is read back and re-checked by another.
 
-Exporting 32 segments adds 117,483 gas (about 3,700 a segment): binding a blob costs the
+Exporting 32 segments adds 117,465 gas (about 3,700 a segment): binding a blob costs the
 check, not the export. Per package, gas is the limit, not size: three blobs fit a tiny
 package's 1e9 and four run out, so a full package (5e9) holds 19.
 
