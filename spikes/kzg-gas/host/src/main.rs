@@ -1,0 +1,43 @@
+//! kzg-host <vectors dir>: every c-kzg-4844 verify_kzg_proof vector (ckzg/*.yaml: output true,
+//! false, or null for an input that must be refused) and geth's pointEvaluation.json vector.
+use std::{env, fs};
+
+fn hex<const N: usize>(s: &str) -> Option<[u8; N]> {
+    let s = s.trim().trim_matches('\'').trim_start_matches("0x");
+    if s.len() != 2 * N { return None; }
+    let mut out = [0u8; N];
+    for i in 0..N { out[i] = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()?; }
+    Some(out)
+}
+
+fn field<'a>(y: &'a str, k: &str) -> &'a str {
+    y.lines().find_map(|l| l.trim().strip_prefix(&format!("{k}: "))).unwrap_or("")
+}
+
+fn main() {
+    let dir = env::args().nth(1).expect("usage: kzg-host <vectors dir>");
+    let (mut pass, mut fail) = (0, 0);
+    let mut names: Vec<_> = fs::read_dir(format!("{dir}/ckzg")).unwrap().map(|e| e.unwrap().path()).collect();
+    names.sort();
+    for p in names {
+        let y = fs::read_to_string(&p).unwrap();
+        let want = field(&y, "output");
+        // a field of the wrong length counts as refused input, as c-kzg's bindings do
+        let got = match (hex::<48>(field(&y, "commitment")), hex::<32>(field(&y, "z")), hex::<32>(field(&y, "y")), hex::<48>(field(&y, "proof"))) {
+            (Some(c), Some(z), Some(v), Some(pi)) => match kzg_verify::verify_kzg_proof(&c, &z, &v, &pi) {
+                Ok(true) => "true", Ok(false) => "false", Err(_) => "null",
+            },
+            _ => "null",
+        };
+        if got == want { pass += 1 } else { fail += 1; println!("MISMATCH {}: want {want}, got {got}", p.display()) }
+    }
+    let g = fs::read_to_string(format!("{dir}/geth-pointEvaluation.json")).unwrap();
+    let input = g.split("\"Input\": \"").nth(1).unwrap().split('"').next().unwrap();
+    let bytes: Vec<u8> = (0..input.len() / 2).map(|i| u8::from_str_radix(&input[2 * i..2 * i + 2], 16).unwrap()).collect();
+    let geth = kzg_verify::point_evaluation(&bytes);
+    let mut bad = bytes.clone(); bad[70] ^= 1; // y altered
+    let geth_bad = kzg_verify::point_evaluation(&bad);
+    println!("c-kzg verify_kzg_proof vectors: {pass} agree, {fail} differ");
+    println!("geth pointEvaluation1: {geth:?}; with y altered: {geth_bad:?}");
+    if fail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
+}

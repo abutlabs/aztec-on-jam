@@ -1,0 +1,11 @@
+[package]
+name = "kzg-host"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Checks kzg-verify against c-kzg-4844's verify_kzg_proof vectors and geth's point-evaluation vector"
+
+[dependencies]
+kzg-verify = { path = "../kzg" }
+
+[workspace]

@@ -5,18 +5,16 @@
 #   1. Synthetic circuits of 2^LOGS (default 12 14 16 18 20 22) with 113 public inputs, proved
 #      as Aztec proves the root rollup (Noir 1.0.0-rc.3 and bb 6.0.0, Aztec v6's pins); each
 #      checked by `bb verify` and by host/ (our verifier, ported to bb 6.0.0) before use.
-#   2. One six-validator PolkaJam testnet (v0.8.0, dummy finality), service/ deployed with
-#      `jamboree rpc`, each proof submitted in its own package. PolkaJam's JIP-3 `Refined` events
+#   2. One six-validator PolkaJam testnet (spikes/lib/polkajam.sh), service/ deployed, each
+#      proof submitted in its own package. PolkaJam's JIP-3 `Refined` events
 #      (its jam-telemetry-dumper) give refine's gas and time; accumulate stores each verdict,
 #      read back with `jamboree rpc read`. Plus one proof with a public input altered.
 # Writes out/; prints a table.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); SUB=$(cd "$HERE/../../.." && pwd); O=$HERE/out; mkdir -p "$O"
+HERE=$(cd "$(dirname "$0")" && pwd); O=$HERE/out; mkdir -p "$O"
+. "$HERE/../lib/polkajam.sh"
 NARGO=$HOME/.nargo/versions/nargo-1.0.0-rc.3; BB=$HOME/.bb/versions/bb-6.0.0
 BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build
-JB=${JAMBOREE:-$SUB/jamboree/target/release/jamboree}
-case "$(uname -s)-$(uname -m)" in Darwin-arm64) PJP=macos-aarch64 ;; Linux-aarch64) PJP=linux-aarch64 ;; *) PJP=linux-x86_64 ;; esac
-PJD=$HOME/.cache/jam-privacy/polkajam-v0.8.0/polkajam-v0.8.0-$PJP
 LOGS=${LOGS:-12 14 16 18 20 22}; NPUBS=113
 
 echo "== 1. proofs (nargo $("$NARGO" --version | head -1 | awk '{print $4}'), bb $("$BB" --version))"
@@ -68,31 +66,15 @@ PY
 
 echo "== 2. on a PolkaJam testnet ($("$PJD/polkajam" --version | head -1))"
 BLOB=$("$BUILD" "$HERE/service" --out "$O" | awk '{print $1}')
-W=$(mktemp -d)
-cleanup() { pkill -f "$PJD/polkajam" 2>/dev/null || true; pkill -f "$PJD/jam-telemetry-dumper" 2>/dev/null || true; }
-trap cleanup EXIT
-"$PJD/polkajam" --chain dev dump-spec "$W/spec.json" > /dev/null
-"$PJD/jam-telemetry-dumper" --port 19900 > "$O/telemetry.log" 2>&1 &
-(cd "$W" && "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode dummy > "$O/testnet.log" 2>&1 &)
-rpc() { "$JB" rpc --url ws://127.0.0.1:19800 --chain-spec "$W/spec.json" "$@"; }
-for _ in $(seq 1 150); do rpc head 2>/dev/null | grep -q "finalized [1-9]" && break; sleep 2; done
-rpc deploy "$BLOB" --state "$W/svc.json" 2>&1 | tail -1
-SID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['service_id'])" "$W/svc.json")
-# one package at a time: the Refined events logged while it is in flight are its guarantors'
-send() { # <tag> <hex file>
-  local from; from=$(wc -l < "$O/telemetry.log")
-  rpc submit "$SID" "0x$(cat "$2")" --wait --timeout 180 > "$O/submit-$1.json" 2>&1 || echo "  $1: submit: $(tail -1 "$O/submit-$1.json")"
-  sleep 4
-  tail -n +"$((from + 1))" "$O/telemetry.log" | grep "Refined {" > "$O/refined-$1.log" || true
-}
-for k in $LOGS; do payload "$O/c$k" "$k" > "$W/p$k.hex"; send "$k" "$W/p$k.hex"; done
+pj_start "$O"
+pj_deploy "$BLOB"
+for k in $LOGS; do payload "$O/c$k" "$k" > "$O/p$k.hex"; pj_send "$k" "$O/p$k.hex"; done
 last=$(echo $LOGS | awk '{print $NF}')
-payload "$O/c$last" 99 tamper > "$W/bad.hex"; send 99 "$W/bad.hex"
+payload "$O/c$last" 99 tamper > "$O/bad.hex"; pj_send 99 "$O/bad.hex"
 sleep 12
-verdict() { rpc read "$SID" "0x763a$(printf '%02x' "$1")" 2>/dev/null | tail -1; }
-for k in $LOGS 99; do echo "$k $(verdict "$k")"; done > "$O/verdicts.txt"
+for k in $LOGS 99; do echo "$k $(pj_read "763a$(printf '%02x' "$k")")"; done > "$O/verdicts.txt"
 
-python3 - "$O" "$LOGS" "$(uname -sm)" "$(grep -m1 -o 'PVM backend: [a-z]*' "$O/testnet.log" | sed 's/PVM backend: //')" <<'PY'
+python3 - "$O" "$LOGS" "$(uname -sm)" "$(pj_backend)" <<'PY'
 import re, statistics as st, sys
 out, logs, host, backend = sys.argv[1:]
 verdicts = dict(l.split(maxsplit=1) for l in open(f"{out}/verdicts.txt").read().splitlines() if " " in l)

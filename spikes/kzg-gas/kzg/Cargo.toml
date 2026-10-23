@@ -1,0 +1,10 @@
+[package]
+name = "kzg-verify"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "EIP-4844's KZG point evaluation (the 0x0a precompile) in no_std Rust, on zkcrypto's bls12_381, for the PVM"
+
+[dependencies]
+bls12_381 = { version = "0.8", default-features = false, features = ["groups", "pairings", "alloc"] }
+sha2 = { version = "0.10", default-features = false }

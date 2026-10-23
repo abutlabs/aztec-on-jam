@@ -1016,3 +1016,27 @@ Evidence: `spikes/epoch-proof/measure.sh` → refine gas 153,250,436 (2^12), 155
 - **The loop.** `docs/RALPH.md` Phase 3: what closes each issue, and the rules (PolkaJam;
   simulated personas; nothing submitted).
 Next: the loop reviews the open issues and starts by dependency order.
+
+## 2026-10-23 32 — #24: EIP-4844's point evaluation costs refine 199,469,377 gas on PolkaJam
+Why this issue: it is first in dependency order. Its numbers feed #31 (whether JAM's lack of
+native cryptography is a real limit), #26 (the settlement service) and #29 (lessons), and it
+depends on nothing open.
+Did: `spikes/kzg-gas`. c-kzg-4844's `verify_kzg_proof` plus the 0x0a precompile's
+versioned-hash check, in no_std Rust on zkcrypto's bls12_381 0.8, with Ethereum's [s]G2.
+Checked on the host against 122 c-kzg vectors and geth's precompile vector (pinned commits
+a751e2d and 2006f08), then measured in refine on a PolkaJam testnet. `spikes/lib/polkajam.sh`
+is now shared by both spikes and waits for the nodes to be connected, not just finalized: one
+run's deploy was refused at "0 peers". The epoch-proof spike was rerun through it with
+identical gas.
+Evidence: `spikes/kzg-gas/measure.sh` → "c-kzg verify_kzg_proof vectors: 122 agree, 0
+differ"; geth Ok(true), y altered Ok(false); on PolkaJam every case 199,469,377 gas (19.9%
+of a tiny package, 4.0% of a full one), 0.19 s, verdicts 01 for the four valid and 00 for the
+two invalid. `spikes/epoch-proof/measure.sh` → 153,250,436 … 166,433,017, as in ledger 31.
+Beside Ethereum: the precompile's fixed 50,000 gas is about 0.1% of a block; here 4% of a
+full package (#31).
+Also: Aodh found Aztec asking the community for Noir verifiers on other chains, including
+Polkadot (x.com/aztecnetwork/status/1641394426005315587; not opened from here). Noted on #35
+and #22 as a lead.
+Next: #24's second half, `verify_blob_kzg_proof` per blob (binding the data to its
+commitment, which Ethereum's consensus does for free), and where blob data lives on JAM.
+Blockers: none.
