@@ -458,3 +458,49 @@ Python, Docker present, the sibling checkouts, jam080-build and lasair's demo_de
 then `docs/TOOLS.md` generated from the same pins; run it here, and in a clean Linux
 container for everything but Docker.
 Blockers: none. Net, indexer and wallet left running.
+
+## 2026-10-23 13 — #12: one script installs the pinned toolchain
+Did: `scripts/bootstrap.sh`: the pins live at its top and nowhere else; it checks and
+installs Rust (stable + nightly-2025-05-10 with rust-src for jam080-build), Noir rc.5 and
+bb 5.0.0 into the versioned paths, checks Node 20+, Python 3.11+, openssl, Docker and
+Chrome, clones `../jamswap` and `../demo-wallet` (on `jam`), builds jam080-build, compiles
+both circuits, builds both services, installs puppeteer-core and pulls the lasair image.
+`--check` reports only; `--rig` adds lasair's in-process rig (OCaml 5.4.0 via opam, the FFI
+crates, demo_deploy; abutlabs/lasair is private, and only check.sh and the spike use it);
+`--tools-md` generates `docs/TOOLS.md`. The README's prerequisites point at it. Ran it here
+and in a clean `node:22-bookworm` container (Linux aarch64) that clones this repo from GitHub.
+Evidence: this Mac → 20 rows `ok`, `Ready`, 3.9 s; `--rig` → `lasair rig  OCaml 5.4.0  built ok`.
+Clean Linux container (`scripts/bootstrap.sh`, from nothing, 2 min 55 s):
+```
+TOOL                     WANTED                     FOUND                              STATUS
+curl                     any                        /usr/bin/curl                      ok
+git                      any                        /usr/bin/git                       ok
+rust                     stable                     1.99.1                             ok
+rust nightly             nightly-2025-05-10         present                            ok
+nargo                    1.0.0-rc.5                 1.0.0-rc.5                         ok
+bb                       5.0.0                      5.0.0                              ok
+node                     >= 20                      v22.23.4                           ok
+python3                  >= 3.11                    3.11.2                             ok
+openssl                  any                        present                            ok
+docker                   daemon running             missing                            missing
+chrome                   any (the e2e run only)     missing; set CHROME=               optional
+../jamswap               checkout                   44213a7                            ok
+../demo-wallet           jam branch                 8f9c22b                            ok
+jam080-build             jamswap tools/jam080       built                              ok
+circuit transfer         compiles                   ok                                 ok
+circuit hash_cli         compiles                   ok                                 ok
+service public-balance   builds                     13702 bytes                        ok
+service privacy          builds                     1015546 bytes                      ok
+puppeteer-core           25.16.0                    25.16.0                            ok
+
+1 missing. Install the rest by hand (see docs/TOOLS.md), then run this again.
+```
+Docker cannot run inside the container; Chrome is optional (the e2e run only). Noted: the
+privacy blob is 1,015,546 bytes on Linux and 1,015,513 on the Mac, so the build is not yet
+byte-reproducible across machines (jamswap found Cargo hashes absolute paths); a polish item.
+Issues: #12 closed.
+Next: #4: the demo on the PolkaJam-only net. `nets/pj6.sh` as the counterpart of
+`nets/lasair6.sh` over jamswap's `nets/compose/pj6.yml` (or its `./dex up NET=pj6`), and a
+`NET=` switch in `nets/demo.sh` so up, check and the stages run on lasair6 or pj6; run
+`check` on pj6. The hour's soak comes after.
+Blockers: none.

@@ -16,10 +16,16 @@ Aztec](https://abutlabs.github.io/the-gray-tutor/jam-beside-aztec). How it got h
 
 ## Demo
 
-You need Docker (running), Rust, Python 3, Node, Noir `1.0.0-rc.5` and bb `5.0.0`
-(install lines in [docs/TOOLS.md](docs/TOOLS.md)), and these sibling checkouts:
-`../jamswap` (the testnet compose files and JIP-2 tooling), `../lasair` and
-`../demo-wallet` on its `jam` branch. One word a stage:
+You need Docker (running), Rust, Python 3.11+, Node 20+ and git. Everything else, at the
+pinned versions ([docs/TOOLS.md](docs/TOOLS.md)), comes from one script, which also clones
+the two sibling checkouts it needs (`../jamswap` for the testnet, `../demo-wallet` for the
+wallet page) and builds the circuits and both services:
+
+```sh
+scripts/bootstrap.sh    # check and install; --check only reports
+```
+
+Then, one word a stage:
 
 ```sh
 nets/demo.sh up         # six lasair validators, both services deployed, the indexer and the wallet
