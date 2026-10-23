@@ -49,8 +49,7 @@ same runner, and `pricing.py` on both:
 
 The single recovery's refine is mostly the package's fixed cost: 33 recoveries take 1.9 ms
 each. Leaving it out, **R ≈ 7–8 gas/ns and f ≈ 4.7–9.4**. Earlier estimates from #14's
-UltraHonk timings (R 7–21, f 3.5–10) bracketed this. The KZG row's gas differs from the local
-199,453,527 by the median vector's input.
+UltraHonk timings (R 7–21, f 3.5–10) bracketed this. The KZG row's gas is the current build's; until ledger 52 the docs quoted 199,473,075, from an earlier build of the kzg service.
 
 Native times on the same runner, one thread, median of 25:
 

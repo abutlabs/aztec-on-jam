@@ -45,8 +45,8 @@ of a block's budget, not numbers. The precompile charges a fixed 50,000 gas (EIP
 a full package's refine budget, or 20% of a tiny one. Ethereum prices this check as a native
 operation; on JAM it is interpreted PVM code (#31).
 
-**With the epoch proof.** The epoch proof (about 169M at 2^24, #23) plus this check comes to
-about 369M gas: 7.4% of a full package, or 37% of a tiny one, once per epoch.
+**With the epoch proof.** The epoch proof (180,791,299 at 2^24, #23) plus this check comes to
+about 380M gas: 7.6% of a full package, or 38% of a tiny one, once per epoch.
 
 **Per blob, on JAM.** On Ethereum, consensus checks each blob against its commitment before
 any contract sees it. On JAM a service would do that itself, at 262M gas a blob. An Aztec

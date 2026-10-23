@@ -66,7 +66,7 @@ attestations.
   Then advance `tip:proven`, write `outbox:<epoch>`, and pay fees by deferred transfer.
 
 Gas per package, against a tiny package's 1e9 of refine: a checkpoint is about 968M plus its
-signature checks; an epoch proof is about 369M plus its attestations. Each fits one package.
+signature checks; an epoch proof is about 380M plus its attestations (433M), 813M in all (`spikes/ecdsa-gas/RESULTS.md`). Each fits one package.
 A full package (5e9) holds either with room to spare.
 
 ## Values Ethereum supplies, and JAM's answers
