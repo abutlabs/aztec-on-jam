@@ -5,10 +5,11 @@
 //!
 //! Work-item payload: `[pubs_len: u16 LE][pubs: pubs_len bytes, 32 each][proof: the rest]`.
 //! Refine output: `[1][pubs]` when the proof verifies, `[0]` otherwise.
-//! Public inputs, in circuit order (circuits/transfer_stub): old note root, old nullifier
-//! root, new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1,
+//! Public inputs, in circuit order (circuits/transfer): old note root, old nullifier root,
+//! new note root, new nullifier root, nullifier 0, nullifier 1, note hash 0, note hash 1,
 //! unshield amount (0 = none), unshield receiver (a public-balance account), unshield
-//! destination (the public-balance service id). Fields are 32-byte big-endian.
+//! destination (the public-balance service id), deposit amount (0 = none; else nullifier 0
+//! is a shield's commitment and `dep:<it>` must hold this amount). Fields are 32-byte BE.
 //!
 //! Shield: a deferred transfer from the public-balance service arrives as a Transfer item
 //! with `memo = note commitment (32) ++ "jam" ++ zeros`; accumulate records
@@ -23,7 +24,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage, transfer};
+use jam_pvm_common::accumulate::{accumulate_items, get_storage, remove_storage, set_storage, transfer};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::{declare_service, Service};
 use service_util::{be_u64, key, le_u64};
@@ -35,11 +36,11 @@ polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 declare_service!(Privacy);
 struct Privacy;
 
-/// The transfer circuit's verification key (bb 3.0.3, `--oracle_hash keccak`). A preimage later.
-const VK: &[u8] = include_bytes!("../fixtures/transfer_stub.vk");
+/// circuits/transfer's verification key (bb 3.0.3, `--oracle_hash keccak`). A preimage later.
+const VK: &[u8] = include_bytes!("../fixtures/transfer.vk");
 
 const HASH_LEN: usize = 32;
-const N_PUBS: usize = 11;
+const N_PUBS: usize = 12;
 const OLD_NOTE_ROOT: usize = 0;
 const OLD_NULL_ROOT: usize = 1;
 const NEW_NOTE_ROOT: usize = 2;
@@ -49,11 +50,13 @@ const NOTE_HASHES: core::ops::Range<usize> = 6..8;
 const UNSHIELD_AMOUNT: usize = 8;
 const UNSHIELD_RECEIVER: usize = 9;
 const UNSHIELD_DEST: usize = 10;
+const DEPOSIT_AMOUNT: usize = 11;
 const UNSHIELD_GAS: UnsignedGas = 100_000;
 
 const KEY_NOTE_ROOT: &[u8] = b"root:note";
 const KEY_NULL_ROOT: &[u8] = b"root:null";
 const KEY_TRANSFERS: &[u8] = b"transfers";
+const KEY_LEAVES: &[u8] = b"leaves";
 const KEY_SHIELDED: &[u8] = b"shielded";
 const KEY_UNSHIELDED: &[u8] = b"unshielded";
 
@@ -129,12 +132,27 @@ impl Service for Privacy {
             if pubs[NULLIFIERS].iter().any(|nf| get_storage(&key(b"nf:", nf)).is_some()) {
                 continue; // a spent note: double spend
             }
+            // a deposit claim: nullifier 0 is the shield's commitment, and the shield must
+            // have brought exactly the amount the proof says
+            let deposit = be_u64(pubs[DEPOSIT_AMOUNT]);
+            if deposit > 0 {
+                let dep_key = key(b"dep:", pubs[NULLIFIERS.start]);
+                match get_storage(&dep_key) {
+                    Some(v) if le_u64(&v) == deposit => { remove_storage(&dep_key); }
+                    _ => continue, // no such deposit, or not that amount
+                }
+            }
             for nf in &pubs[NULLIFIERS] {
                 set_storage(&key(b"nf:", nf), &[1u8]).ok();
             }
+            // the tree's leaves in order, so a client can rebuild the tree from the chain
+            let mut leaves = get_storage(KEY_LEAVES).map(|v| le_u64(&v)).unwrap_or(0);
             for nh in &pubs[NOTE_HASHES] {
                 set_storage(&key(b"nh:", nh), &[1u8]).ok(); // the encrypted note goes here later
+                set_storage(&key(b"leaf:", &leaves.to_le_bytes()), nh).ok();
+                leaves += 1;
             }
+            set_storage(KEY_LEAVES, &leaves.to_le_bytes()).ok();
             set_storage(KEY_NOTE_ROOT, pubs[NEW_NOTE_ROOT]).ok();
             set_storage(KEY_NULL_ROOT, pubs[NEW_NULL_ROOT]).ok();
             let n = get_storage(KEY_TRANSFERS).map(|v| le_u64(&v)).unwrap_or(0);

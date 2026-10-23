@@ -56,6 +56,12 @@ package is dropped.
 
 ## Step 2: the circuits (`aztec-packages` at v6.0.0)
 
+**Done differently, 2026-10-23 (#7, #18):** a transfer circuit of our own in Noir
+(`circuits/transfer`, Poseidon2, Aztec's note and nullifier shapes, depth-16 tree, deposit
+claims, unshield), proven by `client/privacy.py`, running on lasair6 with `nets/demo.sh
+check` passing. Aztec's kernels and Aztec.nr are not used yet; the plan below is the way
+back to them and stays open.
+
 Keep the private kernels (init, inner, reset, tail) and Aztec.nr unchanged. Add a tail
 variant that drops the L1-to-L2 and L2-to-L1 message fields and anchors to the service's
 block header (the JAM lookup anchor stands in for Aztec's archive). Keep tx-base-private

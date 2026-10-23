@@ -31,9 +31,11 @@ All four sit under `Aiden/submodules/`. Aztec's code is Apache-2.0; so is this.
 
 ## Status
 
-Step 0 done: one UltraHonk verification in `refine` costs **312,279,376 gas** (zk) or
-302,381,955 (plain) on lasair's GP 0.8.0 PVM, 1.26 times Groth16, under a tiny package's
-1 billion; bad proofs are rejected at 12.8M. Verifier: zkVerify `ultrahonk-no-std`, pure
-Rust, built with `jam080-build`. Toolchain pinned to Noir 1.0.0-beta.16 and bb 3.0.3
-(`docs/TOOLS.md`). The service's refine still rejects everything; step 1 is next.
-Numbers and history: issue #13.
+Steps 0 to 2 done on a live six-validator lasair net: `nets/demo.sh check` passes. A shields
+100 (a deferred transfer carrying the note commitment), proves a Poseidon2 join-split that
+claims the deposit and pays B 40 privately, B proves a spend that unshields 40 back to the
+public side (a deferred transfer the other way), and a replay is dropped. Every value is
+read back over JIP-2 byte for byte. The circuit is ours (`circuits/transfer`), not yet
+Aztec's kernels (#18); the client is `client/privacy.py`, not yet the PXE. Numbers: one
+UltraHonk verification in refine costs 312,279,376 gas (zk, the spike; #13). Toolchain
+pinned in `docs/TOOLS.md`. What is next: `docs/LEDGER.md`, last entry.

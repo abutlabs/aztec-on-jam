@@ -108,3 +108,39 @@ the two note hashes, the new nullifier root is the old plus the two nullifiers. 
 prover-side script (`client/`) that builds the witness from a local note set so A can
 really pay B, and demo.sh check reads B's private balance from the notes.
 Blockers: none. The net is left running (services 3 and 4).
+
+## 2026-10-23 5 — step 2: the real transfer circuit, proven and paid on lasair6
+Did: `circuits/transfer` (Noir beta.16, Poseidon2 from noir-lang/poseidon v0.2.6; v0.3+
+needs a newer compiler): join-split of two notes in and two out, Merkle membership of spent
+notes in a depth-16 append-only tree, nullifier = H(note hash, owner sk), owner pk = H(sk),
+note hash = H(pk, value, blinding), balance in = out + unshield, the two new leaves inserted
+into an empty slot proven under the old root, a deposit claim (input 0 may be a shield
+deposit: its nullifier is the commitment and the proof returns the amount), the nullifier
+"root" a running hash. Twelve public inputs: two params, ten returned by the circuit, so
+the prover never states a root it did not compute. `circuits/hash_cli` is the client's
+hash oracle (the circuit's own Poseidon2). `client/privacy.py` (stdlib Python driving
+nargo and bb): keys from names, deposit notes, the tree with zero hashes, witnesses,
+proofs, payloads, and `sync` from the chain's `leaves` and `leaf:<i>` keys, which the
+service now writes. The service checks `dep:<nullifier 0>` holds the proof's deposit
+amount and removes it. The stub circuit is deleted (#16). Dummy inputs take the sender's
+key and a fresh blinding so their nullifiers never repeat (found when tx2 reused tx1's).
+Evidence: `client/privacy.py transfer …` builds a proof in about 2.7 s on this laptop.
+`services/privacy/check.sh` → `PASS: 6 assertions`; refine of the real proof
+`gas used : 182188752 steps: 59325612`. `nets/demo.sh check` on lasair6 (public-balance 3,
+privacy 5) → `PASS` in 2 min 05 s, twice in a row on the same chain (the second run
+synced 2 leaves and inserted at 2 and 3): mint → `bal:A = 100`; shield → `bal:A = 0`,
+`dep:C = 100`; tx1 (claim, pay B 40, keep 60) → `dep:C = (none)`, `root:note` and
+`root:null` equal the proof's returned roots, both nullifiers and both leaves recorded,
+`transfers` +1; tx2 (B spends 40, unshields 40 to account 2 on service 3) → root moves,
+`unshielded` +40, `bal:B` +40; replay of tx2 → `transfers` and `bal:B` unchanged.
+Client view after: A holds 60 privately; B's notes are spent.
+Issues: #7 (closed), #16 (superseded, closed), #18 (decision: the circuit's
+simplifications), #13 (run 3), #10, #17 (Aodh: testnet plumbing, jamboree assessed).
+Next: step 3 (#8): the pieces around the chain. Not the aztec-node fork yet: first make
+`nets/demo.sh up` work from a clean machine state in one command (start, deploy, record
+ids) and time it, then an indexer (a long-running reader of `leaves`, `leaf:<i>`,
+`nf:`, roots over JIP-2 serving HTTP to the wallet), then the wallet (#9) as a small web
+page over the client (the demo-wallet fork needs the Aztec PXE, which this circuit does not
+speak; decision to record). Also: the privacy blob is 1.2 MB against the spike's 264 KB
+with the same verifier (look into it), and the refine gas of the real proof vs the spike.
+Blockers: none. The net is left running.
