@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The indexer: follows the privacy and public-balance services over JIP-2 and serves what
 the client and the wallet need over HTTP. Stdlib Python on jamswap's offchain modules; runs
-in a container on the net (nets/lasair6.sh indexer).
+in a container on the net (nets/net.sh indexer).
 
   GET  /head                      best and finalized slot
   GET  /state                     roots, leaf count, leaves, transfers, shielded, unshielded

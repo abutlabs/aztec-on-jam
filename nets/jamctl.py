@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Talk to a JAM service over JIP-2 with jamswap's offchain modules (stdlib only).
-Runs inside a container on the net (nets/lasair6.sh wraps it).
+Runs inside a container on the net (nets/net.sh wraps it).
 
   jamctl.py submit <service_id> <payload-hex>     one work-item in its own package; waits
                                                    until the package is Ready or Failed
