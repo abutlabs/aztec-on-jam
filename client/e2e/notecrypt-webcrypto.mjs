@@ -16,30 +16,19 @@ async function x25519Keys(skHex) {
   return c.subtle.importKey("pkcs8", pkcs8, { name: "X25519" }, false, ["deriveBits"]);
 }
 
-async function keysFor(priv, epk) {
+async function aesKey(priv, epk) {
   const pub = await c.subtle.importKey("raw", epk, { name: "X25519" }, false, []);
   const secret = new Uint8Array(await c.subtle.deriveBits({ name: "X25519", public: pub }, priv, 256));
-  const hk = await c.subtle.importKey("raw", secret, "HKDF", false, ["deriveBits"]);
-  return new Uint8Array(await c.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: epk, info: INFO }, hk, 512));
-}
-
-async function keystream(key, n) {
-  const out = new Uint8Array(Math.ceil(n / 32) * 32);
-  for (let i = 0; i * 32 < n; i++) {
-    const ctr = new Uint8Array(4); new DataView(ctr.buffer).setUint32(0, i);
-    out.set(new Uint8Array(await c.subtle.digest("SHA-256", Uint8Array.from([...key, ...ctr]))), i * 32);
-  }
-  return out.slice(0, n);
+  const hk = await c.subtle.importKey("raw", secret, "HKDF", false, ["deriveKey"]);
+  return c.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: epk, info: INFO }, hk, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
 }
 
 async function open(priv, sealed) {
-  const epk = sealed.slice(0, 32), ct = sealed.slice(32, -16), tag = sealed.slice(-16);
-  const keys = await keysFor(priv, epk);
-  const mk = await c.subtle.importKey("raw", keys.slice(32), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = new Uint8Array(await c.subtle.sign("HMAC", mk, Uint8Array.from([...epk, ...ct]))).slice(0, 16);
-  if (Buffer.compare(Buffer.from(mac), Buffer.from(tag)) !== 0) return null;
-  const ks = await keystream(keys.slice(0, 32), ct.length);
-  return ct.map((b, i) => b ^ ks[i]);
+  const epk = sealed.slice(0, 32);
+  try {
+    const key = await aesKey(priv, epk);
+    return new Uint8Array(await c.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(12), additionalData: epk, tagLength: 128 }, key, sealed.slice(32)));
+  } catch { return null; }
 }
 
 const [skHex, pkHex, sealedHex] = py(`sk, pk = n.keypair(b"B" * 32)\ns = n.seal(pk, n.note_plaintext(40, 777))\nprint(sk.hex(), pk.hex(), s.hex())`).split(" ");
