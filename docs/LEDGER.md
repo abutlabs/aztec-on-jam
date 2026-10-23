@@ -1429,3 +1429,17 @@ tiny (999,999,97x); 4 with the 4th altered 519,006,957 (00). CI: KZG R 7.9, f 6.
 ×33 R 6.9, f 9.4; Poseidon2 ×100 R 7.0, f 4.7.
 Issues: #30, #42, #32 closed; #43 filed.
 Next: #22's invalid-inner fixtures with the unchecked bb; then #33's reviews.
+
+## 2026-10-23 53 — #22 closed: the bb 6.0.0 verifier passes all its tests, invalid-inner fixtures included
+Why this issue: the unchecked bb built in 52, and #22 needed only these fixtures.
+Did: `generate_test_fixtures.sh` (ultrahonk_verifier) makes the invalid-inner proofs with
+`BB_UNCHECKED` (`build_bb_unchecked.sh`) and checks that stock bb rejects them. Every fixture
+was regenerated with bb 6.0.0 and nargo rc.3 from aztec-packages v6.0.0. `bb-v6` is pushed at
+ae599d3, to abutlabs's fork only.
+Evidence: `cargo test --release` → 49 passed, 0 failed, plus 1 doc test. Both invalid-inner cases
+fail at "Shplemini pairing check failed". Stock bb rejects both proofs.
+Pins: the services stay on 2ae44db. ae599d3 changes no verifier source (`git diff 2ae44db
+ae599d3 -- src Cargo.toml` is empty), and a rebuild at the new rev gives a blob 7 bytes shorter,
+which would leave the gas measured at 2ae44db (#23, #26, #30) unmatched to the code.
+Issues: #22 closed.
+Next: #33, the simulated reviews of the JIP.
