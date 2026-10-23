@@ -63,7 +63,7 @@ case "${1:-}" in
   wallet)
     [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true
     nohup python3 "$ROOT/client/wallet.py" > "$ROOT/out/wallet.log" 2>&1 & echo $! > "$ROOT/out/wallet.pid"
-    for _ in $(seq 1 20); do curl -sf localhost:19710/api/state?user=A >/dev/null 2>&1 && break; sleep 1; done
+    for _ in $(seq 1 20); do curl -sf localhost:19710/ >/dev/null 2>&1 && break; sleep 1; done
     echo "wallet: http://localhost:19710/?user=A   (and ?user=B)   log: out/wallet.log" ;;
   down)
     [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true; rm -f "$ROOT/out/wallet.pid"
@@ -110,8 +110,11 @@ case "${1:-}" in
     for _ in 1 2 3 4 5; do curl -sf "$INDEXER/state" > "$T/chain.json"; python3 -c "import json,sys; sys.exit(0 if json.load(open('$T/chain.json'))['note_root']=='$R2' else 1)" && break; sleep 2; done
     asB scan B "$T/chain.json" | tee "$T/scanB.txt"
     NB=$(grep -c "found note .*: B 40 at leaf $((N0 + 2))" "$T/scanB.txt" || true)
-    [ "$NB" = 1 ] && [ "$(grep -c 'found note' "$T/scanB.txt")" = 1 ] && echo "  ok   B's client found exactly one note: 40 at leaf $((N0 + 2)), sealed to B on chain" || { echo "  FAIL B's scan: $(cat "$T/scanB.txt")"; exit 1; }
-    BNOTE=$(sed -n 's/^found note \([0-9]*\): B 40.*/\1/p' "$T/scanB.txt")
+    # of the notes this run made (leaf N0 on; a reused chain also holds earlier runs'), B's
+    # key opens exactly one: the 40 at leaf N0+2
+    NEW=$(awk -v n0="$N0" '/^found note/ { if ($NF + 0 >= n0 || $(NF-1) + 0 >= n0) c++ } END { print c + 0 }' "$T/scanB.txt")
+    [ "$NB" = 1 ] && [ "$NEW" = 1 ] && echo "  ok   B's client found exactly one new note: 40 at leaf $((N0 + 2)), sealed to B on chain" || { echo "  FAIL B's scan ($NEW new notes):"; sed 's/^/       /' "$T/scanB.txt"; exit 1; }
+    BNOTE=$(sed -n "s/^found note \([0-9]*\): B 40 at leaf $((N0 + 2))\$/\1/p" "$T/scanB.txt")
 
     echo "== 3. unshield: B proves a spend of the found note, 40 to public account B on service $PB"
     asB transfer B "$BNOTE" - B 0 40 2 "$PB" "$T/tx3.hex" > "$T/tx3.txt"; grep -E "payload|unshield" "$T/tx3.txt"
