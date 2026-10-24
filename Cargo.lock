@@ -221,6 +221,7 @@ dependencies = [
  "jam-pvm-common",
  "kzg-verify",
  "polkavm-derive",
+ "ultrahonk-no-std 0.1.0 (git+https://github.com/abutlabs/ultrahonk_verifier?rev=2ae44db)",
 ]
 
 [[package]]
@@ -748,7 +749,7 @@ dependencies = [
  "jam-pvm-common",
  "polkavm-derive",
  "service-util",
- "ultrahonk-no-std",
+ "ultrahonk-no-std 0.1.0 (git+https://github.com/abutlabs/ultrahonk_verifier?rev=a4b2a4af5d)",
 ]
 
 [[package]]
@@ -996,6 +997,22 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "ultrahonk-no-std"
+version = "0.1.0"
+source = "git+https://github.com/abutlabs/ultrahonk_verifier?rev=2ae44db#2ae44db43bb026370b26cc5d2fcaa6c2979d4a96"
+dependencies = [
+ "ark-bn254",
+ "ark-bn254-ext",
+ "ark-ec",
+ "ark-ff",
+ "ark-models-ext",
+ "ark-std",
+ "hex-literal",
+ "sha3",
+ "snafu",
+]
 
 [[package]]
 name = "ultrahonk-no-std"
