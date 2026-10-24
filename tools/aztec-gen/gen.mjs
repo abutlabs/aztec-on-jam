@@ -5,7 +5,11 @@
 // hash is Aztec's CheckpointHeader.hash().
 //   node gen.mjs <out> <spec.json>
 // spec: {genesis (unix), slotSeconds, fee, genesisArchive (0x-hex, or null for a random one),
-//        checkpoints: [{name, parent ("genesis" or an earlier name), slot, inbox (0x-hex), txs}]}
+//        checkpoints: [{name, parent ("genesis" or an earlier name), slot, inbox (0x-hex), txs, sign}],
+//        committee (optional): {keys: [0x-hex private keys], seed, epochSlots, chainId, rollup}}
+// With a committee, each checkpoint gets <name>.attest, the payload's attestations block, signed
+// by Aztec's code (#54): every member signs the payload digest but the one after the proposer;
+// sign "noProposer" leaves the proposer unsigned, "badSig" corrupts the proposer's signature.
 // For each checkpoint, written to <out>/:
 //   <name>.header   348 bytes, ProposedHeaderLib's packed encoding (from header.toViem())
 //   <name>.archive  32 bytes, the new archive root
@@ -21,6 +25,13 @@ import { CheckpointNumber, SlotNumber } from '@aztec-labs/foundation/branded-typ
 import { Fr } from '@aztec-labs/foundation/curves/bn254';
 import { getBlobsPerL1Block, computeBlobsHashFromBlobs, getKzg } from '@aztec-labs/blob-lib';
 import { AppendOnlyTreeSnapshot } from '@aztec-labs/stdlib/trees';
+import { computeCheckpointPayloadDigest } from '@aztec-labs/stdlib/checkpoint';
+import { CommitteeAttestation, CommitteeAttestationsAndSigners } from '@aztec-labs/stdlib/block';
+import { getHashedSignaturePayloadTypedData } from '@aztec-labs/stdlib/p2p';
+import { Secp256k1Signer } from '@aztec-labs/foundation/crypto/secp256k1-signer';
+import { Buffer32 } from '@aztec-labs/foundation/buffer';
+import { EthAddress } from '@aztec-labs/foundation/eth-address';
+import { encodeAbiParameters, keccak256 } from 'viem';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 
 const [out, specPath] = process.argv.slice(2);
@@ -33,6 +44,26 @@ const hex = b => '0x' + Buffer.from(b).toString('hex');
 const genesis = spec.genesisArchive ? new AppendOnlyTreeSnapshot(Fr.fromString(spec.genesisArchive), 1) : AppendOnlyTreeSnapshot.random();
 writeFileSync(`${out}/genesis.json`, JSON.stringify({ archive: genesis.root.toString() }));
 const archives = { genesis };
+// the attestations block (services/aztec-settlement: modifier, indices, signatures or addresses,
+// signers, the proposer's signature), signed as Aztec's validators sign
+function attest(header, archive, slot, mode) {
+  const k = spec.committee, keys = k.keys.map((h) => new Secp256k1Signer(Buffer32.fromString(h)));
+  const ctx = { chainId: Number(k.chainId), rollupAddress: EthAddress.fromString(k.rollup) };
+  const epoch = slot / BigInt(k.epochSlots);
+  const p = Number(BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [epoch, slot, BigInt(k.seed)]))) % BigInt(keys.length));
+  const digest = Buffer32.fromString(computeCheckpointPayloadDigest({ header, archiveRoot: archive, feeAssetPriceModifier: 0n, signatureContext: ctx }).toString());
+  const skip = (p + 1) % keys.length;
+  const atts = keys.map((key, i) => (i === skip || (mode === 'noProposer' && i === p) ? CommitteeAttestation.fromAddress(key.address) : CommitteeAttestation.fromAddressAndSignature(key.address, key.sign(digest))));
+  const aas = new CommitteeAttestationsAndSigners(atts, ctx);
+  const packed = aas.getPackedAttestations();
+  const s = keys[p].sign(getHashedSignaturePayloadTypedData(aas));
+  const sig = Buffer.concat([Buffer.from([s.v]), s.r.toBuffer(), s.s.toBuffer()]);
+  if (mode === 'badSig') sig[40] ^= 1;
+  const u16 = (n) => Buffer.from([n & 0xff, n >> 8]);
+  const idx = Buffer.from(packed.signatureIndices.slice(2), 'hex'), so = Buffer.from(packed.signaturesOrAddresses.slice(2), 'hex');
+  const signers = aas.getSigners();
+  return Buffer.concat([Buffer.alloc(32), u16(idx.length), idx, u16(so.length), so, u16(signers.length), ...signers.map((a) => a.toBuffer()), sig]);
+}
 for (const [i, c] of spec.checkpoints.entries()) {
   const slot = BigInt(c.slot);
   const timestamp = BigInt(spec.genesis) + slot * BigInt(spec.slotSeconds);
@@ -62,6 +93,7 @@ for (const [i, c] of spec.checkpoints.entries()) {
   writeFileSync(`${out}/${n}.blobs`, Buffer.concat([Buffer.from([blobs.length]), ...items]));
   blobs.forEach((b, j) => writeFileSync(`${out}/${n}.blob${j}`, b.data));
   writeFileSync(`${out}/${n}.fields.json`, JSON.stringify(cp.toBlobFields().map(f => f.toString())));
+  if (spec.committee) writeFileSync(`${out}/${n}.attest`, attest(header, cp.archive.root, slot, c.sign ?? 'ok'));
   writeFileSync(`${out}/${n}.json`, JSON.stringify({
     headerHash: header.hash().toString(), blobsHash: header.blobsHash.toString(), archive: cp.archive.root.toString(),
     lastArchiveRoot: header.lastArchiveRoot.toString(), slot: Number(slot), timestamp: Number(timestamp),

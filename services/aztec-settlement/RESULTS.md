@@ -139,3 +139,31 @@ adds them: about 788M in all, within a tiny package.
 **Not ported:** pruning unproven checkpoints when the proof window closes, prover rewards, and
 the attestations (#54). The proof window itself is checked.
 
+
+## The proposer's signature (#54)
+
+`services/aztec-settlement/signatures.sh`. cfg names a committee of four test keys. Refine runs
+`ValidatorSelectionLib.verifyProposer` (`crates/aztec-l1/src/signatures.rs`):
+- the packed attestations reconstruct the committee, whose commitment must match;
+- the slot's proposer, `keccak256(abi.encode(epoch, slot, seed)) % size`, signed the EIP-712
+  payload digest (`ProposeLib.digest`);
+- the proposer also signed the attestations-and-signers digest.
+
+Recovery follows OpenZeppelin's rules: v 27 or 28, s in the lower half. The checkpoints are
+signed by Aztec's released code (`gen.mjs`: `computeCheckpointPayloadDigest`,
+`CommitteeAttestationsAndSigners`, `getHashedSignaturePayloadTypedData`). `cargo test -p aztec-l1`
+also holds the port to a vector from Aztec's code (`fixtures/generated/signatures.json`): both
+digests, the commitment, the proposer index, and the refusals.
+
+| case | refine gas | verdict | expected |
+|---|---|---|---|
+| checkpoint 1, signed | 289,429,114 | 1, accepted | 1 |
+| checkpoint 2, the proposer unsigned | 641,320 | 6, bad signatures (refine) | 6 |
+| checkpoint 2, the proposer's signature corrupted | 27,216,050 | 6 | 6 |
+| checkpoint 2, no attestations | 477,073 | 6 | 6 |
+| checkpoint 2, signed | 289,443,426 | 1, accepted | 1 |
+
+**Gas.** The two recoveries and the hashing add about 27M to a checkpoint: 289.4M against
+262.4M for one blob unsigned. Refine checks signatures before blobs, so a forged checkpoint
+costs at most 27M. An empty committee skips the check, as the Rollup does, and that is how the
+local network and `tools/aztec-local/on-jam.sh` run.

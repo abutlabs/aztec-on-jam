@@ -1,0 +1,32 @@
+{
+ "chainId": 31337,
+ "rollup": "0x00000000000000000000000000000000a11ce002",
+ "slot": 7,
+ "epoch": 1,
+ "seed": "12345",
+ "committee": [
+  "0x123abaf7a75fe084f7f5bf8dd7e3e6d9e6027b3b",
+  "0x9b11740ea6d46b9176b1ebb69a1672be9c2c63d8",
+  "0x49328be73c2edb094e13ac5f7d1cfb6dbba47d15",
+  "0x50748f03a458c538df5ee231caac25d0f2cde5ab"
+ ],
+ "proposerIndex": 0,
+ "archive": "0x11853f660cb5901d21a1ff49e3d23287334395aa5f27bdbdd12a1ddf327b71a3",
+ "headerHash": "0x000ac4a3d0fae299ec5450fa366f21eafbce49f8c95fee8a4b69637b24cfbdcd",
+ "feeAssetPriceModifier": "7",
+ "payloadDigest": "0x89b0e0196f296ebccc78f2103c995de44180a317ddea2eae4f87725b027abc71",
+ "signatureIndices": "0xb0",
+ "signaturesOrAddresses": "0x1b61c89254ce2f7f7a22f08d38bcccc6b1fb1987815f385ca731768e0def20f7b9543ad73386d6e8110ecd643197e8406dd6ac4bd172abf88c3c30f861afd1cdf79b11740ea6d46b9176b1ebb69a1672be9c2c63d81cacd2d9e612d4984b9fe9098a0d9144b2d4a5e4f225f58899094a38f8942cae1a359029f96a0828a6fda5b0a29ece2b5e7e3a8c342beddadc97511fd810b1a4501c7ad16307df7bbb24d3090f32ba8bfec1647e01d2644785da15e14bae7b90865e0d75a6e08b6ae3b9d4321b52590032e4d2dbfae277eae718ee530b2db87bcdf0",
+ "signers": [
+  "0x123abaf7a75fe084f7f5bf8dd7e3e6d9e6027b3b",
+  "0x49328be73c2edb094e13ac5f7d1cfb6dbba47d15",
+  "0x50748f03a458c538df5ee231caac25d0f2cde5ab"
+ ],
+ "attestationsAndSignersDigest": "0xab611a582deca0c62861b333c1e2302319b437f983c1ae0039f00c9ef38a4711",
+ "attestationsAndSignersSignature": {
+  "v": 27,
+  "r": "0xc597d1a81974ba7cacc228b67af7170370ef2c2215515a995d7f71ed616f438b",
+  "s": "0x2e8c34aeeb47d3af631c78a283f3efe63a29eba26cd6f5ac8903364f929adf69"
+ },
+ "committeeCommitment": "0x2f46154b1de94bd8e0838f908b37fba90cadc22dd03ea1974f7c4c7dbe1aaef0"
+}

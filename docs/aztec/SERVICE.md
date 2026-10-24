@@ -112,7 +112,11 @@ checkpoints must consume it as `validateInboxConsumption` requires.
 The epoch path (#51) verifies a root rollup proof and its batched blob opening in refine. In
 accumulate it compares the public inputs with what `EpochProofLib` assembles from storage,
 then advances `tip:proven` and writes the Outbox. It is tested with a bb 6 proof carrying the
-public inputs Aztec's own code builds. The signatures (#54) follow.
+public inputs Aztec's own code builds.
+
+The signatures (#54): with a committee in cfg, refine checks the proposer's signatures as
+`ValidatorSelectionLib.verifyProposer` does. They are tested against checkpoints signed by Aztec's
+own code.
 
 ## Built first: the skeleton
 

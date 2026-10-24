@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # #49: the settlement service's checkpoint path on a PolkaJam testnet (spikes/lib/polkajam.sh).
 # Aztec v6's own released packages make three chained checkpoints (tools/aztec-gen), with 1, 2
-# and 1 blobs; the service is configured with their genesis (cfg.bin). Then: the second before
+# and 1 blobs (8 random transactions may fit in one); the service is configured with their genesis (cfg.bin). Then: the second before
 # the first (refused), the first (accepted), the first again (refused), the second with its
 # blobsHash altered, a blob altered, and its timestamp altered (all refused), the second and
 # the third (accepted). Each stored checkpoint's header hash must be Aztec's.
@@ -39,7 +39,7 @@ pj_send 1 "$G/p1.bin" $(xs 2)
 pj_send 2 "$G/p2.bin" $(xs 1)
 pj_send 3 "$G/p3.bin" $(xs 1)
 pj_send 4 "$G/p4.bin" $(xs 2)
-pj_send 5 "$G/p5.bin" --extrinsic "@$G/cp2.blob0.bad" --extrinsic "@$G/cp2.blob1" --exports 64
+pj_send 5 "$G/p5.bin" $(xs 2 | sed "s#@$G/cp2.blob0 #@$G/cp2.blob0.bad #")   # blob 0 altered
 pj_send 6 "$G/p6.bin" $(xs 2)
 pj_send 7 "$G/p7.bin" $(xs 2)
 pj_send 8 "$G/p8.bin" $(xs 3)
@@ -52,7 +52,7 @@ echo "|---|---|---|---|---|"
 for t in $(seq 1 8); do
   g=$(pj_refines "$t" | awk '{print $1}' | sort -n | head -1)
   v=$(pj_read "$(printf '763a%02x' "$t")")
-  n=$(case $t in 2|3|8) echo 1 ;; *) echo 2 ;; esac)
+  n=$(python3 -c "import json; print(json.load(open('$G/cp' + {1: '2', 2: '1', 3: '1', 8: '3'}.get($t, '2') + '.json'))['blobs'])")
   printf '| %s | %s | %s | %s | %s |\n' "${names[$t]}" "$n" "$(python3 -c "print(f'{int(\"${g:-0}\"):,}')")" "$(python3 -c "import sys; v=sys.argv[1].strip('\"'); print(int(v, 16) if v and all(c in '0123456789abcdef' for c in v) else 'none: ' + v)" "$v")" "${want[$t]}"
 done
 echo

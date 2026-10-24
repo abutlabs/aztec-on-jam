@@ -3,10 +3,12 @@ name = "aztec-l1"
 version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"
-description = "Aztec v6's L1 encodings and checks (ProposedHeaderLib, BlobLib, Hash), no_std, for the settlement service"
+description = "Aztec v6's L1 encodings and checks (ProposedHeaderLib, BlobLib, Hash, Inbox, EpochProofLib, signatures), no_std, for the settlement service"
 
 [dependencies]
 sha2 = { version = "0.10", default-features = false }
+sha3 = { version = "0.10", default-features = false }
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }
 
 [dev-dependencies]
 serde_json = "1"

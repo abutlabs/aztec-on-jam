@@ -378,7 +378,7 @@ function findPropose(tx) {
   return undefined;
 }
 async function relayPropose(rec, propose, tx) {
-  const [args, , , , blobsInput] = propose.args;
+  const [args, attestations, signers, signature, blobsInput] = propose.args;
   const h = args.header;
   const be = (v, n) => Buffer.from(BigInt(v).toString(16).padStart(2 * n, '0'), 'hex');
   const packed = Buffer.concat([
@@ -390,7 +390,13 @@ async function relayPropose(rec, propose, tx) {
   const commitments = Buffer.from(hexToBytes(blobsInput)).subarray(1);
   const kzg = getKzg();
   const items = blobs.map((b, i) => { const c = commitments.subarray(48 * i, 48 * i + 48); return Buffer.concat([c, Buffer.from(kzg.computeBlobKzgProof(b, c))]); });
-  const payload = Buffer.concat([Buffer.from([1, rec.tag]), packed, Buffer.from(hexToBytes(args.archive)), Buffer.from(new BigUint64Array([BigInt(args.bucketHint)]).buffer), Buffer.from([blobs.length]), ...items]);
+  // the committee's signatures, which refine checks against cfg's committee (#54)
+  const u16 = (n) => Buffer.from([n & 0xff, n >> 8]);
+  const idx = Buffer.from(hexToBytes(attestations.signatureIndices)), so = Buffer.from(hexToBytes(attestations.signaturesOrAddresses));
+  const modifier = Buffer.from(toHex(BigInt.asUintN(256, BigInt(args.oracleInput.feeAssetPriceModifier)), { size: 32 }).slice(2), 'hex');
+  const sig = Buffer.concat([Buffer.from([Number(signature.v)]), Buffer.from(hexToBytes(signature.r)), Buffer.from(hexToBytes(signature.s))]);
+  const att = Buffer.concat([modifier, u16(idx.length), idx, u16(so.length), so, u16(signers.length), ...signers.map((a) => Buffer.from(hexToBytes(a))), sig]);
+  const payload = Buffer.concat([Buffer.from([1, rec.tag]), packed, Buffer.from(hexToBytes(args.archive)), Buffer.from(new BigUint64Array([BigInt(args.bucketHint)]).buffer), Buffer.from([blobs.length]), ...items, att]);
   const dir = `${config.work}/${rec.hash}`;
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}/payload.bin`, payload);

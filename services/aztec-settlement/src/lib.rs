@@ -4,7 +4,8 @@
 //! work item can set it: [genesis archive 32][Aztec genesis unix time u64][Aztec slot seconds
 //! u64][epoch length in Aztec slots u64][mana minimum fee u128][mana limit 32][chain id 32][version 32]
 //! [epoch proof's vk sha256 32][vk tree root 32][protocol contracts hash 32][proof submission epochs
-//! u64], big-endian.
+//! u64][rollup address 20 (the signatures' EIP-712 verifying contract)][sample seed 32][committee size
+//! u8][16 × address 20, the first `size` used], big-endian.
 //!
 //! The Inbox (`Inbox.sol`, #50): an L1→L2 message is a deferred transfer to this service whose
 //! memo is [recipient 32][content 32][secret hash 32][version 32]; its L1 sender is the sending
@@ -17,7 +18,11 @@
 //!
 //! Work item kind 1, a checkpoint (`ProposeLib.propose`):
 //!   payload [1][tag u8][header 348, ProposedHeaderLib's packing][archive 32][bucket hint u64 LE]
-//!     [n u8][n × (C 48 ‖ proof 48)]
+//!     [n u8][n × (C 48 ‖ proof 48)][fee asset price modifier 32][signature indices len u16 LE][..]
+//!     [signatures or addresses len u16 LE][..][signers u16 LE][signers × 20][proposer's signature 65]
+//!   refine also runs `ValidatorSelectionLib.verifyProposer` against `cfg`'s committee (#54): the
+//!     attestations reconstruct it, the slot's proposer signed the payload digest and the
+//!     attestations-and-signers digest. An empty committee skips it, as the Rollup does.
 //!   extrinsic j: blob j (131,072 bytes)
 //!   refine: the header's stateless checks (`aztec_l1::check_header`: fields in range, coinbase,
 //!     mana, blobsHash against the commitments, no DA fee), the blobs against their commitments
@@ -52,6 +57,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use aztec_l1::signatures;
 use aztec_l1::{
     address_to_field, blob_commitments_hash, blob_public_inputs, check_header, epoch_pi, inbox_rolling_hash, is_field,
     l1_to_l2_leaf, parse_blob_commitments, sha256_to_field, Header, EMPTY_EPOCH_OUT_HASH, HEADER_LEN,
@@ -70,7 +76,7 @@ declare_service!(Settlement);
 struct Settlement;
 
 const CFG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/cfg.bin"));
-const _: () = assert!(CFG.len() == 272, "cfg.bin must be 272 bytes");
+const _: () = assert!(CFG.len() == 645, "cfg.bin must be 645 bytes");
 /// JAM's Common Era, 2025-01-01 12:00 UTC (GP 0.8.0 `overview.tex:91`), and its 6-second slots.
 const JAM_COMMON_ERA: u64 = 1_735_732_800;
 const JAM_SLOT_SECONDS: u64 = 6;
@@ -88,6 +94,9 @@ struct Cfg {
     vk_tree_root: [u8; 32],
     protocol_contracts_hash: [u8; 32],
     proof_submission_epochs: u64,
+    rollup: [u8; 20],
+    seed: [u8; 32],
+    committee: Vec<[u8; 20]>,
 }
 
 fn cfg() -> Cfg {
@@ -105,6 +114,9 @@ fn cfg() -> Cfg {
         vk_tree_root: CFG[200..232].try_into().unwrap(),
         protocol_contracts_hash: CFG[232..264].try_into().unwrap(),
         proof_submission_epochs: u(264),
+        rollup: CFG[272..292].try_into().unwrap(),
+        seed: CFG[292..324].try_into().unwrap(),
+        committee: CFG[325..325 + 20 * (CFG[324] as usize).min(16)].chunks_exact(20).map(|a| a.try_into().unwrap()).collect(),
     }
 }
 
@@ -112,6 +124,7 @@ fn cfg() -> Cfg {
 const BAD_PAYLOAD: u8 = 1;
 const BAD_HEADER: u8 = 2;
 const BAD_BLOBS: u8 = 3;
+const BAD_SIGNATURES: u8 = 6;
 // Accumulate's verdicts.
 const ACCEPTED: u8 = 1;
 const WRONG_PARENT: u8 = 10;
@@ -140,22 +153,50 @@ const PAST_DEADLINE: u8 = 35;
 const WRONG_PUBLIC_INPUT: u8 = 36;
 const ALREADY_PROVEN: u8 = 37;
 
+struct Attestations<'a> {
+    modifier: [u8; 32],
+    indices: &'a [u8],
+    sigs: &'a [u8],
+    signers: Vec<[u8; 20]>,
+    proposer: signatures::Sig,
+}
+
+fn parse_attestations(p: &[u8]) -> Option<Attestations<'_>> {
+    let modifier: [u8; 32] = p.get(..32)?.try_into().ok()?;
+    let mut at = 32;
+    let mut take = |n: usize| -> Option<&[u8]> { let b = p.get(at..at + n)?; at += n; Some(b) };
+    let len = |b: &[u8]| u16::from_le_bytes([b[0], b[1]]) as usize;
+    let il = len(take(2)?);
+    let indices = take(il)?;
+    let sl = len(take(2)?);
+    let sigs = take(sl)?;
+    let n = len(take(2)?);
+    let signers = take(20 * n)?.chunks_exact(20).map(|a| a.try_into().unwrap()).collect();
+    let proposer = take(65)?.try_into().ok()?;
+    (at == p.len()).then_some(Attestations { modifier, indices, sigs, signers, proposer })
+}
+
 fn checkpoint(p: &[u8]) -> Result<Vec<u8>, u8> {
     let c = cfg();
     let header = Header::decode(p.get(..HEADER_LEN).ok_or(BAD_PAYLOAD)?).ok_or(BAD_PAYLOAD)?;
     let archive: [u8; 32] = p.get(HEADER_LEN..HEADER_LEN + 32).ok_or(BAD_PAYLOAD)?.try_into().unwrap();
     let hint: [u8; 8] = p.get(HEADER_LEN + 32..HEADER_LEN + 40).ok_or(BAD_PAYLOAD)?.try_into().unwrap();
-    let blobs = p.get(HEADER_LEN + 40..).ok_or(BAD_PAYLOAD)?;
-    let n = *blobs.first().ok_or(BAD_PAYLOAD)? as usize;
-    if n == 0 || blobs.len() != 1 + 96 * n {
+    let rest = p.get(HEADER_LEN + 40..).ok_or(BAD_PAYLOAD)?;
+    let n = *rest.first().ok_or(BAD_PAYLOAD)? as usize;
+    let blobs = rest.get(..1 + 96 * n).ok_or(BAD_PAYLOAD)?;
+    if n == 0 {
         return Err(BAD_PAYLOAD);
     }
     let items: Vec<&[u8]> = blobs[1..].chunks_exact(96).collect();
+    let att = parse_attestations(&rest[1 + 96 * n..]).ok_or(BAD_PAYLOAD)?;
     let mut prefixed = alloc::vec![n as u8];
     items.iter().for_each(|it| prefixed.extend_from_slice(&it[..48]));
     let commitments = parse_blob_commitments(&prefixed).ok_or(BAD_PAYLOAD)?;
     check_header(&header, &aztec_l1::blobs_hash(&commitments), &c.mana_limit).map_err(|_| BAD_HEADER)?;
     let slot = header.slot().ok_or(BAD_HEADER)?;
+    let digest = signatures::payload_digest(&archive, &att.modifier, &header.hash(), &c.chain_id, &c.rollup);
+    signatures::verify_proposer(&c.committee, &c.seed, slot / c.epoch_slots, slot, &digest, att.indices, att.sigs, &att.signers, &att.proposer, &c.chain_id, &c.rollup)
+        .map_err(|_| BAD_SIGNATURES)?;
     let data: Vec<Vec<u8>> = (0..n).map(refine::extrinsic).collect::<Option<_>>().ok_or(BAD_BLOBS)?;
     let proofs: Vec<[u8; 48]> = items.iter().map(|it| it[48..].try_into().unwrap()).collect();
     let refs: Vec<&[u8]> = data.iter().map(|b| b.as_slice()).collect();

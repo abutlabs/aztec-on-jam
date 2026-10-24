@@ -1728,3 +1728,32 @@ Evidence:
 - The privacy service's code hash is unchanged (0x97e7677f…).
 Issues: #48 closed; #55 filed.
 Next: #54, the proposer's signature.
+
+## 2026-10-24 69 — #54 closed: the committee's signatures, checked in refine as the Rollup checks them
+Why this issue: `ProposeLib.propose` verifies the proposer, the last part of the Rollup not yet
+ported.
+Did:
+- `aztec-l1::signatures`: EIP-712 in the "Aztec Rollup" domain, `ProposeLib.digest`,
+  `AttestationLib` (packing, the attestations-and-signers digest, reconstruction), the committee
+  commitment, the proposer index, and OpenZeppelin's strict `recover`. It is tested against a
+  vector from Aztec's code (`tools/aztec-local/sign-vectors.mjs`).
+- The service: cfg is 645 bytes (rollup address, seed, committee of up to 16), the checkpoint
+  payload carries the attestations, and refine checks them before the blobs.
+- The facade relays `propose`'s attestations, signers and signature. `gen.mjs` signs with
+  Aztec's code. `testlib.py` and `devnet.sh` follow.
+Found: Aztec's `getHashedSignaturePayload` is the untyped hash; the Rollup checks
+`getHashedSignaturePayloadTypedData`'s. My first vector used the wrong one, and the native test
+caught it.
+Evidence:
+- `signatures.sh`: verdicts 1, 6, 6, 6, 1 as expected. Signed checkpoints cost 289.4M, and a
+  forgery at most 27.2M.
+- `cargo test -p aztec-l1`: 7 passed.
+- Re-run on this code:
+  - `measure.sh`: 8 of 8, with Aztec's header hashes. It was made robust to a checkpoint's
+    random blob count.
+  - `inbox.sh`: 6 of 6.
+  - `epoch.sh`: 7 of 7.
+  - `on-jam.sh` with `send-tx.mjs`: checkpoint 4 holds 2 transactions, with 6 accepted, 0
+    refused and 0 errors.
+Issues: #54 closed.
+Next: Phase 4's done check.

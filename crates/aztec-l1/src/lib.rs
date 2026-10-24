@@ -6,6 +6,8 @@
 
 extern crate alloc;
 
+pub mod signatures;
+
 use alloc::vec::Vec;
 use sha2::{Digest, Sha256};
 
@@ -310,6 +312,44 @@ mod tests {
 
     const FIXTURES: [&str; 6] = ["empty_checkpoint_1", "empty_checkpoint_2", "single_tx_checkpoint_1", "single_tx_checkpoint_2", "mixed_checkpoint_1", "mixed_checkpoint_2"];
 
+
+
+    #[test]
+    fn signatures_match_aztecs_code() {
+        use crate::signatures::*;
+        let f = fixture_at("generated/signatures");
+        let h = |k: &str| -> Vec<u8> { unhex(f[k].as_str().unwrap()) };
+        let a20 = |s: &str| -> [u8; 20] { unhex(s).try_into().unwrap() };
+        let chain = word(f["chainId"].as_u64().unwrap());
+        let rollup = a20(f["rollup"].as_str().unwrap());
+        let committee: Vec<[u8; 20]> = f["committee"].as_array().unwrap().iter().map(|x| a20(x.as_str().unwrap())).collect();
+        let signers: Vec<[u8; 20]> = f["signers"].as_array().unwrap().iter().map(|x| a20(x.as_str().unwrap())).collect();
+        let mut seed = [0u8; 32];
+        seed[24..].copy_from_slice(&f["seed"].as_str().unwrap().parse::<u64>().unwrap().to_be_bytes());
+        let modifier = word(f["feeAssetPriceModifier"].as_str().unwrap().parse::<u64>().unwrap());
+        let digest = payload_digest(&w32(f["archive"].as_str().unwrap()), &modifier, &w32(f["headerHash"].as_str().unwrap()), &chain, &rollup);
+        assert_eq!(digest, w32(f["payloadDigest"].as_str().unwrap()));
+        let (idx, so) = (h("signatureIndices"), h("signaturesOrAddresses"));
+        assert_eq!(attestations_and_signers_digest(&idx, &so, &signers, &chain, &rollup), w32(f["attestationsAndSignersDigest"].as_str().unwrap()));
+        assert_eq!(committee_commitment(&committee), w32(f["committeeCommitment"].as_str().unwrap()));
+        let (slot, epoch) = (f["slot"].as_u64().unwrap(), f["epoch"].as_u64().unwrap());
+        assert_eq!(proposer_index(epoch, slot, &seed, 4), f["proposerIndex"].as_u64().unwrap() as usize);
+        let s = &f["attestationsAndSignersSignature"];
+        let mut psig = [0u8; 65];
+        psig[0] = s["v"].as_u64().unwrap() as u8;
+        psig[1..33].copy_from_slice(&unhex(s["r"].as_str().unwrap()));
+        psig[33..].copy_from_slice(&unhex(s["s"].as_str().unwrap()));
+        let ok = verify_proposer(&committee, &seed, epoch, slot, &digest, &idx, &so, &signers, &psig, &chain, &rollup);
+        assert_eq!(ok, Ok(f["proposerIndex"].as_u64().unwrap() as usize));
+        // refused: another digest, another committee, a corrupted proposer signature
+        let mut other = digest; other[0] ^= 1;
+        assert_eq!(verify_proposer(&committee, &seed, epoch, slot, &other, &idx, &so, &signers, &psig, &chain, &rollup), Err(SignatureError::BadProposerSignature));
+        let mut swapped = committee.clone(); swapped.swap(1, 2);
+        assert_eq!(verify_proposer(&swapped, &seed, epoch, slot, &digest, &idx, &so, &signers, &psig, &chain, &rollup), Err(SignatureError::WrongCommittee));
+        let mut bad = psig; bad[40] ^= 1;
+        assert!(verify_proposer(&committee, &seed, epoch, slot, &digest, &idx, &so, &signers, &bad, &chain, &rollup).is_err());
+        assert_eq!(verify_proposer(&[], &seed, epoch, slot, &other, &idx, &so, &signers, &bad, &chain, &rollup), Ok(0));
+    }
 
     #[test]
     fn epoch_layout_and_blob_limbs() {

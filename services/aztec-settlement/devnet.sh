@@ -17,7 +17,9 @@ cfg = dict(genesisArchive=archive, genesisTime=int(genesis), slotSeconds=36, epo
 w = lambda h: bytes.fromhex(h[2:].rjust(64, "0"))
 open(out, "wb").write(w(archive) + struct.pack(">QQQ", cfg["genesisTime"], 36, 4) + (1000).to_bytes(16, "big")
                       + (2**63).to_bytes(32, "big") + (31337).to_bytes(32, "big") + (1).to_bytes(32, "big")
-                      + bytes(32) + w(vk_tree) + w(protocol) + struct.pack(">Q", 1))
+                      + bytes(32) + w(vk_tree) + w(protocol) + struct.pack(">Q", 1)
+                      + bytes.fromhex("00000000000000000000000000000000a11ce002")   # the facade's Rollup
+                      + bytes(32) + bytes([0]) + bytes(320))                            # no committee, as the local network
 json.dump(cfg, open(js, "w"))
 PY
 BLOB=$("$BUILD" "$HERE" --out "$O" | awk '{print $1}')

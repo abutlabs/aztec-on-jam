@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared by measure.sh (#49) and inbox.sh (#50): the service's cfg and its work-item payloads.
 
-  testlib.py cfg <gen dir> <genesis unix time> <out> [vk]  cfg.bin: genesis archive, time, 6 s slots,
+  testlib.py cfg <gen dir> <genesis unix time> <out> [vk|-] [committee.json]  cfg.bin: genesis archive, time, 6 s slots,
                                                            32-slot epochs, fee 1000, no mana limit,
                                                            chain id 31337, version 1, the vk's hash,
                                                            vk tree root 0x01, protocol contracts hash
@@ -18,12 +18,22 @@ def field_hash(b):
     import hashlib
     return b"\0" + hashlib.sha256(b).digest()[:31]
 
-def cfg(gen, genesis, out, vk=None):
+ROLLUP = bytes.fromhex("00000000000000000000000000000000a11ce002")   # the facade's Rollup address
+
+def cfg(gen, genesis, out, vk=None, committee=None):
+    """committee: a JSON file {addresses, seed}, as gen.mjs's spec gives it; none by default."""
     archive = bytes.fromhex(json.load(open(f"{gen}/genesis.json"))["archive"][2:])
-    vk_hash = field_hash(open(vk, "rb").read()) if vk else bytes(32)
+    vk_hash = field_hash(open(vk, "rb").read()) if vk and vk != "-" else bytes(32)
+    members, seed = [], 0
+    if committee:
+        c = json.load(open(committee)); members, seed = [bytes.fromhex(a[2:]) for a in c["addresses"]], int(c["seed"])
     open(out, "wb").write(archive + struct.pack(">QQQ", int(genesis), 6, 32) + (1000).to_bytes(16, "big")
                           + b"\xff" * 32 + (31337).to_bytes(32, "big") + (1).to_bytes(32, "big")
-                          + vk_hash + (1).to_bytes(32, "big") + (2).to_bytes(32, "big") + struct.pack(">Q", 1))
+                          + vk_hash + (1).to_bytes(32, "big") + (2).to_bytes(32, "big") + struct.pack(">Q", 1)
+                          + ROLLUP + seed.to_bytes(32, "big") + bytes([len(members)]) + b"".join(members).ljust(320, b"\0"))
+
+# no attestations: modifier 0, empty indices and signatures, no signers, a zero proposer signature
+EMPTY_ATTESTATIONS = bytes(32) + bytes(2) + bytes(2) + bytes(2) + bytes(65)
 
 def epoch(tag, start, end, vk, pubs, proof, batched, alter=None):
     vk, proof, batched = open(vk, "rb").read(), open(proof, "rb").read(), bytearray(open(batched, "rb").read())
@@ -46,7 +56,11 @@ def payload(tag, gen, name, hint, alter=None):
         h[96:128] = bytes.fromhex(alter[6:].removeprefix("0x").rjust(64, "0"))
     blobs = open(f"{gen}/{name}.blobs", "rb").read()
     archive = open(f"{gen}/{name}.archive", "rb").read()
-    sys.stdout.buffer.write(bytes([1, int(tag)]) + bytes(h) + archive + int(hint).to_bytes(8, "little") + blobs)
+    try:
+        att = open(f"{gen}/{name}.attest", "rb").read()
+    except FileNotFoundError:
+        att = EMPTY_ATTESTATIONS
+    sys.stdout.buffer.write(bytes([1, int(tag)]) + bytes(h) + archive + int(hint).to_bytes(8, "little") + blobs + att)
 
 def extrinsics(gen, name):
     n = json.load(open(f"{gen}/{name}.json"))["blobs"]
