@@ -197,6 +197,50 @@ pub fn inbox_rolling_hash(previous: &[u8; 32], leaf: &[u8; 32]) -> [u8; 32] {
     sha256_to_field(&b)
 }
 
+/// `Constants.ROOT_ROLLUP_PUBLIC_INPUTS_LENGTH` and `MAX_CHECKPOINTS_PER_EPOCH`.
+pub const ROOT_ROLLUP_PUBLIC_INPUTS: usize = 113;
+pub const MAX_CHECKPOINTS_PER_EPOCH: usize = 32;
+/// Where `EpochProofLib.computeEpochProofPublicInputs` puts each value.
+pub mod epoch_pi {
+    pub const PREVIOUS_ARCHIVE: usize = 0;
+    pub const END_ARCHIVE: usize = 1;
+    pub const OUT_HASH: usize = 2;
+    pub const PREVIOUS_INBOX: usize = 3;
+    pub const END_INBOX: usize = 4;
+    pub const HEADER_HASHES: usize = 5;
+    pub const FEES: usize = 5 + super::MAX_CHECKPOINTS_PER_EPOCH;
+    pub const CHAIN_ID: usize = FEES + 2 * super::MAX_CHECKPOINTS_PER_EPOCH;
+    pub const VERSION: usize = CHAIN_ID + 1;
+    pub const VK_TREE_ROOT: usize = CHAIN_ID + 2;
+    pub const PROTOCOL_CONTRACTS_HASH: usize = CHAIN_ID + 3;
+    pub const PROVER_ID: usize = CHAIN_ID + 4;
+    pub const BLOB_COMMITMENTS_HASH: usize = CHAIN_ID + 5;
+    pub const BLOB_Z: usize = CHAIN_ID + 6;
+}
+
+/// `Constants.EMPTY_EPOCH_OUT_HASH`: an epoch with no L2→L1 messages.
+pub const EMPTY_EPOCH_OUT_HASH: [u8; 32] = [
+    0x00, 0xc9, 0x5e, 0x0c, 0xeb, 0x41, 0x95, 0x10, 0x39, 0xe1, 0x59, 0x27, 0x45, 0xec, 0x2f, 0xae,
+    0xa9, 0x86, 0x6f, 0x6e, 0xaf, 0x01, 0xbf, 0x18, 0x9a, 0x44, 0x63, 0xb4, 0x14, 0x3a, 0xf0, 0x93,
+];
+
+/// `EpochProofLib.addressToField`.
+pub fn address_to_field(a: &[u8; 20]) -> [u8; 32] {
+    let mut o = [0u8; 32];
+    o[12..].copy_from_slice(a);
+    o
+}
+
+/// The last six public inputs, from the batched blob opening (`EpochProofLib`): z; y as three
+/// limbs (`bytes32ToBigNum`: the low 120 bits, the next 120, the top 16); the commitment as its
+/// first 31 bytes and its last 17. `batched` is `BlobLib.validateBatchedBlob`'s 192-byte input:
+/// [versioned hash 32][z 32][y 32][C 48][proof 48].
+pub fn blob_public_inputs(batched: &[u8; 192]) -> [[u8; 32]; 6] {
+    let right = |src: &[u8]| -> [u8; 32] { let mut o = [0u8; 32]; o[32 - src.len()..].copy_from_slice(src); o };
+    let (z, y, c) = (&batched[32..64], &batched[64..96], &batched[96..144]);
+    [right(z), right(&y[17..32]), right(&y[2..17]), right(&y[..2]), right(&c[..31]), right(&c[31..48])]
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -265,6 +309,22 @@ mod tests {
     }
 
     const FIXTURES: [&str; 6] = ["empty_checkpoint_1", "empty_checkpoint_2", "single_tx_checkpoint_1", "single_tx_checkpoint_2", "mixed_checkpoint_1", "mixed_checkpoint_2"];
+
+
+    #[test]
+    fn epoch_layout_and_blob_limbs() {
+        assert_eq!(epoch_pi::BLOB_Z + 6, ROOT_ROLLUP_PUBLIC_INPUTS);
+        let mut b = [0u8; 192];
+        for (i, x) in b.iter_mut().enumerate() { *x = i as u8; }
+        let l = blob_public_inputs(&b);
+        assert_eq!(&l[0][..], &b[32..64]);
+        assert_eq!(&l[1][17..], &b[64 + 17..96]);
+        assert!(l[1][..17].iter().all(|&x| x == 0));
+        assert_eq!(&l[2][17..], &b[64 + 2..64 + 17]);
+        assert_eq!(&l[3][30..], &b[64..66]);
+        assert_eq!(&l[4][1..], &b[96..127]);
+        assert_eq!(&l[5][15..], &b[127..144]);
+    }
 
     #[test]
     fn header_hash_matches_every_fixture() {

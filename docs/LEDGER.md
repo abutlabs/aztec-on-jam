@@ -1620,3 +1620,29 @@ Evidence:
 - `cargo test -p aztec-l1`: 5 passed.
 Issues: #50 closed.
 Next: #51, the epoch path.
+
+## 2026-10-24 64 — #51 closed: the epoch path, Aztec's 113 public inputs, proved by bb 6 and settled on PolkaJam
+Why this issue: after #49 and #50 every value it compares is stored.
+Did:
+- The service's kind 2: refine verifies the root rollup proof (zkVerify's verifier, bb-v6
+  2ae44db) and the batched blob opening, and checks the last six public inputs against the
+  opening. Accumulate runs `assertAcceptable` and compares the other 107 with stored
+  checkpoints and cfg, then writes `tip:proven`, `outbox:<epoch>` and the prover.
+- cfg is 272 bytes (vk hash, vk tree root, protocol contracts hash, proof window). The
+  checkpoint log keeps coinbase and fees.
+- `aztec-l1`: the public-input layout and blob limbs.
+- `tools/aztec-gen/epoch.mjs` builds the public inputs and opening with Aztec's
+  `RootRollupPublicInputs` and `BatchedBlobAccumulator`.
+- `testdata/epoch-circuit`: 113 free public inputs at 2^16.
+Found: refine prefixed every output with kind 1, so accumulate read an epoch's start byte as
+its verdict. The first run showed "accepted" with no proven tip. Fixed: the prefix is the item's
+kind.
+Evidence:
+- `epoch.sh`: the seven verdicts were 1, 1, 36, 4, 5, 1, 37 as expected. The proven tip is
+  checkpoint 2 with b's archive, the Outbox holds b's out hash over 2 checkpoints, and cp:2's
+  blob commitments hash equals Aztec's `BatchedBlob`'s.
+- Refine gas: 359.3M for an epoch proof.
+- `measure.sh` and `inbox.sh` re-run on this code: all as before.
+Issues: #51 closed.
+Next: #52 (node integration). It needs Aztec's local network running, which is disk- and
+memory-bound here, so it gets assessed first.

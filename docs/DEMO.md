@@ -28,14 +28,17 @@ service sends one back whose memo names the receiving account (unshield).
 
 ```sh
 scripts/bootstrap.sh          # the pinned toolchain, the sibling checkouts, both services built
-nets/demo.sh up               # six lasair validators, both services deployed, indexer and wallet
+nets/demo.sh up               # PolkaJam's tiny testnet, both services deployed, indexer and wallet
 nets/demo.sh check            # A shields, pays B, B finds it and unshields: 37 assertions
 open "http://localhost:19710/?user=A"   # and ?user=B in another browser profile
 nets/demo.sh down
 ```
 
-`NET=pj6` runs the same on six PolkaJam validators; `NET=jb-pj6`, `jb-lasair6` and `jb-mixed`
-on native nets that our jamboree fork launches, the last with three validators of each client.
+The default net is PolkaJam's own: `polkajam-testnet` from the v0.8.0 release runs six
+validators and an RPC node on this machine, with no Docker. `NET=lasair6` and `NET=pj6` run the
+same on Docker nets of six lasair or six PolkaJam validators; `NET=jb-pj6`, `jb-lasair6` and
+`jb-mixed` on native nets that our jamboree fork launches, the last with three validators of
+each client.
 Every net is driven the same way: `jamboree rpc` deploys through the Bootstrap service, builds
 and submits work-packages, and reads storage, from the chain spec alone.
 

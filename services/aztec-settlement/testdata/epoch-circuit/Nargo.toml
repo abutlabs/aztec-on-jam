@@ -1,0 +1,6 @@
+[package]
+name = "epoch_circuit"
+type = "bin"
+authors = [""]
+
+[dependencies]

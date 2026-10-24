@@ -4,10 +4,12 @@ version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["abutlabs <abutlabs@gmx.com>"]
-description = "Aztec v6's Rollup as a JAM service: checkpoints checked in refine (header, blobs), chained in accumulate (docs/aztec/SERVICE.md)"
+description = "Aztec v6's Rollup as a JAM service: checkpoints and epoch proofs checked in refine, compared and chained in accumulate (docs/aztec/SERVICE.md)"
 
 [dependencies]
 jam-pvm-common = { path = "../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
 aztec-l1 = { path = "../../crates/aztec-l1" }
 kzg-verify = { path = "../../crates/kzg-verify" }
+# zkVerify's UltraHonk verifier, ported to bb 6.0.0 (our fork, branch bb-v6), as #23 measured it
+ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }

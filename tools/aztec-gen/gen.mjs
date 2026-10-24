@@ -12,6 +12,7 @@
 //   <name>.blobs    [n u8][n × (commitment 48 ‖ blob KZG proof 48)]
 //   <name>.blob<j>  131,072 bytes, blob j's data
 //   <name>.json     Aztec's own values: header hash, blobs hash, slot, number of blobs and txs
+//   <name>.fields.json  the checkpoint's blob fields, for an epoch's batched blob (epoch.mjs)
 // and genesis.json, the genesis archive root.
 import { Checkpoint } from '@aztec-labs/stdlib/checkpoint';
 import { CheckpointHeader } from '@aztec-labs/stdlib/rollup';
@@ -60,10 +61,13 @@ for (const [i, c] of spec.checkpoints.entries()) {
   const items = blobs.map(b => Buffer.concat([b.commitment, Buffer.from(kzg.computeBlobKzgProof(b.data, b.commitment))]));
   writeFileSync(`${out}/${n}.blobs`, Buffer.concat([Buffer.from([blobs.length]), ...items]));
   blobs.forEach((b, j) => writeFileSync(`${out}/${n}.blob${j}`, b.data));
+  writeFileSync(`${out}/${n}.fields.json`, JSON.stringify(cp.toBlobFields().map(f => f.toString())));
   writeFileSync(`${out}/${n}.json`, JSON.stringify({
     headerHash: header.hash().toString(), blobsHash: header.blobsHash.toString(), archive: cp.archive.root.toString(),
     lastArchiveRoot: header.lastArchiveRoot.toString(), slot: Number(slot), timestamp: Number(timestamp),
     blobs: blobs.length, txs: cp.blocks[0].body.txEffects.length, packedHeader: hex(packed),
+    outHash: header.epochOutHash.toString(), inboxRollingHash: header.inboxRollingHash.toString(),
+    coinbase: header.coinbase.toString(), accumulatedFees: header.accumulatedFees.toString(),
   }, null, 1));
   console.log(`${n}: slot ${slot}, parent ${c.parent}, ${cp.blocks[0].body.txEffects.length} txs, ${blobs.length} blob(s), header hash ${header.hash()}`);
   archives[n] = cp.archive;

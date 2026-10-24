@@ -1,4 +1,4 @@
-# The settlement service on PolkaJam: the checkpoint path (#49) and the Inbox (#50)
+# The settlement service on PolkaJam: checkpoints (#49), the Inbox (#50), epoch proofs (#51)
 
 `services/aztec-settlement/measure.sh`, 2026-10-24, Apple M-series Mac, polkajam-testnet v0.8.0
 (six validators, the PVM interpreter), via `spikes/lib/polkajam.sh`. No JIP: all of it is PVM
@@ -21,14 +21,14 @@ code.
 
 | case | blobs | refine gas | verdict | expected |
 |---|---|---|---|---|
-| checkpoint 2 before 1 | 2 | 404,594,293 | 10, wrong parent | 10 |
-| checkpoint 1 | 1 | 262,395,769 | 1, accepted | 1 |
-| checkpoint 1 again | 1 | 262,395,769 | 10, wrong parent | 10 |
-| checkpoint 2, blobsHash altered | 2 | 316,949 | 2, refused in refine (header) | 2 |
-| checkpoint 2, a blob's byte altered | 2 | 404,533,272 | 3, refused in refine (blobs) | 3 |
-| checkpoint 2, timestamp altered | 2 | 404,594,293 | 13, wrong timestamp | 13 |
-| checkpoint 2 | 2 | 404,594,293 | 1, accepted | 1 |
-| checkpoint 3 | 1 | 262,395,769 | 1, accepted | 1 |
+| checkpoint 2 before 1 | 2 | 404,598,679 | 10, wrong parent | 10 |
+| checkpoint 1 | 1 | 262,397,812 | 1, accepted | 1 |
+| checkpoint 1 again | 1 | 262,397,812 | 10, wrong parent | 10 |
+| checkpoint 2, blobsHash altered | 2 | 319,065 | 2, refused in refine (header) | 2 |
+| checkpoint 2, a blob's byte altered | 2 | 404,534,856 | 3, refused in refine (blobs) | 3 |
+| checkpoint 2, timestamp altered | 2 | 404,598,679 | 13, wrong timestamp | 13 |
+| checkpoint 2 | 2 | 404,598,679 | 1, accepted | 1 |
+| checkpoint 3 | 1 | 262,397,812 | 1, accepted | 1 |
 
 The stored `cp:1`, `cp:2` and `cp:3` header hashes equal the ones Aztec's code computed, and
 `tip:pending` is checkpoint 3.
@@ -98,4 +98,43 @@ accumulate costs 263,367 gas for 3 messages and 111,828 for 2 (PolkaJam telemetr
 **Not ported:** Ethereum's Inbox keeps a 4,096-bucket ring and evicts a bucket once it is proven
 consumed. Here every bucket is kept. A refused message's transfer has already moved its 1 unit,
 which stays with the service: a JAM transfer can't be reverted by its recipient.
+
+## Epoch proofs (#51)
+
+`services/aztec-settlement/epoch.sh`, the same machine and testnet.
+
+- **The proof.** Aztec's prover isn't available here, so it is a genuine bb 6.0.0 UltraHonk
+  proof in the epoch proof's shape: plain, Keccak transcript, the 113 public inputs all free
+  (`testdata/epoch-circuit`, 2^16 gates, 0.6 s to prove).
+- **The public inputs and blob opening come from Aztec's code.** `tools/aztec-gen/epoch.mjs`
+  uses `RootRollupPublicInputs.toFields()` over the two checkpoints, and
+  `BatchedBlobAccumulator.batch` for the batched opening.
+- **What each side checks.** Refine verifies the proof and the opening, and that the last six
+  public inputs are the opening's (`EpochProofLib`'s limbs). Accumulate compares the other 107
+  with what `computeEpochProofPublicInputs` would assemble from the stored checkpoints and
+  `cfg`, after `assertAcceptable`'s range checks.
+
+| item | refine gas | verdict | expected |
+|---|---|---|---|
+| checkpoint a | 262,397,812 | 1, accepted | 1 |
+| checkpoint b | 404,598,679 | 1, accepted | 1 |
+| epoch proof, vk tree root wrong (a valid proof) | 359,284,024 | 36, wrong public input (accumulate) | 36 |
+| epoch proof, a public input changed after proving | 8,559,249 | 4, bad proof (refine) | 4 |
+| epoch proof, the blob opening's z altered | 358,999,149 | 5, bad blob opening (refine) | 5 |
+| epoch proof | 359,321,493 | 1, accepted | 1 |
+| epoch proof again | 359,321,493 | 37, already proven | 37 |
+
+```
+tip:proven checkpoint 2, archive equals checkpoint b's
+outbox: out hash equals checkpoint b's, 2 checkpoints
+cp:2 blob commitments hash equals Aztec's BatchedBlob's
+```
+
+**Gas.** An epoch proof's refine costs 359M: the UltraHonk check at 2^16 plus the point
+evaluation (199M). Aztec's real proof is 2^24, which #23 measured at 180.8M for the check
+alone, so a real epoch proof is about 380M, plus 433M for the attestations once #54 adds them.
+That is 813M in all, within a tiny package.
+
+**Not ported:** pruning unproven checkpoints when the proof window closes, prover rewards, and
+the attestations (#54). The proof window itself is checked.
 

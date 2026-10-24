@@ -107,8 +107,12 @@ Aztec's v6 L1 fixtures (`crates/aztec-l1`).
 
 The Inbox (#50) is a deferred transfer from any JAM service, absorbed into Aztec's rolling-hash
 buckets, one per JAM timeslot. Its leaves and rolling hashes equal Aztec's released code's, and
-checkpoints must consume it as `validateInboxConsumption` requires. The epoch path (#51) and the
-signatures (#54) follow.
+checkpoints must consume it as `validateInboxConsumption` requires.
+
+The epoch path (#51) verifies a root rollup proof and its batched blob opening in refine. In
+accumulate it compares the public inputs with what `EpochProofLib` assembles from storage,
+then advances `tip:proven` and writes the Outbox. It is tested with a bb 6 proof carrying the
+public inputs Aztec's own code builds. The signatures (#54) follow.
 
 ## Built first: the skeleton
 

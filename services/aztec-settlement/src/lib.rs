@@ -2,8 +2,9 @@
 //!
 //! Configuration is compiled in (build.rs: `cfg.bin`, written by `measure.sh` or a deployment), so no
 //! work item can set it: [genesis archive 32][Aztec genesis unix time u64][Aztec slot seconds
-//! u64][epoch length in Aztec slots u64][mana minimum fee u128][mana limit 32][chain id 32][version 32],
-//! big-endian.
+//! u64][epoch length in Aztec slots u64][mana minimum fee u128][mana limit 32][chain id 32][version 32]
+//! [epoch proof's vk sha256 32][vk tree root 32][protocol contracts hash 32][proof submission epochs
+//! u64], big-endian.
 //!
 //! The Inbox (`Inbox.sol`, #50): an L1→L2 message is a deferred transfer to this service whose
 //! memo is [recipient 32][content 32][secret hash 32][version 32]; its L1 sender is the sending
@@ -28,6 +29,19 @@
 //!     slot's, the fee is the minimum, and the inbox is consumed as `validateInboxConsumption`
 //!     requires; then `cp:<n>` and `tip:pending` are written and the epoch's blob commitments hash
 //!     is advanced.
+//! Work item kind 2, an epoch proof (`EpochProofLib.submitEpochRootProof`, #51):
+//!   payload [2][tag u8][start u64 LE][end u64 LE][vk_len u16 LE][vk][113 × 32 public inputs]
+//!     [proof_len u32 LE][proof][batched blob opening 192]
+//!   refine: the root rollup proof (plain UltraHonk, Keccak transcript) against its public
+//!     inputs, the batched blob opening (EIP-4844's point evaluation), and the last six public
+//!     inputs against that opening; output [2][tag][start][end][vk sha256 32][the first 107
+//!     public inputs × 32]
+//!   accumulate (`assertAcceptable` and `computeEpochProofPublicInputs`, by comparison): the vk is
+//!     `cfg`'s; start..end is one epoch, from its first checkpoint, building on the proven tip, at
+//!     most 32, within the proof window; every public input equals what Ethereum's Rollup would
+//!     assemble from stored checkpoints and `cfg`. Then `tip:proven` advances and the epoch's out
+//!     hash goes to `outbox:<epoch>` (unless empty). Not ported: attestations (#54), pruning
+//!     unproven checkpoints, prover rewards.
 //! Every item's verdict (1 accepted, or the reason codes below) is stored at "v:" ++ its tag. A
 //! refused item still exports its declared number of segments (zeros), because a work item that
 //! exports a different number has its output replaced by an error (GP 0.8.0
@@ -38,19 +52,25 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use aztec_l1::{blob_commitments_hash, check_header, inbox_rolling_hash, is_field, l1_to_l2_leaf, parse_blob_commitments, Header, HEADER_LEN};
+use aztec_l1::{
+    address_to_field, blob_commitments_hash, blob_public_inputs, check_header, epoch_pi, inbox_rolling_hash, is_field,
+    l1_to_l2_leaf, parse_blob_commitments, sha256_to_field, Header, EMPTY_EPOCH_OUT_HASH, HEADER_LEN,
+    MAX_CHECKPOINTS_PER_EPOCH, ROOT_ROLLUP_PUBLIC_INPUTS,
+};
+use ultrahonk_no_std::{verify, ProofType};
 use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::refine;
 use jam_pvm_common::{declare_service, Service};
 
-polkavm_derive::min_stack_size!(4 * 1024 * 1024);
+// BN254 pairings overflow polkavm's default stack (spikes/epoch-proof)
+polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 
 declare_service!(Settlement);
 struct Settlement;
 
 const CFG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/cfg.bin"));
-const _: () = assert!(CFG.len() == 168, "cfg.bin must be 168 bytes");
+const _: () = assert!(CFG.len() == 272, "cfg.bin must be 272 bytes");
 /// JAM's Common Era, 2025-01-01 12:00 UTC (GP 0.8.0 `overview.tex:91`), and its 6-second slots.
 const JAM_COMMON_ERA: u64 = 1_735_732_800;
 const JAM_SLOT_SECONDS: u64 = 6;
@@ -64,6 +84,10 @@ struct Cfg {
     mana_limit: [u8; 32],
     chain_id: [u8; 32],
     version: [u8; 32],
+    vk_hash: [u8; 32],
+    vk_tree_root: [u8; 32],
+    protocol_contracts_hash: [u8; 32],
+    proof_submission_epochs: u64,
 }
 
 fn cfg() -> Cfg {
@@ -77,6 +101,10 @@ fn cfg() -> Cfg {
         mana_limit: CFG[72..104].try_into().unwrap(),
         chain_id: CFG[104..136].try_into().unwrap(),
         version: CFG[136..168].try_into().unwrap(),
+        vk_hash: CFG[168..200].try_into().unwrap(),
+        vk_tree_root: CFG[200..232].try_into().unwrap(),
+        protocol_contracts_hash: CFG[232..264].try_into().unwrap(),
+        proof_submission_epochs: u(264),
     }
 }
 
@@ -100,6 +128,17 @@ const INBOX_UNCONSUMED: u8 = 20;
 /// `Constants.MAX_L1_TO_L2_MSGS_PER_BLOCK` (a bucket) and `_PER_CHECKPOINT`.
 const MAX_MSGS_PER_BUCKET: u32 = 256;
 const MAX_MSGS_PER_CHECKPOINT: u64 = 1024;
+// The epoch path's verdicts.
+const BAD_PROOF: u8 = 4;
+const BAD_BLOB_OPENING: u8 = 5;
+const WRONG_VK: u8 = 30;
+const BAD_RANGE: u8 = 31;
+const NOT_ONE_EPOCH: u8 = 32;
+const NOT_EPOCH_START: u8 = 33;
+const NOT_ON_PROVEN: u8 = 34;
+const PAST_DEADLINE: u8 = 35;
+const WRONG_PUBLIC_INPUT: u8 = 36;
+const ALREADY_PROVEN: u8 = 37;
 
 fn checkpoint(p: &[u8]) -> Result<Vec<u8>, u8> {
     let c = cfg();
@@ -138,6 +177,8 @@ fn checkpoint(p: &[u8]) -> Result<Vec<u8>, u8> {
     out.extend_from_slice(&header.out_hash);
     out.extend_from_slice(&header.fee_per_l2_gas.to_le_bytes());
     out.extend_from_slice(&hint);
+    out.extend_from_slice(&header.coinbase);
+    out.extend_from_slice(&header.accumulated_fees);
     out.push(n as u8);
     commitments.iter().for_each(|cm| out.extend_from_slice(cm));
     Ok(out)
@@ -271,8 +312,9 @@ fn accept(o: &[u8], timeslot: u32) -> u8 {
     let (inbox, out_hash) = (w(112), w(144));
     let fee = u128::from_le_bytes(o[176..192].try_into().unwrap());
     let hint = u(192);
-    let n = o[200] as usize;
-    let commitments: Vec<[u8; 48]> = o[201..201 + 48 * n].chunks_exact(48).map(|x| x.try_into().unwrap()).collect();
+    let (coinbase, fees): ([u8; 20], [u8; 32]) = (o[200..220].try_into().unwrap(), w(220));
+    let n = o[252] as usize;
+    let commitments: Vec<[u8; 48]> = o[253..253 + 48 * n].chunks_exact(48).map(|x| x.try_into().unwrap()).collect();
     if last_archive != t.archive {
         return WRONG_PARENT;
     }
@@ -299,8 +341,8 @@ fn accept(o: &[u8], timeslot: u32) -> u8 {
     let bch = blob_commitments_hash(&t.blob_commitments_hash, &commitments, first_of_epoch);
     let number = t.number + 1;
     // cp:<n>: [header hash 32][archive 32][slot u64][out hash 32][inbox hash 32][blob commitments hash 32]
-    // [inbox messages consumed u64][bucket u64]
-    let mut log = Vec::with_capacity(184);
+    // [inbox messages consumed u64][bucket u64][coinbase 20][accumulated fees 32]
+    let mut log = Vec::with_capacity(236);
     log.extend_from_slice(&header_hash);
     log.extend_from_slice(&archive);
     log.extend_from_slice(&slot.to_le_bytes());
@@ -309,6 +351,8 @@ fn accept(o: &[u8], timeslot: u32) -> u8 {
     log.extend_from_slice(&bch);
     log.extend_from_slice(&consumed.to_le_bytes());
     log.extend_from_slice(&hint.to_le_bytes());
+    log.extend_from_slice(&coinbase);
+    log.extend_from_slice(&fees);
     set_storage(&key(b"cp:", number), &log).ok();
     let mut tip = Vec::with_capacity(96);
     tip.extend_from_slice(&number.to_le_bytes());
@@ -321,16 +365,146 @@ fn accept(o: &[u8], timeslot: u32) -> u8 {
     ACCEPTED
 }
 
+fn epoch_proof(p: &[u8]) -> Result<Vec<u8>, u8> {
+    let le = |at: usize, n: usize| -> Result<u64, u8> {
+        let b = p.get(at..at + n).ok_or(BAD_PAYLOAD)?;
+        Ok(b.iter().rev().fold(0u64, |a, &x| (a << 8) | x as u64))
+    };
+    let (start, end) = (le(0, 8)?, le(8, 8)?);
+    let vk_len = le(16, 2)? as usize;
+    let vk = p.get(18..18 + vk_len).ok_or(BAD_PAYLOAD)?;
+    let mut at = 18 + vk_len;
+    let pubs: Vec<[u8; 32]> = p
+        .get(at..at + 32 * ROOT_ROLLUP_PUBLIC_INPUTS)
+        .ok_or(BAD_PAYLOAD)?
+        .chunks_exact(32)
+        .map(|c| c.try_into().unwrap())
+        .collect();
+    at += 32 * ROOT_ROLLUP_PUBLIC_INPUTS;
+    let proof_len = le(at, 4)? as usize;
+    let proof = p.get(at + 4..at + 4 + proof_len).ok_or(BAD_PAYLOAD)?;
+    let batched: [u8; 192] = p.get(at + 4 + proof_len..).ok_or(BAD_PAYLOAD)?.try_into().map_err(|_| BAD_PAYLOAD)?;
+    verify::<()>(vk, &ProofType::Plain(proof.into()), &pubs).map_err(|_| BAD_PROOF)?;
+    if kzg_verify::point_evaluation(&batched) != Ok(true) || blob_public_inputs(&batched)[..] != pubs[epoch_pi::BLOB_Z..] {
+        return Err(BAD_BLOB_OPENING);
+    }
+    let mut out = Vec::with_capacity(48 + 32 * epoch_pi::BLOB_Z);
+    out.extend_from_slice(&start.to_le_bytes());
+    out.extend_from_slice(&end.to_le_bytes());
+    out.extend_from_slice(&sha256_to_field(vk));
+    pubs[..epoch_pi::BLOB_Z].iter().for_each(|x| out.extend_from_slice(x));
+    Ok(out)
+}
+
+/// A stored checkpoint log, or the genesis values for checkpoint 0.
+struct Log {
+    header_hash: [u8; 32],
+    archive: [u8; 32],
+    slot: u64,
+    out_hash: [u8; 32],
+    inbox: [u8; 32],
+    blob_commitments_hash: [u8; 32],
+    coinbase: [u8; 20],
+    fees: [u8; 32],
+}
+
+fn log(n: u64, c: &Cfg) -> Option<Log> {
+    if n == 0 {
+        return Some(Log { header_hash: [0; 32], archive: c.genesis_archive, slot: 0, out_hash: [0; 32], inbox: [0; 32], blob_commitments_hash: [0; 32], coinbase: [0; 20], fees: [0; 32] });
+    }
+    let l = get_storage(&key(b"cp:", n)).filter(|l| l.len() == 236)?;
+    let w = |at: usize| -> [u8; 32] { l[at..at + 32].try_into().unwrap() };
+    Some(Log {
+        header_hash: w(0),
+        archive: w(32),
+        slot: u64::from_le_bytes(l[64..72].try_into().unwrap()),
+        out_hash: w(72),
+        inbox: w(104),
+        blob_commitments_hash: w(136),
+        coinbase: l[184..204].try_into().unwrap(),
+        fees: w(204),
+    })
+}
+
+fn proven() -> u64 {
+    get_storage(b"tip:proven").map_or(0, |v| u64::from_le_bytes(v[..8].try_into().unwrap()))
+}
+
+fn accept_epoch(o: &[u8], timeslot: u32) -> u8 {
+    let c = cfg();
+    let u = |at: usize| u64::from_le_bytes(o[at..at + 8].try_into().unwrap());
+    let (start, end) = (u(0), u(8));
+    if o[16..48] != c.vk_hash {
+        return WRONG_VK;
+    }
+    let pi = |i: usize| -> [u8; 32] { o[48 + 32 * i..80 + 32 * i].try_into().unwrap() };
+    let pending = tip(&c).number;
+    if start == 0 || end < start || end > pending || (end - start + 1) as usize > MAX_CHECKPOINTS_PER_EPOCH {
+        return BAD_RANGE;
+    }
+    let logs: Vec<Log> = match (start - 1..=end).map(|n| log(n, &c)).collect::<Option<_>>() {
+        Some(l) => l,
+        None => return BAD_RANGE,
+    };
+    let (parent, first, last) = (&logs[0], &logs[1], &logs[logs.len() - 1]);
+    let epoch = |slot: u64| slot / c.epoch_slots;
+    if epoch(first.slot) != epoch(last.slot) {
+        return NOT_ONE_EPOCH;
+    }
+    if !(start == 1 || epoch(parent.slot) < epoch(first.slot)) {
+        return NOT_EPOCH_START;
+    }
+    let proven_before = proven();
+    if start - 1 > proven_before {
+        return NOT_ON_PROVEN;
+    }
+    let current_epoch = epoch(unix_time(timeslot).saturating_sub(c.genesis_time) / c.slot_seconds);
+    if current_epoch >= epoch(first.slot) + c.proof_submission_epochs + 1 {
+        return PAST_DEADLINE;
+    }
+    // `computeEpochProofPublicInputs`, compared
+    let mut want = alloc::vec![[0u8; 32]; epoch_pi::BLOB_Z];
+    want[epoch_pi::PREVIOUS_ARCHIVE] = parent.archive;
+    want[epoch_pi::END_ARCHIVE] = last.archive;
+    want[epoch_pi::OUT_HASH] = last.out_hash;
+    want[epoch_pi::PREVIOUS_INBOX] = parent.inbox;
+    want[epoch_pi::END_INBOX] = last.inbox;
+    for (i, l) in logs[1..].iter().enumerate() {
+        want[epoch_pi::HEADER_HASHES + i] = l.header_hash;
+        want[epoch_pi::FEES + 2 * i] = address_to_field(&l.coinbase);
+        want[epoch_pi::FEES + 2 * i + 1] = l.fees;
+    }
+    want[epoch_pi::CHAIN_ID] = c.chain_id;
+    want[epoch_pi::VERSION] = c.version;
+    want[epoch_pi::VK_TREE_ROOT] = c.vk_tree_root;
+    want[epoch_pi::PROTOCOL_CONTRACTS_HASH] = c.protocol_contracts_hash;
+    want[epoch_pi::PROVER_ID] = pi(epoch_pi::PROVER_ID); // the prover names itself
+    want[epoch_pi::BLOB_COMMITMENTS_HASH] = last.blob_commitments_hash;
+    if (0..epoch_pi::BLOB_Z).any(|i| pi(i) != want[i]) {
+        return WRONG_PUBLIC_INPUT;
+    }
+    if end <= proven_before {
+        return ALREADY_PROVEN;
+    }
+    set_storage(b"tip:proven", &[&end.to_le_bytes()[..], &last.archive].concat()).ok();
+    set_storage(&key(b"prover:", end), &pi(epoch_pi::PROVER_ID)).ok();
+    if last.out_hash != EMPTY_EPOCH_OUT_HASH {
+        set_storage(&key(b"outbox:", epoch(last.slot)), &[&last.out_hash[..], &(end - start + 1).to_le_bytes()].concat()).ok();
+    }
+    ACCEPTED
+}
+
 impl Service for Settlement {
     fn refine(_core: CoreIndex, item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
         let tag = p.get(1).copied().unwrap_or(0);
         let out = match (p.first(), p.get(2..)) {
             (Some(1), Some(rest)) => checkpoint(rest),
+            (Some(2), Some(rest)) => epoch_proof(rest),
             _ => Err(BAD_PAYLOAD),
         };
         match out {
-            Ok(o) => [&[1u8, tag][..], &o].concat().into(),
+            Ok(o) => [&[p[0], tag][..], &o].concat().into(),
             Err(reason) => {
                 let declared = refine::work_item_summary(item).map_or(0, |s| s.export_count as usize);
                 let zero = [0u8; SEGMENT_LEN];
@@ -357,7 +531,8 @@ impl Service for Settlement {
             let o = out.0;
             let tag = o.get(1).copied().unwrap_or(0);
             let verdict = match o.first() {
-                Some(1) if o.len() >= 203 && o.len() == 203 + 48 * o[202] as usize => accept(&o[2..], timeslot),
+                Some(1) if o.len() >= 255 && o.len() == 255 + 48 * o[254] as usize => accept(&o[2..], timeslot),
+                Some(2) if o.len() == 2 + 16 + 32 + 32 * epoch_pi::BLOB_Z => accept_epoch(&o[2..], timeslot),
                 _ => o.get(2).copied().unwrap_or(0),
             };
             set_storage(&[b'v', b':', tag], &[verdict]).ok();
