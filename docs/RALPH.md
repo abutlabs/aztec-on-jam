@@ -250,3 +250,33 @@ submit later.
 `<promise>PHASE 3 DONE</promise>` may be written only when every row above holds with its
 evidence in the ledger and on its issue, the demo's checks still pass (`NET=pj6
 nets/demo.sh up`, `check`, from clean), and CI is green on the last commit.
+
+# Phase 4: Aztec on JAM, settling without the JIP
+
+Phase 3 ended with `PHASE 3 DONE` (ledger 60). JIP-8 is kept in reserve
+(`docs/jip/SUBMISSION.md`). Phase 4's goal, from Aodh (2026-10-24): complete Aztec on JAM
+under today's specs. Every per-package cost was measured to fit without host calls: about
+981M a checkpoint and 813M an epoch proof, against a tiny package's 1e9 (#23, #37, #39). The
+settlement service becomes Aztec's Rollup, Inbox and Outbox, checked against Aztec v6's own
+fixtures (aztec-packages v6.0.0, 0219f11, `l1-contracts/test/fixtures`). Aztec's own node then
+settles on it, with Aztec's packages used as released.
+
+The iteration steps and rules are Phase 3's, and the demo's checks must keep holding.
+
+## The issues, and what closes each
+
+| Issue | Closed when |
+|---|---|
+| #49 the checkpoint path | On PolkaJam, the service accepts `mixed_checkpoint_1` then `_2`. Its header hash and blobs hash equal the fixtures', and the blob commitments are recomputed from the body. It refuses the second checkpoint first, a tampered header and a wrong blob, and its gas fits a tiny package. |
+| #50 the Inbox | The fixtures' messages, sent as deferred transfers, give the fixtures' `inboxRollingHash`. A checkpoint consuming them is accepted; unsettled or regressed consumption is refused. |
+| #51 the epoch path | A bb 6 UltraHonk proof in the epoch proof's shape, carrying the fixture epoch's real public inputs, advances `tip:proven`. One changed public input is refused by accumulate, and the stored Outbox root equals the fixtures' out hash. |
+| #52 node integration decided | A recorded run of Aztec v6's local network lists every L1 method, contract and event the node uses. `docs/aztec/NODE.md` chooses the facade or the seams on that evidence. |
+| #53 end to end | A PXE transaction is checkpointed by Aztec's unchanged sequencer onto the settlement service on PolkaJam, synced back by Aztec's archiver, and seen mined by the PXE. |
+| #48 field-wise hooks | As filed. In Phase 4 it applies to the settlement service first, before the privacy service's re-soak. |
+| #28 tracking | A status comment at the phase's end. |
+
+## Phase 4 done
+
+`<promise>PHASE 4 DONE</promise>` may be written only when every row above holds with its
+evidence in the ledger and on its issue, the demo's checks still pass from clean, and CI is
+green on the last commit.

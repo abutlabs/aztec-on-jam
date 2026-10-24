@@ -1558,3 +1558,14 @@ soaked code and so need a re-soak).
 Nothing was submitted or posted outside this repository's issues.
 - **CI, recorded:** run 40027377792 on 32745d9 passed (the ci workflow). The commit adding this
   line touches only this file, and its run is checked before the phase is called done.
+
+## 2026-10-24 61 — Phase 4 opened: Aztec on JAM without the JIP
+Why: Aodh asked to complete Aztec on JAM under today's specs, keeping JIP-8 in reserve.
+Did: RALPH.md's Phase 4 section, and issues #49–#53 under #28. The lasair fuzzer check gives
+exit 0 (nothing new). Aztec v6's L1 fixtures (`mixed_checkpoint_1.json` and others) hold real
+headers, header hashes, blob commitments, batched blob inputs, bodies and inbox messages. So
+the settlement service can be tested on Aztec's own encodings before any node runs.
+Machine: 16 GB of RAM, Docker's VM 8 GB, 11 GB of disk free. #52 and #53 will need room for
+Aztec's packages.
+Next: #49, the checkpoint path. It comes first because #50 and #51 build on its stored
+checkpoints.
