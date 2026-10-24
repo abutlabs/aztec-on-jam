@@ -91,3 +91,59 @@ The facade (`tools/jam-l1`), in this order:
 
 The node runs with `--node --archiver --sequencer`, not `--local-network`, against the facade's
 addresses.
+
+## Built: Aztec v6's released node settling on JAM (#53)
+
+`tools/aztec-local/on-jam.sh --node --sequencer` starts three things:
+- a PolkaJam testnet with the settlement service configured for the node's genesis
+  (`services/aztec-settlement/devnet.sh`);
+- the facade (`tools/aztec-local/jam-l1.mjs`) as the node's L1;
+- the node, `@aztec-labs/aztec` 6.0.0 as released.
+
+`node send-tx.mjs` then sends transactions through Aztec's own PXE (`EmbeddedWallet`), the way the
+local network's start does it.
+
+Run on 2026-10-24:
+
+```
+publish class:    tx 0x18d3ee3e…  status proposed  block 4  after 15 s
+publish instance: tx 0x173cd3f4…  status proposed  block 5  after 20 s
+class publicly registered: true | instance published: true
+archiver: Downloaded checkpoint 1–3: 0 tx; checkpoint 4: 2 tx; checkpoints 5–7: 0 tx
+node_getTxReceipt: checkpointed, block 4 / checkpointed, block 5
+facade: 7 checkpoints accepted by the settlement service, 0 refused, 7 replacement
+        transactions folded into their originals, 0 errors
+```
+
+Every checkpoint takes the full path:
+1. Aztec's sequencer builds it and proposes it to "L1": a blob transaction to Multicall3.
+2. The facade relays it as a work package (kind 1, blobs as extrinsics, KZG proofs
+   recomputed).
+3. The settlement service checks it in refine and chains it in accumulate.
+4. The facade sees `cp:<n>` and emits `CheckpointProposed`, with the payload digest and
+   attestations hash computed by Aztec's own functions.
+5. Aztec's archiver downloads it, verifies the calldata against those hashes, and reads the
+   blobs from the file store the sequencer wrote.
+
+**What the facade had to get right**, each found by a run:
+- **Genesis:** the node stands by until the Rollup's genesis matches its own.
+- **The deployment log:** the archiver probes the Rollup's deployment `OwnershipTransferred`.
+- **The exact `CheckpointLog` shape.**
+- **Raw storage reads:** `isEpochSetUp`, and the STF tips slot.
+- **State overrides:** `eth_call`'s and `eth_simulateV1`'s, which the sequencer uses to simulate
+  pipelined proposals, with a block-time override.
+- **Reverts** as JSON-RPC error 3, with Aztec's custom errors ABI-encoded.
+- **Nonces:** `latest` counts only included transactions.
+- **Replacements:** a second transaction for a pending nonce replaces the first, so one
+  checkpoint is relayed once.
+- **The event's hashes,** which the archiver checks the calldata against.
+
+**Not yet, and why:**
+- **Test mode** (`PROVER_REAL_PROOFS=false`), as the local network runs: transactions' client
+  proofs aren't verified.
+- **No prover,** so the proven tip stays at 0. The epoch path is built and tested with a real
+  bb 6 proof (#51). A prover node on this net needs Aztec's real proving, which is hardware-bound
+  here.
+- **No committee:** the target committee size is 0, as in the local network. Signatures are
+  #54.
+- **P2P off,** with one sequencer.

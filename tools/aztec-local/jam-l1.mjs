@@ -14,12 +14,18 @@
 import { createServer } from 'http';
 import { appendFileSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
+import { AsyncLocalStorage } from 'async_hooks';
 import {
-  decodeFunctionData, encodeFunctionResult, encodeEventTopics, encodeAbiParameters, keccak256, parseTransaction,
+  decodeFunctionData, encodeFunctionResult, encodeErrorResult, encodeEventTopics, encodeAbiParameters, keccak256, parseTransaction,
   recoverTransactionAddress, toFunctionSelector, toHex, hexToBytes, bytesToHex, zeroAddress,
 } from 'viem';
 import * as artifacts from '@aztec-foundation/l1-artifacts';
 import { getKzg } from '@aztec-labs/blob-lib';
+import { computeAttestationsHash } from '@aztec-labs/ethereum/contracts';
+import { computeCheckpointPayloadDigest } from '@aztec-labs/stdlib/checkpoint';
+import { CheckpointHeader } from '@aztec-labs/stdlib/rollup';
+import { Fr } from '@aztec-labs/foundation/curves/bn254';
+import { EthAddress } from '@aztec-labs/foundation/eth-address';
 
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const C = config.cfg, A = Object.fromEntries(Object.entries(config.addresses).map(([k, v]) => [k, v.toLowerCase()]));
@@ -79,16 +85,44 @@ async function read(key) {
 const keyN = (prefix, n) => Buffer.concat([Buffer.from(prefix), Buffer.from(new BigUint64Array([BigInt(n)]).buffer)]);
 
 // --- The service's state, as Aztec's contracts would report it -------------------------------
+// eth_call's state overrides: Aztec's sequencer simulates with the chain tips overridden
+// (RollupContract.makeChainTipsOverride writes the STF storage slot, pending << 128 | proven).
+const STF_SLOT = keccak256(toHex('aztec.stf.storage'));
+function stfOverride(overrides) {
+  const o = Object.entries(overrides ?? {}).find(([k]) => k.toLowerCase() === A.rollup)?.[1];
+  const d = o?.stateDiff ?? o?.state;
+  const v = Array.isArray(d) ? d.find((x) => x.slot?.toLowerCase() === STF_SLOT)?.value : Object.entries(d ?? {}).find(([k]) => k.toLowerCase() === STF_SLOT)?.[1];
+  return v ? BigInt(v) : undefined;
+}
+const callScope = new AsyncLocalStorage();   // {tips, time}: the overrides of the call being answered
+const now = () => callScope.getStore()?.time ?? head.timestamp;
 async function tips() {
+  const tipsOverride = callScope.getStore()?.tips;
+  if (tipsOverride) return tipsOverride;
   const p = await read('tip:pending'), q = await read('tip:proven');
   return { pending: p ? u64le(p) : 0n, proven: q ? u64le(q) : 0n };
 }
 async function checkpointLog(n) {
   if (BigInt(n) === 0n) return { archive: C.genesisArchive, headerHash: word(0), blobCommitmentsHash: word(0), outHash: word(0), slot: 0n, inbox: word(0), consumed: 0n, bucket: 0n };
   const l = await read(keyN('cp:', n));
-  if (!l || l.length !== 236) return undefined;
+  if (!l || l.length !== 236) return inFlight(BigInt(n));
   const h = (at) => bytesToHex(l.subarray(at, at + 32));
   return { headerHash: h(0), archive: h(32), slot: u64le(l, 64), outHash: h(72), inbox: h(104), blobCommitmentsHash: h(136), consumed: u64le(l, 168), bucket: u64le(l, 176) };
+}
+// A checkpoint relayed but not yet accumulated: Aztec's sequencer pipelines, simulating its next
+// proposal on top of one still in flight. Walk the chain from the stored tip by parent archive.
+async function inFlight(n) {
+  const stored = await read('tip:pending');
+  let k = stored ? u64le(stored) : 0n;
+  if (n <= k) return undefined;
+  let tip = await checkpointLog(k);
+  while (k < n) {
+    const next = [...txs.values()].find((r) => r.propose && r.status === undefined && !r.dropped && r.lastArchive === tip.archive.toLowerCase());
+    if (!next) return undefined;
+    k++;
+    tip = { archive: next.archive, headerHash: next.headerHash, blobCommitmentsHash: word(0), outHash: next.outHash, slot: next.slot, inbox: next.inbox, consumed: 0n, bucket: 0n };
+  }
+  return tip;
 }
 const slotAt = (ts) => (BigInt(ts) - BigInt(C.genesisTime)) / BigInt(C.slotSeconds);
 
@@ -104,11 +138,14 @@ async function onNewBlock(b) {
   const t = await tips();
   for (let n = seenCheckpoints + 1n; n <= t.pending; n++) {
     const cp = await checkpointLog(n);
-    const tx = [...txs.values()].find((x) => x.archive === cp.archive);
+    const tx = [...txs.values()].find((x) => x.archive === cp.archive && !x.dropped);
     const topics = encodeEventTopics({ abi: artifacts.RollupAbi, eventName: 'CheckpointProposed', args: { checkpointNumber: n, archive: cp.archive } });
     const ev = artifacts.RollupAbi.find((x) => x.type === 'event' && x.name === 'CheckpointProposed');
     const nonIndexed = ev.inputs.filter((i) => !i.indexed);
-    const values = nonIndexed.map((i) => (i.name === 'versionedBlobHashes' || i.name === 'blobHashes' ? tx?.blobHashes ?? [] : i.type === 'bytes32' ? word(0) : 0n));
+    // the hashes the archiver checks the proposal's calldata against (calldata_retriever.js),
+    // computed as the Rollup does, by Aztec's own functions
+    const byName = { versionedBlobHashes: tx?.blobHashes ?? [], blobHashes: tx?.blobHashes ?? [], payloadDigest: tx?.payloadDigest ?? word(0), attestationsHash: tx?.attestationsHash ?? word(0) };
+    const values = nonIndexed.map((i) => byName[i.name] ?? (i.type === 'bytes32' ? word(0) : 0n));
     const data = encodeAbiParameters(nonIndexed, values);
     logs.push({ address: A.rollup, topics, data, blockNumber: b.number, blockHash: b.hash, transactionHash: tx?.hash ?? keccak256(cp.archive), logIndex: logs.length });
     if (tx) { tx.blockNumber = b.number; tx.blockHash = b.hash; tx.status = 1; b.txs.push(tx.hash); }
@@ -117,7 +154,7 @@ async function onNewBlock(b) {
   seenCheckpoints = t.pending;
   // relayed transactions the service refused
   for (const tx of txs.values()) {
-    if (tx.status === undefined && tx.tag !== undefined) {
+    if (tx.status === undefined && tx.tag !== undefined && !tx.dropped) {
       const v = await read(Buffer.from([0x76, 0x3a, tx.tag]));
       if (v && v[0] !== 1) { tx.status = 0; tx.blockNumber = b.number; tx.blockHash = b.hash; b.txs.push(tx.hash); log({ refused: tx.hash, reason: v[0] }); }
     }
@@ -135,7 +172,7 @@ const views = {
     getPendingCheckpointNumber: async () => (await tips()).pending,
     getProvenCheckpointNumber: async () => (await tips()).proven,
     archiveAt: async ([n]) => (await checkpointLog(n))?.archive ?? word(0),
-    archive: async () => (await checkpointLog((await tips()).pending)).archive,
+    archive: async () => (await checkpointLog((await tips()).pending))?.archive ?? word(0),
     getCheckpoint: async ([n]) => {
       const cp = await checkpointLog(n);
       if (!cp) return undefined;
@@ -144,13 +181,44 @@ const views = {
     },
     status: async ([n]) => {
       const t = await tips();
-      return [t.proven, (await checkpointLog(t.proven)).archive, t.pending, (await checkpointLog(t.pending)).archive, (await checkpointLog(n))?.archive ?? word(0), (await checkpointLog(t.proven)).slot / BigInt(C.epochSlots)];
+      const proven = await checkpointLog(t.proven), pend = await checkpointLog(t.pending);
+      if (!proven || !pend) revert('Rollup__InvalidArchive', [word(0), word(t.pending)]);
+      return [t.proven, proven.archive, t.pending, pend.archive, (await checkpointLog(n))?.archive ?? word(0), proven.slot / BigInt(C.epochSlots)];
     },
     canPruneAtTime: async () => false,
+    // ProposeLib's preflight: the slot at _ts and the next checkpoint number, if _archive is the
+    // pending tip's and the slot is after its; reverts otherwise
+    canProposeAtTime: async ([ts, archive]) => {
+      const t = await tips();
+      const tip = await checkpointLog(t.pending);
+      if (!tip) revert('Rollup__InvalidArchive', [word(0), archive]);
+      const slot = slotAt(ts);
+      if (archive.toLowerCase() !== tip.archive.toLowerCase()) revert('Rollup__InvalidArchive', [tip.archive, archive]);
+      if (slot <= tip.slot) revert('Rollup__SlotAlreadyInChain', [tip.slot, slot]);
+      return [slot, t.pending + 1n];
+    },
     canPrune: async () => false,
-    getCurrentSlot: async () => slotAt(head.timestamp),
+    getCurrentSlot: async () => slotAt(now()),
     getSlotAt: async ([ts]) => slotAt(ts),
-    getCurrentEpoch: async () => slotAt(head.timestamp) / BigInt(C.epochSlots),
+    getCurrentEpoch: async () => slotAt(now()) / BigInt(C.epochSlots),
+    // ProposeLib.validateHeader, as the service's accumulate applies it (services/aztec-settlement)
+    validateHeaderWithAttestations: async ([header]) => { await checkHeader(header); return []; },
+    // ProposeLib's header and Inbox checks; returns the bucket to pass as propose's bucketHint
+    validateCheckpointHeaderAndInbox: async ([a]) => {
+      const t = await tips();
+      if (BigInt(a.expectedParentCheckpointNumber) !== t.pending) revert('Rollup__UnexpectedParentCheckpoint', [t.pending, BigInt(a.expectedParentCheckpointNumber)]);
+      await checkHeader(a.header, a.flags.ignoreDA ? undefined : a.blobsHash);
+      const seq = (await views.inbox.getCurrentBucketSeq());
+      for (let s = seq; s >= 0n; s--) {
+        const b = await bucketAt(s);
+        if (b.totalMsgCount === BigInt(a.expectedTotal)) {
+          if (b.rollingHash.toLowerCase() !== a.header.inboxRollingHash.toLowerCase()) revert('Rollup__InvalidInboxRollingHash', [b.rollingHash, a.header.inboxRollingHash]);
+          return s;
+        }
+        if (b.totalMsgCount < BigInt(a.expectedTotal) || s === 0n) break;
+      }
+      revert('Rollup__InboxTotalNotAtBucketBoundary', [BigInt(a.expectedTotal), (await bucketAt(await views.inbox.getCurrentBucketSeq())).totalMsgCount]);
+    },
     getEpochAt: async ([ts]) => slotAt(ts) / BigInt(C.epochSlots),
     getEpochForCheckpoint: async ([n]) => ((await checkpointLog(n))?.slot ?? 0n) / BigInt(C.epochSlots),
     getTimestampForSlot: async ([s]) => BigInt(C.genesisTime) + BigInt(s) * BigInt(C.slotSeconds),
@@ -218,6 +286,25 @@ const views = {
   governanceProposer: { ROUND_SIZE: async () => 10n, QUORUM_SIZE: async () => 6n, getInstance: async () => A.rollup },
   feeJuice: { owner: async () => A.governance, balanceOf: async () => 0n },
 };
+// A revert as a node reports one: JSON-RPC error 3 with Aztec's custom error ABI-encoded, so the
+// node's viem decodes it by name (ErrorsAbi).
+const revert = (name, args = []) => {
+  const data = encodeErrorResult({ abi: artifacts.ErrorsAbi, errorName: name, args });
+  throw Object.assign(new Error(`execution reverted: ${name}(${args.join(', ')})`), { revert: true, data });
+};
+async function checkHeader(h, blobsHash) {
+  const t = await tips();
+  const tip = await checkpointLog(t.pending);
+  if (!tip) revert('Rollup__InvalidArchive', [word(0), h.lastArchiveRoot]);
+  const slot = BigInt(h.slotNumber);
+  if (h.lastArchiveRoot.toLowerCase() !== tip.archive.toLowerCase()) revert('Rollup__InvalidArchive', [tip.archive, h.lastArchiveRoot]);
+  if (slot <= tip.slot) revert('Rollup__SlotAlreadyInChain', [tip.slot, slot]);
+  if (BigInt(h.timestamp) !== BigInt(C.genesisTime) + slot * BigInt(C.slotSeconds)) revert('Rollup__InvalidTimestamp', [BigInt(C.genesisTime) + slot * BigInt(C.slotSeconds), BigInt(h.timestamp)]);
+  if (h.coinbase === zeroAddress) revert('Rollup__InvalidCoinbase');
+  if (BigInt(h.gasFees.feePerDaGas) !== 0n) revert('Rollup__NonZeroDaFee');
+  if (BigInt(h.gasFees.feePerL2Gas) !== BigInt(C.minFee)) revert('Rollup__InvalidManaMinFee', [BigInt(C.minFee), BigInt(h.gasFees.feePerL2Gas)]);
+  if (blobsHash !== undefined && h.blobsHash.toLowerCase() !== blobsHash.toLowerCase()) revert('Rollup__UnavailableTxs', [h.blobsHash]);
+}
 async function bucketAt(s) {
   const b = BigInt(s) ? await read(keyN('inbox:b:', s)) : undefined;
   return b ? { rollingHash: bytesToHex(b.subarray(0, 32)), totalMsgCount: u64le(b, 32), timestamp: u64le(b, 40), msgCount: BigInt(b.readUInt32LE(48)) }
@@ -245,18 +332,39 @@ function zeroOf(outputs) {
 
 // --- Writes: a proposal becomes a work package ---------------------------------------------
 let tagCounter = 0;
-const nonces = new Map();
 async function sendRaw(raw) {
   const hash = keccak256(raw);
   const tx = parseTransaction(raw);
   const from = (await recoverTransactionAddress({ serializedTransaction: raw })).toLowerCase();
-  nonces.set(from, (nonces.get(from) ?? 0n) + 1n);
   const rec = { hash, raw, from, to: tx.to?.toLowerCase(), input: tx.data, nonce: tx.nonce, blobHashes: tx.blobVersionedHashes ?? [], tx };
+  // a second transaction for a nonce still pending replaces the first, as in a node's mempool:
+  // the first is dropped (never mined); if it was relayed, its relay now belongs to this one
+  const prior = [...txs.values()].find((r) => r.from === from && r.nonce === tx.nonce && r.blockNumber === undefined && !r.dropped);
   txs.set(hash, rec);
+  if (prior) {
+    prior.dropped = true;
+    if (prior.propose) {
+      Object.assign(rec, { tag: prior.tag, propose: prior.propose, archive: prior.archive, lastArchive: prior.lastArchive, slot: prior.slot, outHash: prior.outHash,
+        inbox: prior.inbox, headerHash: prior.headerHash, attestationsHash: prior.attestationsHash, payloadDigest: prior.payloadDigest });
+      log({ replaced: prior.hash, by: hash });
+      return hash;
+    }
+  }
   const propose = findPropose(tx);
   if (!propose) { log({ sent: hash, to: nameOf[rec.to] ?? rec.to, note: 'not a proposal: recorded, not relayed' }); rec.status = 1; rec.blockNumber = head.number; rec.blockHash = head.hash; head.txs.push(hash); return hash; }
   rec.tag = tagCounter++ % 256;
-  rec.archive = propose.args[0].archive.toLowerCase();
+  rec.propose = propose;
+  const [pa, attestations] = propose.args;
+  rec.archive = pa.archive.toLowerCase();
+  rec.lastArchive = pa.header.lastArchiveRoot.toLowerCase();
+  rec.slot = BigInt(pa.header.slotNumber);
+  rec.outHash = pa.header.outHash;
+  rec.inbox = pa.header.inboxRollingHash;
+  const header = CheckpointHeader.fromViem(pa.header);
+  rec.headerHash = header.hash().toString();
+  rec.attestationsHash = computeAttestationsHash(attestations);
+  rec.payloadDigest = computeCheckpointPayloadDigest({ header, archiveRoot: Fr.fromString(pa.archive), feeAssetPriceModifier: pa.oracleInput.feeAssetPriceModifier,
+    signatureContext: { chainId: Number(C.chainId), rollupAddress: EthAddress.fromString(A.rollup) } }).toString();
   await relayPropose(rec, propose, tx);
   return hash;
 }
@@ -351,16 +459,43 @@ const methods = {
   eth_blockNumber: () => toHex(head.number),
   eth_getBlockByNumber: ([tag, full]) => blockByNumber(tag, full),
   eth_getBlockByHash: ([h, full]) => { const b = blocks.find((x) => x.hash === h); return b ? blockByNumber(toHex(b.number), full) : null; },
-  eth_call: ([c]) => ethCall(c.to, c.data ?? c.input),
+  eth_call: async ([c, , overrides]) => {
+    const n = stfOverride(overrides);
+    return callScope.run({ tips: n === undefined ? undefined : { pending: n >> 128n, proven: n & ((1n << 128n) - 1n) } }, () => ethCall(c.to, c.data ?? c.input));
+  },
   eth_estimateGas: () => toHex(10_000_000n),
-  eth_simulateV1: ([req]) => (req?.blockStateCalls ?? []).map(() => ({ ...blockByNumber('latest'), calls: [{ status: '0x1', returnData: '0x', gasUsed: toHex(1_000_000n), logs: [] }] })),
+  // each call through the same handlers as eth_call, with the block's time and state overrides
+  eth_simulateV1: async ([req]) => Promise.all((req?.blockStateCalls ?? []).map(async (bsc) => {
+    const time = bsc.blockOverrides?.time !== undefined ? BigInt(bsc.blockOverrides.time) : undefined;
+    const calls = [];
+    for (const c of bsc.calls ?? []) {
+      const n = stfOverride(bsc.stateOverrides);
+      try {
+        const returnData = await callScope.run({ tips: n === undefined ? undefined : { pending: n >> 128n, proven: n & ((1n << 128n) - 1n) }, time }, () => ethCall(c.to, c.data ?? c.input));
+        calls.push({ status: '0x1', returnData, gasUsed: toHex(1_000_000n), logs: [] });
+      } catch (e) {
+        if (!e.revert) log({ error: 'eth_simulateV1', e: String(e).slice(0, 200) });
+        calls.push({ status: '0x0', returnData: e.data ?? '0x', gasUsed: toHex(1_000_000n), logs: [], error: { code: 3, message: String(e.message ?? e), data: e.data ?? '0x' } });
+      }
+    }
+    return { ...blockByNumber('latest'), ...(time !== undefined ? { timestamp: toHex(time) } : {}), calls };
+  })),
   eth_sendRawTransaction: ([raw]) => sendRaw(raw),
   eth_getTransactionByHash: ([h]) => txObject(txs.get(h)),
   eth_getTransactionReceipt: ([h]) => receipt(txs.get(h)),
-  eth_getTransactionCount: ([a]) => toHex(nonces.get(a.toLowerCase()) ?? 0n),
+  // as a node counts them: "latest" the sender's included transactions, "pending" all it sent
+  eth_getTransactionCount: ([a, tag]) => {
+    const from = a.toLowerCase();
+    const mine = [...txs.values()].filter((r) => r.from === from && !r.dropped);
+    const n = tag === 'pending' ? mine.length : mine.filter((r) => r.blockNumber !== undefined).length;
+    return toHex(BigInt(n));
+  },
   eth_getBalance: () => toHex(10n ** 24n),
   eth_getCode: ([a]) => (Object.values(A).includes(a.toLowerCase()) ? '0x60006000fd' : '0x'),
   eth_getStorageAt: ([a, s]) => {
+    if (a.toLowerCase() === A.rollup && s.toLowerCase() === STF_SLOT) {
+      return tips().then((t) => toHex((t.pending << 128n) | t.proven, { size: 32 }));
+    }
     // RollupContract.isEpochSetUp reads validator selection storage, epoch => committee commitment,
     // straight from storage. With no committee, every epoch is set up.
     if (a.toLowerCase() === A.rollup) {
@@ -397,7 +532,11 @@ createServer(async (rq, rs) => {
     const m = methods[req.method];
     if (!m) { log({ unhandled: req.method, params: JSON.stringify(req.params).slice(0, 200) }); return { jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `jam-l1: ${req.method} is not supported` } }; }
     try { return { jsonrpc: '2.0', id: req.id, result: await m(req.params ?? []) }; }
-    catch (e) { log({ error: req.method, e: String(e).slice(0, 300) }); return { jsonrpc: '2.0', id: req.id, error: { code: -32000, message: String(e) } }; }
+    catch (e) {
+      if (e.revert) return { jsonrpc: '2.0', id: req.id, error: { code: 3, message: e.message, data: e.data } };
+      log({ error: req.method, e: String(e).slice(0, 300) });
+      return { jsonrpc: '2.0', id: req.id, error: { code: -32000, message: String(e) } };
+    }
   };
   const parsed = JSON.parse(body);
   const out = Array.isArray(parsed) ? await Promise.all(parsed.map(one)) : await one(parsed);

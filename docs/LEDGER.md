@@ -1688,3 +1688,27 @@ Found, in turn:
 Evidence: node.log shows "Aztec Node started on chain 0x7a69 …", "Aztec Server listening on
 port 8081". `node_isReady` returns true, `node_getBlockNumber` 0, and the facade logged no errors.
 Next: step two, `--sequencer` and a transaction.
+
+## 2026-10-24 67 — #53 closed: an unchanged Aztec v6 node settles transactions on JAM
+Why this issue: Phase 4's goal.
+Did:
+- **The facade's sequencer path:**
+  - `canProposeAtTime`, `validateHeaderWithAttestations` and
+    `validateCheckpointHeaderAndInbox`, applying the service's own checks;
+  - `eth_simulateV1` with state and time overrides, scoped per call by `AsyncLocalStorage`;
+  - in-flight checkpoints for pipelined simulations;
+  - reverts as error 3 with Aztec's custom errors ABI-encoded;
+  - nonces counted as a node counts them, and replacement transactions;
+  - `CheckpointProposed` carrying the payload digest and attestations hash, computed by Aztec's
+    functions.
+- `on-jam.sh` gained the sequencer's keys (the standard test mnemonic's first account, as the
+  local network uses).
+- `send-tx.mjs` sends through Aztec's PXE.
+Evidence: two PXE transactions, in L2 blocks 4 and 5, went into checkpoint 4. The settlement
+service accepted it on PolkaJam and Aztec's archiver downloaded it with 2 tx. `node_getTxReceipt`
+gives `checkpointed` for both. The run had 7 checkpoints, 0 refused, 7 replacements, and no
+facade errors.
+Not yet: test-mode client proofs and no prover (as the local network runs), no committee (#54),
+and P2P off. Written in NODE.md.
+Issues: #53 closed.
+Next: #48 for the settlement service (14% less gas a proof), then #54 (signatures).
