@@ -1757,3 +1757,16 @@ Evidence:
     refused and 0 errors.
 Issues: #54 closed.
 Next: Phase 4's done check.
+
+## 2026-10-24 70 — Phase 4: every row closed; the demo check waits on Aodh's demo net
+Checked:
+- **Rows:** #48–#54 are closed, each with its command and output on the issue and its ledger
+  entry (62–69). #28 carries an end-of-phase status comment.
+- **CI:** green on 3354962 (run 40073720562).
+- **Demo:** not yet re-run. The committed demo code (services/privacy, client) is unchanged since
+  Phase 3's pass, and the privacy service builds to the same code hash, 0x97e7677f…. But the
+  done condition asks for a run from clean. The other session (aiden-9f) has its polkajam demo
+  net up for Aodh's browser, and pj6 can't run beside it: indexer port 19700, the shared
+  out/state ids, out/wallet.pid, and the indexer container. Once Aodh is done with it: `NET=polkajam
+  nets/demo.sh down`, `NET=pj6 nets/demo.sh down; up; check`, then `NET=polkajam nets/demo.sh up`
+  to restore his net.
