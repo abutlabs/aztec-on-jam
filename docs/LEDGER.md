@@ -1646,3 +1646,24 @@ Evidence:
 Issues: #51 closed.
 Next: #52 (node integration). It needs Aztec's local network running, which is disk- and
 memory-bound here, so it gets assessed first.
+
+## 2026-10-24 65 — #52 closed: an unchanged Aztec v6 node's L1 needs, recorded; the integration is an Ethereum JSON-RPC facade
+Why this issue: #53's path depends on it.
+Did: `tools/aztec-local` runs Aztec v6's released node (`@aztec-labs/aztec` 6.0.0, 1.1 GB) as
+its local network, with Foundry 1.8.5 (Aztec's pin) in its own directory, since the global
+1.7.1 lacks a flag Aztec passes. `rpc-proxy.mjs` records every L1 request, and `analyze.mjs`
+names each one by Aztec's addresses and ABIs. `docs/aztec/NODE.md` records the result and the
+decision, and `docs/aztec/node-l1-record.json` holds the analysis.
+Found:
+- **The surface:** 34 methods, 42 view functions (nearly all on the Rollup), and one write
+  shape per checkpoint: a blob transaction to Multicall3 wrapping `propose`. The archiver reads
+  it back through the transaction and its trace. In steady state, 405 block requests and 286
+  calls a minute.
+- **Cheat-code proving:** the local network proves by anvil cheat codes.
+- **No L1 blobs:** its blobs are in-process.
+Decision: a facade backed by the settlement service (JIP-2 reads and submissions). Aztec's
+packages run as released. The seams stay a proposal to Aztec.
+Coordination: another session (aiden-9f) shares this tree. My commit 7e4d19f had swept in its
+docs/TOOLS.md, so I now stage exact paths and we agreed ports.
+Issues: #52 closed.
+Next: #53, the facade, starting with reads, blocks and logs.

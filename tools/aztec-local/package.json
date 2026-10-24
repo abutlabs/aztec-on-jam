@@ -1,0 +1,9 @@
+{
+  "name": "aztec-local",
+  "private": true,
+  "type": "module",
+  "description": "Aztec v6's released node, unchanged, for recording what it asks of its L1 (#52) and for running it on JAM (#53)",
+  "dependencies": {
+    "@aztec-labs/aztec": "6.0.0"
+  }
+}
