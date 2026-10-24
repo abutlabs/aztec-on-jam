@@ -1569,3 +1569,30 @@ Machine: 16 GB of RAM, Docker's VM 8 GB, 11 GB of disk free. #52 and #53 will ne
 Aztec's packages.
 Next: #49, the checkpoint path. It comes first because #50 and #51 build on its stored
 checkpoints.
+
+## 2026-10-24 62 — #49 closed: the settlement service's checkpoint path, on Aztec's own encodings, on PolkaJam
+Why this issue: #50 and #51 build on its stored checkpoints.
+Did:
+- `crates/aztec-l1` ports v6's `Hash.sha256ToField`, `ProposedHeaderLib.hash` (348 packed bytes),
+  `BlobLib`'s blob hash, blobs hash and blob-commitments accumulator, and `validateHeader`'s
+  stateless checks.
+- `services/aztec-settlement` is the propose path: refine checks the header and blobs and
+  exports the blobs; accumulate chains on the tip with JAM's clock. Its config is compiled in
+  (build.rs: jam080-build clears the environment).
+- `tools/aztec-gen` makes checkpoints with Aztec's released v6 packages (`@aztec-labs/stdlib`,
+  `blob-lib` 6.0.0).
+- The KZG crate moved to `crates/kzg-verify`. The privacy service builds to the same code hash
+  before and after the workspace change (0x97e7677f…).
+- CI builds the service and runs the crate tests.
+Found:
+- Aztec's fixtures carry no blob data, so they test the encodings natively, and the generated
+  checkpoints test the blobs.
+- A refused item must still export its declared segment count, or the GP replaces its output
+  with an error (`work_packages_and_reports.tex:215`), so refine exports zeros.
+Evidence:
+- `cargo test -p aztec-l1`: 4 passed. The header hash and blobs hash equal all six fixtures'.
+- `measure.sh`: all eight cases as expected (accepted 1, 1, 1; refused 10, 10, 2, 3, 13).
+  `cp:1–3` hold Aztec's header hashes, and the tip is 3. Gas: 262.4M for one blob, 404.6M for
+  two.
+Issues: #49 closed; #54 filed (signatures).
+Next: #50, the Inbox.

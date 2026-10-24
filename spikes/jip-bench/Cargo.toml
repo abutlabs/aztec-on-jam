@@ -7,7 +7,7 @@ description = "Native single-threaded timings of the JIP's host calls (#32), and
 
 [dependencies]
 p2 = { path = "../poseidon2-gas/p2" }
-kzg-verify = { path = "../kzg-gas/kzg" }
+kzg-verify = { path = "../../crates/kzg-verify" }
 ecrecover = { path = "../ecdsa-gas/ecrecover" }
 ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }
 ark-ec = { version = "0.5", default-features = false }

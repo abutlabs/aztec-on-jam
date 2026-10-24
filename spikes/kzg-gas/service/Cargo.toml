@@ -9,7 +9,7 @@ description = "Spike: EIP-4844's point evaluation (Ethereum's 0x0a precompile) i
 [dependencies]
 jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
-kzg-verify = { path = "../kzg" }
+kzg-verify = { path = "../../../crates/kzg-verify" }
 
 [profile.release]
 # as the services: opt-level 3 + LTO, the cheapest in gas (#13)

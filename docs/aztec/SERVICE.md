@@ -91,7 +91,22 @@ Whether JAM's own guarantors could replace Aztec's committee is a question for #
 already re-execute refine, so an epoch's validity is checked by JAM's auditors, not only by
 the proof.
 
-## Built: the skeleton
+## Built: the checkpoint path
+
+`services/aztec-settlement` (#49) is the propose path:
+- **Refine** checks the header's stateless conditions, the blobs against their commitments
+  (batched), and the header's blobs hash. It exports the blobs and outputs the header hash and
+  the values accumulate needs.
+- **Accumulate** checks the parent archive, the slot, the timestamp, the fee and the inbox
+  hash, then writes `cp:<n>` and `tip:pending`, advancing the epoch's blob commitments hash.
+
+On PolkaJam it accepts three chained checkpoints made by Aztec's released v6 packages, in order,
+storing Aztec's own header hashes. It refuses them out of order, and refuses tampered headers,
+blobs and timestamps (`services/aztec-settlement/RESULTS.md`). Its encodings match all six of
+Aztec's v6 L1 fixtures (`crates/aztec-l1`). The inbox (#50), the epoch path (#51) and the
+signatures (#54) follow.
+
+## Built first: the skeleton
 
 `spikes/settlement/` (ledger 51) is the epoch-proof path, deployed on a PolkaJam testnet:
 - **Refine** verifies an Aztec-shaped epoch proof (plain UltraHonk, Keccak transcript, 113

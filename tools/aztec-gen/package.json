@@ -1,0 +1,11 @@
+{
+  "name": "aztec-gen",
+  "private": true,
+  "type": "module",
+  "description": "Checkpoints made by Aztec v6's own released packages, for the settlement service's tests (#49)",
+  "dependencies": {
+    "@aztec-labs/blob-lib": "6.0.0",
+    "@aztec-labs/foundation": "6.0.0",
+    "@aztec-labs/stdlib": "6.0.0"
+  }
+}

@@ -61,14 +61,18 @@ jobs:
       - name: A real transfer, proved and verified offline
         working-directory: jam-privacy-service
         run: scripts/offline-proof.sh
-      - name: Both services built for the PVM (jam080-build, GP 0.8.0)
+      - name: The services built for the PVM (jam080-build, GP 0.8.0)
         run: |
           cargo build --release -q --manifest-path jamswap/tools/jam080/builder/Cargo.toml
           B=jamswap/tools/jam080/builder/target/release/jam080-build
           mkdir -p out
           $B jam-privacy-service/services/public-balance --out out
           $B jam-privacy-service/services/privacy --out out
+          $B jam-privacy-service/services/aztec-settlement --out out
           ls -la out
+      - name: Aztec v6's L1 encodings against Aztec's own fixtures
+        working-directory: jam-privacy-service
+        run: cargo test -q -p aztec-l1
       - name: jamboree (our fork) for `jamboree rpc`
         run: |
           git clone -q --branch lasair --depth 1 https://github.com/abutlabs/jamboree jamboree
