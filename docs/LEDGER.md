@@ -1667,3 +1667,24 @@ Coordination: another session (aiden-9f) shares this tree. My commit 7e4d19f had
 docs/TOOLS.md, so I now stage exact paths and we agreed ports.
 Issues: #52 closed.
 Next: #53, the facade, starting with reads, blocks and logs.
+
+## 2026-10-24 66 — #53, step one: Aztec v6's released node runs on JAM, through the facade
+Why this issue: #52 chose the facade, and #49–#51 gave it state to report.
+Did:
+- `tools/aztec-local/jam-l1.mjs` (the facade): JIP-2 head tracking as L1 blocks, about 60 view
+  handlers over the service's storage and cfg (zero values of the right ABI shape, logged,
+  for the rest), the propose relay through `jamboree rpc submit` with blob proofs recomputed,
+  and synthesized logs, receipts and traces. It also emits the deployment `OwnershipTransferred`
+  event, which the archiver probes, and answers `isEpochSetUp`'s raw storage read.
+- `services/aztec-settlement/devnet.sh` keeps a PolkaJam testnet up with the service
+  configured for the node's genesis.
+- `tools/aztec-local/on-jam.sh` starts the devnet, the facade and the node.
+Found, in turn:
+- The node's genesis under `--node` with test accounts is archive 0x0189bb92…, not the local
+  network's: the node entered standby until cfg matched.
+- The archiver requires the Rollup's deployment log.
+- `getCheckpoint`'s `CheckpointLog` shape.
+- `PROVER_REAL_PROOFS=false` puts the node in test mode, as the local network runs.
+Evidence: node.log shows "Aztec Node started on chain 0x7a69 …", "Aztec Server listening on
+port 8081". `node_isReady` returns true, `node_getBlockNumber` 0, and the facade logged no errors.
+Next: step two, `--sequencer` and a transaction.
