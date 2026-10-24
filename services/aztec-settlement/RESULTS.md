@@ -21,14 +21,14 @@ code.
 
 | case | blobs | refine gas | verdict | expected |
 |---|---|---|---|---|
-| checkpoint 2 before 1 | 2 | 404,598,679 | 10, wrong parent | 10 |
-| checkpoint 1 | 1 | 262,397,812 | 1, accepted | 1 |
-| checkpoint 1 again | 1 | 262,397,812 | 10, wrong parent | 10 |
-| checkpoint 2, blobsHash altered | 2 | 319,065 | 2, refused in refine (header) | 2 |
-| checkpoint 2, a blob's byte altered | 2 | 404,534,856 | 3, refused in refine (blobs) | 3 |
-| checkpoint 2, timestamp altered | 2 | 404,598,679 | 13, wrong timestamp | 13 |
-| checkpoint 2 | 2 | 404,598,679 | 1, accepted | 1 |
-| checkpoint 3 | 1 | 262,397,812 | 1, accepted | 1 |
+| checkpoint 2 before 1 | 2 | 404,596,861 | 10, wrong parent | 10 |
+| checkpoint 1 | 1 | 262,395,994 | 1, accepted | 1 |
+| checkpoint 1 again | 1 | 262,395,994 | 10, wrong parent | 10 |
+| checkpoint 2, blobsHash altered | 2 | 317,247 | 2, refused in refine (header) | 2 |
+| checkpoint 2, a blob's byte altered | 2 | 404,533,038 | 3, refused in refine (blobs) | 3 |
+| checkpoint 2, timestamp altered | 2 | 404,596,861 | 13, wrong timestamp | 13 |
+| checkpoint 2 | 2 | 404,596,861 | 1, accepted | 1 |
+| checkpoint 3 | 1 | 262,395,994 | 1, accepted | 1 |
 
 The stored `cp:1`, `cp:2` and `cp:3` header hashes equal the ones Aztec's code computed, and
 `tip:pending` is checkpoint 3.
@@ -116,13 +116,13 @@ which stays with the service: a JAM transfer can't be reverted by its recipient.
 
 | item | refine gas | verdict | expected |
 |---|---|---|---|
-| checkpoint a | 262,397,812 | 1, accepted | 1 |
-| checkpoint b | 404,598,679 | 1, accepted | 1 |
-| epoch proof, vk tree root wrong (a valid proof) | 359,284,024 | 36, wrong public input (accumulate) | 36 |
-| epoch proof, a public input changed after proving | 8,559,249 | 4, bad proof (refine) | 4 |
-| epoch proof, the blob opening's z altered | 358,999,149 | 5, bad blob opening (refine) | 5 |
-| epoch proof | 359,321,493 | 1, accepted | 1 |
-| epoch proof again | 359,321,493 | 37, already proven | 37 |
+| checkpoint a | 262,395,994 | 1, accepted | 1 |
+| checkpoint b | 404,596,861 | 1, accepted | 1 |
+| epoch proof, vk tree root wrong (a valid proof) | 340,365,827 | 36, wrong public input (accumulate) | 36 |
+| epoch proof, a public input changed after proving | 8,559,831 | 4, bad proof (refine) | 4 |
+| epoch proof, the blob opening's z altered | 340,279,412 | 5, bad blob opening (refine) | 5 |
+| epoch proof | 340,601,756 | 1, accepted | 1 |
+| epoch proof again | 340,601,756 | 37, already proven | 37 |
 
 ```
 tip:proven checkpoint 2, archive equals checkpoint b's
@@ -130,10 +130,11 @@ outbox: out hash equals checkpoint b's, 2 checkpoints
 cp:2 blob commitments hash equals Aztec's BatchedBlob's
 ```
 
-**Gas.** An epoch proof's refine costs 359M: the UltraHonk check at 2^16 plus the point
-evaluation (199M). Aztec's real proof is 2^24, which #23 measured at 180.8M for the check
-alone, so a real epoch proof is about 380M, plus 433M for the attestations once #54 adds them.
-That is 813M in all, within a tiny package.
+**Gas.** An epoch proof's refine costs 340.6M, down from 359.3M with the default curve hooks,
+since refine now verifies with `crates/curve-hooks` (#48). That is the UltraHonk check at 2^16
+plus the point evaluation (199M). Aztec's real proof is 2^24, whose check costs about 156M with
+these hooks (#44). So a real epoch proof is about 356M, plus 433M for the attestations once #54
+adds them: about 788M in all, within a tiny package.
 
 **Not ported:** pruning unproven checkpoints when the proof window closes, prover rewards, and
 the attestations (#54). The proof window itself is checked.

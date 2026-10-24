@@ -12,4 +12,5 @@ polkavm-derive = "0.36"
 aztec-l1 = { path = "../../crates/aztec-l1" }
 kzg-verify = { path = "../../crates/kzg-verify" }
 # zkVerify's UltraHonk verifier, ported to bb 6.0.0 (our fork, branch bb-v6), as #23 measured it
+curve-hooks = { path = "../../crates/curve-hooks" }
 ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }

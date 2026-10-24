@@ -384,7 +384,8 @@ fn epoch_proof(p: &[u8]) -> Result<Vec<u8>, u8> {
     let proof_len = le(at, 4)? as usize;
     let proof = p.get(at + 4..at + 4 + proof_len).ok_or(BAD_PAYLOAD)?;
     let batched: [u8; 192] = p.get(at + 4 + proof_len..).ok_or(BAD_PAYLOAD)?.try_into().map_err(|_| BAD_PAYLOAD)?;
-    verify::<()>(vk, &ProofType::Plain(proof.into()), &pubs).map_err(|_| BAD_PROOF)?;
+    // field-wise curve hooks: the same arkworks arithmetic, 14% cheaper than the default `()` (#48)
+    verify::<curve_hooks::FieldHooks>(vk, &ProofType::Plain(proof.into()), &pubs).map_err(|_| BAD_PROOF)?;
     if kzg_verify::point_evaluation(&batched) != Ok(true) || blob_public_inputs(&batched)[..] != pubs[epoch_pi::BLOB_Z..] {
         return Err(BAD_BLOB_OPENING);
     }

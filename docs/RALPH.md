@@ -272,7 +272,8 @@ The iteration steps and rules are Phase 3's, and the demo's checks must keep hol
 | #51 the epoch path | A bb 6 UltraHonk proof in the epoch proof's shape, carrying the 113 public inputs Aztec's released code assembles for an epoch of its checkpoints, advances `tip:proven` on PolkaJam. A valid proof with one wrong public input is refused by accumulate, and the stored Outbox root equals the epoch's out hash. |
 | #52 node integration decided | A recorded run of Aztec v6's local network lists every L1 method, contract and event the node uses. `docs/aztec/NODE.md` chooses the facade or the seams on that evidence. |
 | #53 end to end | A PXE transaction is checkpointed by Aztec's unchanged sequencer onto the settlement service on PolkaJam, synced back by Aztec's archiver, and seen mined by the PXE. |
-| #48 field-wise hooks | As filed. In Phase 4 it applies to the settlement service first, before the privacy service's re-soak. |
+| #48 field-wise hooks | `crates/curve-hooks` holds them, the settlement service verifies with them, and its epoch path is re-measured on PolkaJam with every verdict as before. (The privacy service, which needs a re-soak, is #55.) |
+| #54 signatures | The checkpoint path refuses a checkpoint without the slot proposer's valid signature over Aztec's payload digest, which is checked against Aztec's released code, and the gas is recorded on PolkaJam. |
 | #28 tracking | A status comment at the phase's end. |
 
 ## Phase 4 done

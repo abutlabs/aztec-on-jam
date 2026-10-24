@@ -1712,3 +1712,19 @@ Not yet: test-mode client proofs and no prover (as the local network runs), no c
 and P2P off. Written in NODE.md.
 Issues: #53 closed.
 Next: #48 for the settlement service (14% less gas a proof), then #54 (signatures).
+
+## 2026-10-24 68 — #48 closed for the settlement service: field-wise curve hooks, 18.7M less an epoch proof; the privacy service's switch is #55
+Why this issue: it lowers settlement's largest per-package cost, with no JIP.
+Did:
+- `crates/curve-hooks`: zkVerify's `CurveHooks` on upstream arkworks, converting points field by
+  field. The settlement service's epoch refine verifies with it.
+- #48 is rescoped in RALPH to the settlement service. The privacy service needs a re-soak, so
+  its switch is #55. #54 now has a Phase 4 row.
+Evidence:
+- `epoch.sh`: the epoch proof's refine is 340,601,756 gas (359,321,493 before), and all 7
+  verdicts are as before. The proven tip and Outbox are right, and the blob commitments hash
+  equals Aztec's.
+- `measure.sh` gave 8 of 8 verdicts and `inbox.sh` 6 of 6, with Aztec's hashes matched.
+- The privacy service's code hash is unchanged (0x97e7677f…).
+Issues: #48 closed; #55 filed.
+Next: #54, the proposer's signature.

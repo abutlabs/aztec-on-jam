@@ -1,0 +1,11 @@
+[package]
+name = "curve-hooks"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "zkVerify's CurveHooks on upstream arkworks, converting points field by field instead of encoding and decoding them (#48): about 14% off an UltraHonk check"
+
+[dependencies]
+ark-bn254-ext = { git = "https://github.com/zkVerify/accelerated-bn-cryptography.git", default-features = false, tag = "v0.6.0" }
+ark-bn254 = { version = "0.5.0", default-features = false, features = ["curve"] }
+ark-ec = { version = "0.5.0", default-features = false }
