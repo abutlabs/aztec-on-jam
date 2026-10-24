@@ -170,6 +170,33 @@ pub fn blob_commitments_hash(previous: &[u8; 32], commitments: &[[u8; 48]], firs
     acc
 }
 
+/// `Constants.DOM_SEP__INBOX_ROLLING_HASH`.
+pub const DOM_SEP_INBOX_ROLLING_HASH: u32 = 3_737_216_265;
+
+/// An L1→L2 message leaf (`Hash.sha256ToField(L1ToL2Msg)`, `Inbox.sendL2Message`): sha256ToField of
+/// abi.encode(sender, chain id, recipient, version, content, secret hash, index), seven words.
+/// On JAM the sender is the sending service's id, as a 20-byte address.
+pub fn l1_to_l2_leaf(sender: u32, chain_id: &[u8; 32], recipient: &[u8; 32], version: &[u8; 32], content: &[u8; 32], secret_hash: &[u8; 32], index: u64) -> [u8; 32] {
+    let mut b = [0u8; 224];
+    b[28..32].copy_from_slice(&sender.to_be_bytes());
+    b[32..64].copy_from_slice(chain_id);
+    b[64..96].copy_from_slice(recipient);
+    b[96..128].copy_from_slice(version);
+    b[128..160].copy_from_slice(content);
+    b[160..192].copy_from_slice(secret_hash);
+    b[216..224].copy_from_slice(&index.to_be_bytes());
+    sha256_to_field(&b)
+}
+
+/// `Hash.accumulateInboxRollingHash`: sha256ToField(u32 domain separator ‖ previous ‖ leaf).
+pub fn inbox_rolling_hash(previous: &[u8; 32], leaf: &[u8; 32]) -> [u8; 32] {
+    let mut b = [0u8; 68];
+    b[..4].copy_from_slice(&DOM_SEP_INBOX_ROLLING_HASH.to_be_bytes());
+    b[4..36].copy_from_slice(previous);
+    b[36..].copy_from_slice(leaf);
+    sha256_to_field(&b)
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -183,10 +210,38 @@ mod tests {
     fn w32(s: &str) -> [u8; 32] { unhex(s).try_into().unwrap() }
     fn word(n: u64) -> [u8; 32] { let mut o = [0u8; 32]; o[24..].copy_from_slice(&n.to_be_bytes()); o }
 
-    fn fixture(name: &str) -> serde_json::Value {
-        let p = format!("{}/fixtures/v6/{name}.json", env!("CARGO_MANIFEST_DIR"));
+    fn fixture(name: &str) -> serde_json::Value { fixture_at(&format!("v6/{name}")) }
+    fn fixture_at(path: &str) -> serde_json::Value {
+        let p = format!("{}/fixtures/{path}.json", env!("CARGO_MANIFEST_DIR"));
         serde_json::from_str(&fs::read_to_string(p).unwrap()).unwrap()
     }
+    fn word_of(v: &serde_json::Value) -> [u8; 32] {
+        match v {
+            serde_json::Value::Number(n) => word(n.as_u64().unwrap()),
+            serde_json::Value::String(s) => { let b = unhex(s); let mut o = [0u8; 32]; o[32 - b.len()..].copy_from_slice(&b); o }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn inbox_leaves_and_rolling_hash_match_aztecs_code() {
+        let f = fixture_at("generated/inbox");
+        let (spec, want) = (&f["spec"], &f["expected"]);
+        let (chain, version) = (word_of(&spec["chainId"]), word_of(&spec["version"]));
+        let mut leaves = Vec::new();
+        for (i, m) in spec["messages"].as_array().unwrap().iter().enumerate() {
+            let leaf = l1_to_l2_leaf(m["sender"].as_u64().unwrap() as u32, &chain, &word_of(&m["recipient"]), &version, &word_of(&m["content"]), &word_of(&m["secretHash"]), i as u64);
+            assert_eq!(leaf, w32(want["leaves"][i].as_str().unwrap()), "leaf {i}");
+            leaves.push(leaf);
+        }
+        let (mut rolling, mut at) = ([0u8; 32], 0);
+        for (b, n) in spec["buckets"].as_array().unwrap().iter().enumerate() {
+            for leaf in &leaves[at..at + n.as_u64().unwrap() as usize] { rolling = inbox_rolling_hash(&rolling, leaf); }
+            at += n.as_u64().unwrap() as usize;
+            assert_eq!(rolling, w32(want["buckets"][b]["rollingHash"].as_str().unwrap()), "bucket {b}");
+        }
+    }
+
 
     fn header(c: &serde_json::Value) -> Header {
         let h = &c["header"];

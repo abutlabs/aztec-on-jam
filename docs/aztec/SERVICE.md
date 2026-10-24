@@ -103,7 +103,11 @@ the proof.
 On PolkaJam it accepts three chained checkpoints made by Aztec's released v6 packages, in order,
 storing Aztec's own header hashes. It refuses them out of order, and refuses tampered headers,
 blobs and timestamps (`services/aztec-settlement/RESULTS.md`). Its encodings match all six of
-Aztec's v6 L1 fixtures (`crates/aztec-l1`). The inbox (#50), the epoch path (#51) and the
+Aztec's v6 L1 fixtures (`crates/aztec-l1`).
+
+The Inbox (#50) is a deferred transfer from any JAM service, absorbed into Aztec's rolling-hash
+buckets, one per JAM timeslot. Its leaves and rolling hashes equal Aztec's released code's, and
+checkpoints must consume it as `validateInboxConsumption` requires. The epoch path (#51) and the
 signatures (#54) follow.
 
 ## Built first: the skeleton

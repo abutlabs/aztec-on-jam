@@ -1,0 +1,18 @@
+[package]
+name = "inbox-sender"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Test service for #50: sends Aztec L1-to-L2 messages to the settlement service as deferred transfers"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]

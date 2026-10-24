@@ -268,7 +268,7 @@ The iteration steps and rules are Phase 3's, and the demo's checks must keep hol
 | Issue | Closed when |
 |---|---|
 | #49 the checkpoint path | Its header hash and blobs hash equal all six of Aztec's fixtures', which carry no blob data (natively). On PolkaJam, checkpoints made by Aztec's released v6 packages, with their blobs, are accepted in order with Aztec's header hashes stored. It refuses a checkpoint out of order, a tampered header, a wrong blob and a wrong timestamp, and its gas fits a tiny package. |
-| #50 the Inbox | The fixtures' messages, sent as deferred transfers, give the fixtures' `inboxRollingHash`. A checkpoint consuming them is accepted; unsettled or regressed consumption is refused. |
+| #50 the Inbox | Messages sent as deferred transfers on PolkaJam give the leaves and bucket rolling hashes Aztec's released code computes for them. (The fixtures' own hash can't be reproduced: they don't record the rollup version.) A checkpoint consuming them is accepted; skipped, regressed, mismatched or missing consumption is refused. |
 | #51 the epoch path | A bb 6 UltraHonk proof in the epoch proof's shape, carrying the fixture epoch's real public inputs, advances `tip:proven`. One changed public input is refused by accumulate, and the stored Outbox root equals the fixtures' out hash. |
 | #52 node integration decided | A recorded run of Aztec v6's local network lists every L1 method, contract and event the node uses. `docs/aztec/NODE.md` chooses the facade or the seams on that evidence. |
 | #53 end to end | A PXE transaction is checkpointed by Aztec's unchanged sequencer onto the settlement service on PolkaJam, synced back by Aztec's archiver, and seen mined by the PXE. |

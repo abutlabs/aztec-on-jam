@@ -1,0 +1,48 @@
+{
+ "by": "tools/aztec-gen/inbox.mjs (Aztec v6 @aztec-labs/stdlib 6.0.0: L1ToL2Message.hash, accumulateInboxRollingHash)",
+ "spec": {
+  "chainId": 31337,
+  "version": 1,
+  "messages": [
+   {
+    "sender": 2,
+    "recipient": "0x1647b194c649f5dd01d7c832f89b0f496043c9150797923ea89e93d5ac619a93",
+    "content": 1,
+    "secretHash": 0
+   },
+   {
+    "sender": 2,
+    "recipient": "0x1647b194c649f5dd01d7c832f89b0f496043c9150797923ea89e93d5ac619a93",
+    "content": 2,
+    "secretHash": 0
+   },
+   {
+    "sender": 7,
+    "recipient": 5,
+    "content": "0x2a",
+    "secretHash": "0x0123456789"
+   }
+  ],
+  "buckets": [
+   2,
+   1
+  ]
+ },
+ "expected": {
+  "leaves": [
+   "0x0088ad2f22f948f8f2ec8edf4135b286ee8fb4e78e58e21aa4c82536be6e6685",
+   "0x003864a375c08c72d75d18364d5e338b3787ec013c9e7d9fc00c678bc50d8be0",
+   "0x005deccd1c3c183a25cf0a03f85c842cf492d11aaf6b3fa323f74deeca93ff76"
+  ],
+  "buckets": [
+   {
+    "rollingHash": "0x00d3cd772b3674077f4a0456eeedb68b1304edc7e1e5b1d49d74b5cda63322d9",
+    "total": 2
+   },
+   {
+    "rollingHash": "0x006ce5fba5e92860f30fa3f4bcc74dd77495408188318f380c208fe0447adebe",
+    "total": 3
+   }
+  ]
+ }
+}

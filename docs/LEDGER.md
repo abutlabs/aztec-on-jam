@@ -1596,3 +1596,27 @@ Evidence:
   two.
 Issues: #49 closed; #54 filed (signatures).
 Next: #50, the Inbox.
+
+## 2026-10-24 63 — #50 closed: the Inbox, messages from JAM services in Aztec's rolling-hash buckets
+Why this issue: the epoch path (#51) checks the inbox rolling hashes, so it needs them.
+Did:
+- `aztec-l1`: `l1_to_l2_leaf` and `inbox_rolling_hash`, tested against Aztec's TypeScript
+  (`tools/aztec-gen/inbox.mjs`, `@aztec-labs/stdlib` 6.0.0).
+- The service absorbs deferred transfers as messages, one bucket a JAM timeslot (at most 256
+  a bucket), and stores the messages for the node. A checkpoint now names its bucket, and
+  accumulate checks consumption as `validateInboxConsumption` does. cfg gains chain id and
+  version, and a compile-time length check (a stale 104-byte cfg had built a 3.7 KB blob with
+  everything compiled out).
+- `spikes/inbox-sender` stands in for an L1 contract. `testlib.py` is shared by both tests, and
+  `gen.mjs` takes a spec (names, parents, slots, inbox hashes).
+Found: the fixtures' inbox hash isn't reproducible (no rollup version recorded; Aztec's own
+Solidity tests overwrite it), so the reference is Aztec's released code. Also, one of my own
+script bugs: reading the wrong service id after the second deploy.
+Evidence:
+- `inbox.sh`: both buckets' rolling hashes and all 4 leaves equal Aztec's, and 1 message was
+  refused (version 2). Checkpoint verdicts were 20, 1, 18, 15, 16, 1 as expected, with cp:1–2
+  consuming 4 messages.
+- `measure.sh` (#49) re-run on this code: all 8 as before, and Aztec's header hashes stored.
+- `cargo test -p aztec-l1`: 5 passed.
+Issues: #50 closed.
+Next: #51, the epoch path.
