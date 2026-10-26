@@ -11,6 +11,9 @@ view of the chain plus a relay for submissions (CORS open, so a browser wallet u
   GET  /balance/<account-hex>     {"balance": n} on the public-balance service
   GET  /key/<account-hex>         {"key": hex or null}: the account's directory entry
   GET  /notes?from=N              {"from": N, "notes": [hex, ...]}: sealed notes, leaf N onward
+  GET  /history                   everything the chain records publicly, in order: the
+                                  public-balance service's log ("events") and each private
+                                  transfer ("transfers": its slot, two leaves, two nullifiers)
   POST /submit/<service_id>       body: payload hex; ?core=N pins the core; returns the receipt
   GET  /status?package=<hex>&anchor=<hex>   JIP-2 workPackageStatus of a submission
 
@@ -61,6 +64,9 @@ class Backend:
     def finalized(self):
         return self._c().finalized()[0]
 
+    def parent(self, at):
+        return self._c().parent(at)
+
     def read(self, service, key, at=None):
         return self._c().read(service, key, at)
 
@@ -92,26 +98,72 @@ class Backend:
 B = Backend()
 
 
+EVENT_KINDS = ["mint", "burn", "shield", "key", "transfer", "received"]   # public-balance's log
+WALK = 64                                     # blocks to walk back for a transfer's slot
+
+
+def event(n, rec):
+    """One record of public-balance's log, decoded (its layout: services/public-balance)."""
+    kind = rec[0]
+    e = {"n": n, "kind": EVENT_KINDS[kind] if kind < len(EVENT_KINDS) else str(kind),
+         "slot": struct.unpack("<I", rec[1:5])[0], "account": rec[5:37].hex(), "amount": u64(rec[37:45])}
+    other = rec[45:77]
+    if e["kind"] == "shield":
+        e["commitment"] = other.hex()
+    elif e["kind"] == "transfer":
+        e["to"] = other.hex()
+    elif e["kind"] == "received":
+        e["from_service"] = struct.unpack("<I", other[:4])[0]
+    return e
+
+
+def landed_slots(slots, count, slot, at):
+    """The slot each private transfer landed in: walk back from the head, reading the privacy
+    service's transfer count at each block, until every new transfer is placed. A transfer
+    further back than WALK blocks (the indexer started late) or past a pruned block gets None."""
+    found = {}
+    for _ in range(WALK):
+        p = B.parent(at)
+        if p is None:
+            break
+        before = u64(B.read(PRIVACY, b"transfers", p[1]))
+        for i in range(max(before, len(slots)), count):
+            found[i] = slot
+        count = min(count, before)
+        if count <= len(slots):
+            break
+        slot, at = p
+    return slots + [found.get(i) for i in range(len(slots), max(found, default=len(slots) - 1) + 1)]
+
+
 def refresh():
-    leaves, sealed, nfs = [], [], []           # append-only: read only what is new
+    leaves, sealed, nfs, events, slots = [], [], [], [], []   # append-only: read only what is new
     while True:
         try:
             slot, at = B.head()
             rd = lambda key: B.read(PRIVACY, key, at)  # noqa: E731 — every read at one block
             n = u64(rd(b"leaves"))
             null_size = u64(rd(b"null:size")) or 1
-            if n < len(leaves) or null_size - 1 < len(nfs):   # a shorter chain: start over
-                leaves, sealed, nfs = [], [], []
+            n_ev = u64(B.read(PUBLIC, b"events", at)); n_tx = u64(rd(b"transfers"))
+            if n < len(leaves) or null_size - 1 < len(nfs) or n_ev < len(events) or n_tx < len(slots):
+                leaves, sealed, nfs, events, slots = [], [], [], [], []   # a shorter chain: start over
             leaves = leaves + [rd(b"leaf:" + struct.pack("<Q", i)).hex() for i in range(len(leaves), n)]
             sealed = sealed + [rd(b"enc:" + struct.pack("<Q", i)).hex() for i in range(len(sealed), n)]
             nfs = nfs + [rd(b"nfl:" + struct.pack("<Q", i)).hex() for i in range(len(nfs) + 1, null_size)]
+            events = events + [event(i, B.read(PUBLIC, b"ev:" + struct.pack("<Q", i), at)) for i in range(len(events), n_ev)]
+            if n_tx > len(slots):
+                try:
+                    slots = landed_slots(slots, n_tx, slot, at)
+                except Exception:  # noqa: BLE001 — a client without JIP-2 parent: no slots
+                    pass
+                slots = slots + [None] * (n_tx - len(slots))
             s = {"ok": True, "net": os.environ.get("NET_NAME", ""), "slot": slot, "head": at.hex(),
                  "privacy_id": PRIVACY, "public_id": PUBLIC,
                  "note_root": rd(b"root:note").hex(), "null_root": rd(b"root:null").hex(),
                  "leaves": list(leaves), "sealed": list(sealed), "leaf_count": n,
                  "nullifiers": list(nfs), "null_size": null_size, "transfers": u64(rd(b"transfers")),
                  "shielded": u64(rd(b"shielded")), "unshielded": u64(rd(b"unshielded")),
-                 "updated": time.time()}
+                 "events": list(events), "landed": list(slots), "updated": time.time()}
             with LOCK:
                 STATE.clear(); STATE.update(s)
         except Exception as e:  # noqa: BLE001 — keep serving the last state, say why
@@ -138,8 +190,20 @@ class H(BaseHTTPRequestHandler):
             if parts == ["head"]:
                 return self._json(200, {"best": B.head()[0], "finalized": B.finalized()})
             if parts == ["state"]:
+                with LOCK:   # the log goes to /history; /state stays small for the wallets' polling
+                    s = {k: v for k, v in STATE.items() if k not in ("events", "landed")}
+                return self._json(200 if s.get("ok") else 503, s)
+            if parts == ["history"]:
                 with LOCK:
-                    return self._json(200 if STATE.get("ok") else 503, dict(STATE))
+                    s = dict(STATE)
+                if not s.get("ok"):
+                    return self._json(503, s)
+                txs = [{"index": i, "slot": s["landed"][i] if i < len(s["landed"]) else None,
+                        "leaves": [2 * i, 2 * i + 1], "commitments": s["leaves"][2 * i:2 * i + 2],
+                        "sealed": s["sealed"][2 * i:2 * i + 2], "nullifiers": s["nullifiers"][2 * i:2 * i + 2]}
+                       for i in range(min(s["transfers"], len(s["leaves"]) // 2))]
+                return self._json(200, {"net": s["net"], "slot": s["slot"], "privacy_id": PRIVACY,
+                                        "public_id": PUBLIC, "events": s["events"], "transfers": txs})
             if parts == ["leaves"]:
                 with LOCK:
                     return self._json(200, STATE.get("leaves", []))

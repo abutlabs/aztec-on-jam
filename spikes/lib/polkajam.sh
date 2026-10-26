@@ -16,15 +16,25 @@ PJD=${PJD:-$HOME/.cache/jam-privacy/polkajam-v0.8.0/polkajam-v0.8.0-$PJP}
 JB=${JAMBOREE:-$SUB/jamboree/target/release/jamboree}
 PJ_W=$(mktemp -d)
 
-pj_stop() { pkill -f "$PJD/polkajam" 2>/dev/null || true; pkill -f "$PJD/jam-telemetry-dumper" 2>/dev/null || true; }
+# stops only what pj_start started: another testnet on this machine (the demo's NET=polkajam,
+# another session's spike) runs the same binaries and is left alone
+pj_stop() {
+  local pid
+  if pid=$(cat "$PJ_W/testnet.pid" 2>/dev/null); then pkill -P "$pid" 2>/dev/null || true; kill "$pid" 2>/dev/null || true; fi
+  pkill -f -- "--config-path $PJ_W/" 2>/dev/null || true     # a node the launcher left behind
+  [ -z "${PJ_DUMPER:-}" ] || kill "$PJ_DUMPER" 2>/dev/null || true
+}
 trap pj_stop EXIT
 pj_rpc() { "$JB" rpc --url ws://127.0.0.1:19800 --chain-spec "$PJ_W/spec.json" "$@"; }
 
 pj_start() {
   PJ_OUT=$1; mkdir -p "$PJ_OUT"
   "$PJD/polkajam" --chain dev dump-spec "$PJ_W/spec.json" > /dev/null
-  "$PJD/jam-telemetry-dumper" --port 19900 > "$PJ_OUT/telemetry.log" 2>&1 &
-  (cd "$PJ_W" && "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode dummy > "$PJ_OUT/testnet.log" 2>&1 &)
+  "$PJD/jam-telemetry-dumper" --port 19900 > "$PJ_OUT/telemetry.log" 2>&1 < /dev/null & PJ_DUMPER=$!
+  # the launcher alone in the background ($! is its pid); its nodes' directories under $PJ_W
+  ( cd "$PJ_W" || exit 1
+    TMPDIR=$PJ_W "$PJD/polkajam-testnet" --telemetry 127.0.0.1:19900 --finality-mode dummy \
+      > "$PJ_OUT/testnet.log" 2>&1 < /dev/null & echo $! > "$PJ_W/testnet.pid" )
   # ready once finality has left genesis and the nodes see each other: a node can finalize
   # alone under dummy finality, before any guarantor is reachable
   for _ in $(seq 1 150); do

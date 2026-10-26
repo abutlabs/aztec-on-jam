@@ -110,6 +110,11 @@ class Chain:
     def finalized(self):
         return self._block("finalizedBlock")
 
+    def parent(self, at):
+        """The parent of block `at`: (slot, hash), or None for genesis or a pruned block."""
+        d = self.rpc.call("parent", b64(at))
+        return (int(d["slot"]), unb64(d["header_hash"])) if d else None
+
     def read(self, service, key, at=None):
         at = at or self.head()[1]
         v = self.rpc.call("serviceValue", b64(at), service, b64(key))

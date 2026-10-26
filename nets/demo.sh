@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# The demo, one word a stage, on a JAM tiny net: NET=lasair6 (default) or NET=pj6 (nets/net.sh).
-#   nets/demo.sh up         six validators, both services deployed, the indexer and the wallet
+# The demo, one word a stage, on a JAM tiny net: NET=polkajam (default), lasair6, pj6 or a jb-*
+# net (nets/README.md).
+#   nets/demo.sh up         six validators, both services deployed, the indexer, the dev
+#                           accounts seeded, and the wallet and explorer
+#   nets/demo.sh seed       the JAM dev accounts (Alice … Fergie) publish their addresses and
+#                           hold 1000 public each (client/seed.mjs; idempotent)
 #   nets/demo.sh check      no browser: A shields 100, A sends 40 to B, B unshields 40; asserts
 #                           the chain byte for byte; a replay of the send must change nothing
 #   nets/demo.sh shield     A shields 100 (minting first if A is short)  (args: user amount)
 #   nets/demo.sh send       A sends 40 to B privately; B finds it by scanning  (args: from to amount)
 #   nets/demo.sh unshield   B unshields 40 to B's public account   (args: user amount)
-#   nets/demo.sh wallet     (re)start the wallet page's static server, http://localhost:19710/?user=A
+#   nets/demo.sh wallet     (re)start the wallet page's static server, http://localhost:19710/?user=alice,
+#                           and the explorer, http://localhost:19710/explorer.html
 #                           (the page keeps its own keys and proves in the browser)
 #   nets/demo.sh down       stop everything and wipe the chain
 # Public accounts are 32-byte big-endian field elements: A = 1, B = 2. Private keys derive
 # from the names (client/privacy.py). Service ids come from out/state/*.json.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd)
-L=$HERE/net.sh; export NET=${NET:-lasair6}; CLIENT=$ROOT/client/privacy.py
+L=$HERE/net.sh; export NET=${NET:-polkajam}; CLIENT=$ROOT/client/privacy.py
 export CLIENT_STATE=$ROOT/out/client-state.json
 sid() { python3 -c "import json;print(json.load(open('$ROOT/out/state/$1.json'))['service_id'])"; }
 hex32() { printf '%064x' "$1"; }
@@ -63,12 +68,14 @@ case "${1:-}" in
     [[ $head == *"finalized "[1-9]* ]] || { echo "finality never left genesis in 300 s; not deploying (nets/demo.sh down, then up)" >&2; exit 1; }
     rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
-    "$L" indexer; "$0" wallet ;;
+    "$L" indexer; "$0" seed; "$0" wallet ;;
+  seed) node --no-warnings "$ROOT/client/seed.mjs" ;;
   wallet)
     [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true
     nohup python3 "$ROOT/client/wallet.py" > "$ROOT/out/wallet.log" 2>&1 & echo $! > "$ROOT/out/wallet.pid"
     for _ in $(seq 1 20); do curl -sf localhost:19710/ >/dev/null 2>&1 && break; sleep 1; done
-    echo "wallet: http://localhost:19710/?user=A   (and ?user=B)   log: out/wallet.log" ;;
+    echo "wallet: http://localhost:19710/?user=alice   (any dev account: bob, carol, …; or any other name for a wallet of your own)"
+    echo "explorer: http://localhost:19710/explorer.html   log: out/wallet.log" ;;
   down)
     [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true; rm -f "$ROOT/out/wallet.pid"
     "$L" down ;;

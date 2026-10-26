@@ -1770,3 +1770,77 @@ Checked:
   out/state ids, out/wallet.pid, and the indexer container. Once Aodh is done with it: `NET=polkajam
   nets/demo.sh down`, `NET=pj6 nets/demo.sh down; up; check`, then `NET=polkajam nets/demo.sh up`
   to restore his net.
+
+## 2026-10-25 71 — The demo on PolkaJam's own testnet: dev accounts, public payments, an explorer and viewing keys
+Why: Aodh's wallet send failed on lasair6 ("never reached the chain after 3 sends"), and he
+asked for a demo that shows what JAM records publicly beside what it keeps private.
+Found: two causes of the failed send. lasair 2.1.3's guarantor let packages expire
+(anchor_too_old). And once another transfer had moved the tree, the wallet kept resending a
+stale proof that accumulate could never accept.
+Did (uncommitted, in this repo and in demo-wallet's `jam` branch):
+- **Default net `NET=polkajam`:** the v0.8.0 release's own `polkajam-testnet`, with six
+  validators, an ordinary node serving JIP-2 and GRANDPA finality. It needs no Docker. Its genesis
+  ports are UDP 41000–41005 (`--chain dev:41000`) and JIP-2 is on 42950, so spikes on 40000 and
+  19800 can run beside it. `spikes/lib/polkajam.sh` `pj_stop` now stops only its own processes.
+  Before, its `pkill -f $PJD/polkajam` stopped the demo net too.
+- **Stale proofs:** a send has landed when its first nullifier is on chain. It is stale when the
+  leaf count moves without it, and the wallet then proves again from the new trees, at most 3
+  times.
+- **public-balance:**
+  - op 4 is an unsigned public transfer, `[4][from][amount][nonce][to]`.
+  - Every applied change is appended to a log: `events` and `ev:<n>`, 77 bytes each, holding the
+    kind, slot, account, amount and other.
+- **Indexer:** `/history` serves that log beside each private transfer's leaves, nullifiers and
+  sealed notes. It also gives the slot each transfer landed in, found by walking JIP-2 `parent`.
+  `/state` leaves the log out, to stay small.
+- **Seeding:** `nets/demo.sh up` seeds the JIP-5 dev accounts with `client/seed.mjs`. Alice to
+  Fergie each publish an address and hold 1000 public.
+- **Wallet:**
+  - `?user=alice` (and the other dev names) opens that dev account, from its public seed.
+  - An account menu.
+  - A Pay publicly card.
+  - An "Anyone sees" line on each move.
+  - Its viewing key, `encSecret || pk` (64 bytes).
+  - After a restart or a switch of net, it forgets the old chain.
+- **Explorer:** `explorer.html` lists public and private activity by address. It can read with a
+  dev account's keys, a wallet in this browser, or a viewing key.
+- **Tests:** `client/e2e/race.mjs` (two sends at the same moment) and `client/e2e/explorer.mjs`.
+- **Docs:** README, DEMO.md, nets/README.md and demo-wallet's jam/README.md.
+Evidence (NET=polkajam, 2026-10-24 01:45–01:50, logs in out/*-polkajam.log):
+- `nets/demo.sh check`: PASS, 37 of 37 assertions, and nothing was resent.
+- `node client/e2e/e2e.mjs`: PASS with 5 assertions. Mint 12.1 s, shield 23.6 s, send 11.1 s,
+  unshield 11.6 s.
+- `node client/e2e/race.mjs`: PASS. B's send landed first. A's proof went stale
+  (28 → 30 leaves), was proved again, and landed in 22.8 s. Private balances end at 90 and 110.
+- `node client/e2e/explorer.mjs`: PASS with 19 assertions, including these:
+  - Alice's private send is absent from her address without a key.
+  - With her keys it shows, with her change of 60.
+  - Bob's viewing key opens his notes but cannot see spends.
+  - The screenshots are docs/images/11–14.
+Open (review, 2026-10-25):
+- **The wallet's pay and mint can report a false failure.** They decide "landed" by the payer's
+  balance, so a payment arriving at the same moment hides the debit. After 3 sends the page says
+  "never reached the chain", though the payment landed (the resends reuse the nonce, so nothing is
+  paid twice). The fix is to decide by the nonce (`seen:<nonce>`).
+- **`client/seed.mjs` can mint twice.** It resends with a fresh nonce and amount, so a slow first
+  mint and its resend can both land, and the account ends above 1000. The fix is to build each
+  payload once and resend the same bytes.
+- **A failed slot lookup stays failed.** If one JIP-2 `parent` call fails, the indexer leaves
+  those transfers' `slot` null for good.
+- **The demo net that stayed up lost finality.** It finalized up to #9515228 at 2026-10-24 02:42,
+  and nothing after. Its blocks kept coming. GRANDPA logged "Not connected to the peer" an hour
+  before that, and every epoch since has fallen back to AURA with fewer than 12 tickets. By
+  2026-10-25 every package was refused: "invalid epoch 794876, reference epoch is 792935". A fresh
+  `down; up` is needed. The cause is not known; the Mac sleeping is a guess.
+- **`docs/images/demo.gif` predated this work** (wallets A and B). Remade 2026-10-25, at Aodh's
+  request, by `RECORD=1 node client/e2e/explorer.mjs` on a fresh net (`client/e2e/film.mjs`):
+  - an opening crawl (`client/e2e/film.html`: the KYC Empire against ZK rebels, Aztec's proofs
+    finding a home in JAM's work packages);
+  - a card of what is running (Noir 1.0.0-rc.5, bb.js 5.0.0 UltraHonk, PolkaJam v0.8.0,
+    refine's verifier, sealed notes) and what is not (Aztec's kernels, PXE, sequencer and
+    contracts; real money; tagging; folding), the same claim the README makes beside it;
+  - the wallets side by side and the explorer, captioned, each move naming the part of the
+    stack it runs.
+  The wallet is rebranded the JAM Rebel Wallet and the explorer the Imperial Ledger (demo-wallet
+  `jam`: a starfield bar, "The Empire sees" beside each move). e2e.mjs no longer records.
+Next: Aodh's review and commit; then a fresh net, the GIF, and the two fixes.

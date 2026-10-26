@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JAM privacy: the film's title scenes</title>
+<!-- The README film's title scenes, drawn by film.mjs one frame at a time: ?scene=crawl (the
+     opening crawl), card (what is running and what is not), end (the closing card). Each scene
+     exposes window.film = { length: seconds, still: true for one frame, at(t): draw time t }. -->
+<style>
+  :root { --yellow: #ffe81f; --blue: #4bd5ee; --space: #05040b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--space); color: #fff;
+    font-family: "Franklin Gothic Medium", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  canvas { position: fixed; inset: 0; }
+  .scene { position: fixed; inset: 0; display: none; }
+  body[data-scene="crawl"] #crawl, body[data-scene="card"] #card, body[data-scene="end"] #end { display: block; }
+
+  /* the crawl */
+  #prelude { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: var(--blue);
+    font: 400 30px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; opacity: 0; }
+  #title { position: absolute; left: 50%; top: 50%; text-align: center; color: transparent;
+    -webkit-text-stroke: 3px var(--yellow); font: 900 110px/0.95 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: 0.06em; opacity: 0; transform: translate(-50%, -50%) scale(2.6); white-space: nowrap; }
+  #title small { display: block; font-size: 0.42em; letter-spacing: 0.3em; margin-top: 0.15em; }
+  /* the text plane tilts back from the bottom edge of the screen, so all of it recedes */
+  #far { position: absolute; inset: 0; -webkit-mask-image: linear-gradient(to bottom, transparent 6%, #000 36%); }
+  #stage { position: absolute; left: 50%; bottom: 0; width: 640px; height: 1900px; margin-left: -320px;
+    overflow: hidden; transform-origin: 50% 100%; transform: perspective(320px) rotateX(24deg); }
+  #text { position: absolute; left: 0; right: 0; top: 100%; color: var(--yellow);
+    font: 700 36px/1.32 "Helvetica Neue", Helvetica, Arial, sans-serif; text-align: justify; }
+  #text .ep { text-align: center; font-size: 30px; margin: 0; }
+  #text h1 { text-align: center; font-size: 62px; margin: 0.1em 0 0.7em; letter-spacing: 0.04em; }
+  #text p { margin: 0 0 1.1em; }
+
+  /* the cards */
+  .card { position: absolute; inset: 34px 44px; background: rgba(12, 9, 28, 0.9); border: 2px solid var(--yellow);
+    border-radius: 14px; padding: 26px 34px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+  .card h2 { margin: 0; color: var(--yellow); font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .card .lede { margin: 6px 0 20px; font-size: 19px; color: #e9e4ff; }
+  .cols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 26px; }
+  .cols h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .is h3 { color: #7ff0b0; } .not h3 { color: #ff9c8f; }
+  .cols ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+  .cols li { font-size: 17px; line-height: 1.35; color: #f2efff; padding-left: 22px; position: relative; }
+  .is li::before { content: "✓"; color: #7ff0b0; position: absolute; left: 0; font-weight: 700; }
+  .not li::before { content: "✗"; color: #ff9c8f; position: absolute; left: 0; font-weight: 700; }
+  .cols b { color: var(--yellow); font-weight: 650; }
+  .foot { margin-top: 18px; font-size: 15px; color: #b9b2d6; border-top: 1px solid #3a3160; padding-top: 10px; }
+  #end .card { display: grid; place-content: center; text-align: center; }
+  #end h2 { font-size: 46px; letter-spacing: 0.06em; }
+  #end p { font-size: 20px; color: #e9e4ff; margin: 18px 0 0; }
+  #end code { color: var(--yellow); font-size: 19px; }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+
+<section class="scene" id="crawl">
+  <div id="prelude">A short time ago, on a chain not so far away....</div>
+  <div id="title">JAM<small>PRIVACY</small></div>
+  <div id="far"><div id="stage"><div id="text">
+    <p class="ep">Episode ZK</p>
+    <h1>A NEW PROOF</h1>
+    <p>It is a period of open ledgers. The KYC EMPIRE makes every citizen show their papers,
+    and writes every payment where any IMPERIAL analyst can read it.</p>
+    <p>In the distant workshops of AZTEC, rebel engineers have forged a new weapon: the
+    ZERO-KNOWLEDGE PROOF, which shows a payment keeps every law while revealing nothing of who
+    paid whom, or how much.</p>
+    <p>Now JAM, a world built for any work at all, carries those proofs in its WORK PACKAGES and
+    checks each one in REFINE, bringing the rebellion the hope of a brighter, freer
+    galaxy....</p>
+  </div></div></div>
+</section>
+
+<section class="scene" id="card"><div class="card">
+  <h2>What you are about to see is real</h2>
+  <p class="lede">Aztec's proving stack, running live on a JAM chain. Simplified, not simulated.</p>
+  <div class="cols">
+    <div class="is"><h3>Running in this recording</h3><ul>
+      <li><b>Noir 1.0.0-rc.5</b>: a private-transfer circuit in Aztec's model. Notes, nullifiers, a depth-40 note tree, an indexed nullifier tree.</li>
+      <li><b>Barretenberg</b> (bb.js 5.0.0): an UltraHonk proof, made in the sender's browser in about a second.</li>
+      <li><b>JAM</b>: PolkaJam v0.8.0, six validators, GRANDPA finality. Refine verifies each proof on the PVM (169M gas); accumulate writes the trees.</li>
+      <li><b>Sealed notes</b> (X25519, AES-256-GCM), found by the receiver's own key. Keys never leave the browser.</li>
+    </ul></div>
+    <div class="not"><h3>Not in this recording</h3><ul>
+      <li><b>Not the Aztec network.</b> No Aztec kernel circuits, PXE, sequencer or Aztec.nr contracts. The circuit is ours, written to Aztec's shapes.</li>
+      <li><b>Not real money.</b> A dev chain: a faucet, an unsigned public ledger, and Alice's and Bob's keys are public.</li>
+      <li><b>Not Aztec's note tagging</b> (wallets try every note), and <b>no folding</b> (one proof per work package).</li>
+    </ul></div>
+  </div>
+  <p class="foot">Separately, in the same repository: Aztec v6's own unchanged node and PXE settling on JAM, so far with Aztec's test-mode proofs. Not shown here.</p>
+</div></section>
+
+<section class="scene" id="end"><div class="card">
+  <h2>May the proofs be with you</h2>
+  <p>Run the whole thing on your machine:</p>
+  <p><code>github.com/abutlabs/jam-privacy-service</code> &nbsp;·&nbsp; <code>nets/demo.sh up</code></p>
+</div></section>
+
+<script>
+  const scene = new URLSearchParams(location.search).get("scene") || "crawl";
+  document.body.dataset.scene = scene;
+
+  // a fixed starfield: the same stars in every frame and every run
+  const cv = document.getElementById("stars"), cx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 260; i++) {
+    cx.fillStyle = `rgba(255,255,255,${0.25 + rnd() * 0.75})`;
+    cx.beginPath(); cx.arc(rnd() * cv.width, rnd() * cv.height, rnd() < 0.9 ? 0.7 : 1.3, 0, 7); cx.fill();
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const ramp = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));   // 0 before a, 1 after b
+  const CRAWL_FROM = 7.5, CRAWL_FOR = 30;                                   // seconds
+  window.film = scene === "crawl" ? {
+    length: CRAWL_FROM + CRAWL_FOR,
+    at(t) {
+      $("prelude").style.opacity = String(ramp(t, 0.8, 1.8) * (1 - ramp(t, 5, 6)));
+      // the title recedes into the stars, as the crawl begins beneath it
+      const k = ramp(t, 5.8, 14);
+      $("title").style.opacity = String(ramp(t, 5.8, 6) * (1 - ramp(t, 12, 14)));
+      $("title").style.transform = `translate(-50%, -50%) scale(${2.6 * Math.pow(0.02, k)})`;
+      const travel = $("text").offsetHeight + $("stage").offsetHeight * 0.4;  // until the last line is far off
+      $("text").style.transform = `translateY(${-travel * ramp(t, CRAWL_FROM, CRAWL_FROM + CRAWL_FOR)}px)`;
+    },
+  } : { length: scene === "card" ? 15 : 5, still: true, at() {} };
+  window.film.at(0);
+</script>
+</body>
+</html>

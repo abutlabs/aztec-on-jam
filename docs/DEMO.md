@@ -30,7 +30,8 @@ service sends one back whose memo names the receiving account (unshield).
 scripts/bootstrap.sh          # the pinned toolchain, the sibling checkouts, both services built
 nets/demo.sh up               # PolkaJam's tiny testnet, both services deployed, indexer and wallet
 nets/demo.sh check            # A shields, pays B, B finds it and unshields: 37 assertions
-open "http://localhost:19710/?user=A"   # and ?user=B in another browser profile
+open "http://localhost:19710/?user=alice"        # and ?user=bob in another window: seeded dev accounts
+open "http://localhost:19710/explorer.html"      # what the chain shows, and what a key reads in it
 nets/demo.sh down
 ```
 
@@ -50,6 +51,13 @@ A down 100 publicly, B up 40; a replayed send changing nothing.
 The browser wallet is self-custodial: its secret never leaves the tab; it publishes its
 address (an encryption key and a spend key) on chain, scans for its notes, and proves every
 transfer itself with noir_js and bb.js. The server behind it only serves files.
+
+`up` also seeds the JAM dev accounts, Alice to Fergie, with published addresses and 1000 public
+each, so two windows at `?user=alice` and `?user=bob` can pay each other at once. The explorer
+then shows the difference: Alice's public payment to Bob names both and the amount, and her
+private send to Bob appears under neither address. Reading with Alice's keys, or with Bob's
+viewing key, marks what each can open. The README's *Public and private, side by side* has
+the details.
 
 ## What to read, in this order
 

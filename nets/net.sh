@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The privacy service on a JAM tiny net, chosen by NET: jamswap's Docker nets here, or a
-# native net that jamboree launches (NET=jb-pj6, jb-lasair6, jb-mixed: nets/jb.sh). The Docker nets:
-#   NET=lasair6 (default)  six lasair validators, a JIP-2 reader, the CE-133 builder
+# The privacy service on a JAM tiny net, chosen by NET. The native nets are nets/jb.sh's:
+# NET=polkajam (the default; PolkaJam's own testnet, no Docker) and the nets jamboree launches
+# (NET=jb-pj6, jb-lasair6, jb-mixed). The Docker nets, jamswap's compose, are here:
+#   NET=lasair6            six lasair validators, a JIP-2 reader, the CE-133 builder
 #   NET=pj6                six PolkaJam validators and an ordinary PolkaJam node for JIP-2
 #
 #   nets/net.sh up        start the validators and the RPC node (images cached)
@@ -15,12 +16,12 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 JAMSWAP=$SUB/jamswap; BUILD=$JAMSWAP/tools/jam080/builder/target/release/jam080-build
-NET=${NET:-lasair6}
-case "$NET" in jb-*) exec "$HERE/jb.sh" "$@" ;; esac     # native nets that jamboree launches
+NET=${NET:-polkajam}
+case "$NET" in polkajam|jb-*) exec "$HERE/jb.sh" "$@" ;; esac   # the native nets
 case "$NET" in
   lasair6) FILE=docker-compose.lasair6.yml; UP="spec-init lm0 lm1 lm2 lm3 lm4 lm5 reader builder"; RPC=ws://reader:19800; RPCSVC=reader ;;
   pj6)     FILE=nets/compose/pj6.yml;       UP="spec-init pj0 pj1 pj2 pj3 pj4 pj5 rpc";              RPC=ws://rpc:42150;    RPCSVC=rpc ;;
-  *) echo "NET=$NET: this demo knows lasair6 and pj6" >&2; exit 2 ;;
+  *) echo "NET=$NET: this demo knows polkajam, lasair6, pj6, jb-pj6, jb-lasair6 and jb-mixed" >&2; exit 2 ;;
 esac
 PROJECT=$NET                                   # jamswap's ./dex uses the net's name too
 COMPOSE="docker compose -p $PROJECT -f $JAMSWAP/$FILE"
