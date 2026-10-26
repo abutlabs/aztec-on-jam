@@ -16,7 +16,9 @@
 # Env: POLKAJAM, LASAIR (the client binaries), JAMBOREE, JB_MINUTES (how long jamboree keeps
 #      the net up, headless; default 240), JB_TELEMETRY (the nodes' JIP-3 telemetry to host:port,
 #      e.g. 127.0.0.1:9910 for the observability stack's receiver), JB_RPC (on an all-lasair
-#      net: node, the default, for JIP-2 from validator 0's own state; reader for lasair-reader)
+#      net: node, the default, for JIP-2 from validator 0's own state; reader for lasair-reader),
+#      LASAIR_JIP8_FROM_SLOT (lasair's JIP-8 curve host calls from that slot, on every node: an
+#      experiment, not GP 0.8.0; unset, off)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 NET=${NET:-polkajam}
