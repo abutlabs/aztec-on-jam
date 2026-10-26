@@ -14,8 +14,9 @@
 #
 #   nets/jb.sh up | build | deploy | indexer | ctl ... | names | down | headcheck [minutes]
 # Env: POLKAJAM, LASAIR (the client binaries), JAMBOREE, JB_MINUTES (how long jamboree keeps
-#      the net up, headless; default 240), JB_TELEMETRY (PolkaJam's JIP-3 telemetry to host:port,
-#      e.g. 127.0.0.1:9910 for the observability stack's receiver)
+#      the net up, headless; default 240), JB_TELEMETRY (the nodes' JIP-3 telemetry to host:port,
+#      e.g. 127.0.0.1:9910 for the observability stack's receiver), JB_RPC (on an all-lasair
+#      net: node, the default, for JIP-2 from validator 0's own state; reader for lasair-reader)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 NET=${NET:-polkajam}
@@ -57,6 +58,10 @@ ports_free() {
 
 # lasair validator i, as jamboree runs it: listening on the port jamboree moved it to,
 # dialing every other validator at its genesis port with the dev account's peer id
+# JIP-2 from a lasair validator itself (JB_RPC=node, the default on an all-lasair net), or from
+# lasair-reader following one (JB_RPC=reader: a block behind, its reads proven)
+node_rpc() { [ "$PJN" = 0 ] && [ "${JB_RPC:-node}" = node ]; }
+
 lasair_node() {
   local i=$1 port=$2 tel=${3:-} peers="" k pid
   for k in 0 1 2 3 4 5; do
@@ -69,8 +74,15 @@ lasair_node() {
   # "lags" today's wall slot by millions and the node back-fills forever instead of authoring)
   local pace=(--interval 6)
   [ "$PJN" -gt 0 ] && pace=(--interval 1 --wall)
+  # on an all-lasair net, validator 0 serves JIP-2 itself from its own state (lasair#83):
+  # the head, not a block behind; work-packages go over CE-133 to every lasair builder port
+  local rpc=() g="" k2
+  if node_rpc && [ "$i" = 0 ]; then
+    for k2 in 0 1 2 3 4 5; do g="$g,127.0.0.1:$((BUILDER_BASE + k2))"; done
+    rpc=(--rpc-port "$RPC_PORT"); export LASAIR_RPC_GUARANTORS="${g#,}"
+  fi
   exec "$LZ" --dev-validator "$i" --genesis-spec "$SPEC" --port "$port" --peers "${peers#,}" \
-    --guarantor --builder-port $((BUILDER_BASE + i)) --metrics-port 0 "${pace[@]}" \
+    --guarantor --builder-port $((BUILDER_BASE + i)) --metrics-port 0 "${pace[@]}" "${rpc[@]}" \
     --spec-out "$RUN/spec-out-$i.json" ${tel:+--telemetry "$tel"}
 }
 
@@ -117,7 +129,7 @@ case "${1:-}" in
     # telemetry there (e.g. PolkaJam's jam-telemetry-dumper, for refine times)
     [ "$PJN" -gt 0 ] && cmds+=(--cmd "polkajam[$PJN]=$PJ --chain $SPEC run --temp --pvm-backend interpreter --finality-mode grandpa --dev-validator {i} --port {port} --rpc-port \$((42900+{i}))${JB_TELEMETRY:+ --telemetry $JB_TELEMETRY}")
     [ "$LZN" -gt 0 ] && cmds+=(--cmd "lasair[$LZN]=NET=$NET $HERE/jb.sh lasair-node {i} {port}${JB_TELEMETRY:+ $JB_TELEMETRY}")
-    cmds+=(--cmd "rpc=NET=$NET $HERE/jb.sh rpc-node {port}")
+    node_rpc || cmds+=(--cmd "rpc=NET=$NET $HERE/jb.sh rpc-node {port}")
     ( cd "$RUN" || exit 1
       nohup "$JB" --headless "${JB_MINUTES:-240}m" --move-ports "${cmds[@]}" \
         > "$RUN/jamboree.log" 2>&1 < /dev/null & echo $! > "$RUN/jamboree.pid" )
