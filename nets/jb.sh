@@ -70,9 +70,11 @@ lasair_node() {
     peers="$peers,127.0.0.1:$((GENESIS_PORT + k))@$pid"
   done
   # pacing as jamswap's lasair6 and mixed nets: with PolkaJam on the net, wall-clock slots;
-  # alone, chain-paced from genesis slot 0, a slot every 6 s (wall-paced, a head at slot 0
-  # "lags" today's wall slot by millions and the node back-fills forever instead of authoring)
-  local pace=(--interval 6)
+  # alone, chain-paced from genesis slot 0 (wall-paced, a head at slot 0 "lags" today's wall
+  # slot by millions and the node back-fills forever instead of authoring), a block no sooner
+  # than 6 s after the last, polled every second: JAM's slot time (with --interval 6 alone the
+  # slot owner authored whenever its poll fell, a block about every 3.9 s)
+  local pace=(--interval 1 --block-time 6)
   [ "$PJN" -gt 0 ] && pace=(--interval 1 --wall)
   # on an all-lasair net, validator 0 serves JIP-2 itself from its own state (lasair#83):
   # the head, not a block behind; work-packages go over CE-133 to every lasair builder port
