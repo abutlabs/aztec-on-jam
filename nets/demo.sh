@@ -68,7 +68,9 @@ case "${1:-}" in
     [[ $head == *"finalized "[1-9]* ]] || { echo "finality never left genesis in 300 s; not deploying (nets/demo.sh down, then up)" >&2; exit 1; }
     rm -f "$ROOT"/out/state/*.json "$CLIENT_STATE" "$ROOT"/out/wallet-state.json "$ROOT"/out/wallet-state.bak
     "$L" deploy; echo "services: public-balance $(sid public-balance), privacy $(sid privacy)"
-    "$L" indexer; "$0" seed; "$0" wallet ;;
+    # the wallet before seeding: a seeding pass that falls short leaves a usable net
+    "$L" indexer; "$0" wallet
+    "$0" seed || { echo "seeding fell short: the net and the wallet are up; finish with nets/demo.sh seed" >&2; exit 1; } ;;
   seed) node --no-warnings "$ROOT/client/seed.mjs" ;;
   wallet)
     [ -f "$ROOT/out/wallet.pid" ] && kill "$(cat "$ROOT/out/wallet.pid")" 2>/dev/null || true

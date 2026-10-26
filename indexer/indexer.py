@@ -8,6 +8,8 @@ view of the chain plus a relay for submissions (CORS open, so a browser wallet u
   GET  /leaves                    the note tree's leaves in order (hex)
   GET  /nullifier/<hex>           {"spent": true|false}
   GET  /deposit/<hex>             {"amount": n} or {"amount": null}
+  GET  /seen/<nonce-hex>          {"seen": true|false}: public-balance applied the operation with
+                                  this nonce (a mint, burn or public transfer has landed)
   GET  /balance/<account-hex>     {"balance": n} on the public-balance service
   GET  /key/<account-hex>         {"key": hex or null}: the account's directory entry
   GET  /notes?from=N              {"from": N, "notes": [hex, ...]}: sealed notes, leaf N onward
@@ -136,6 +138,19 @@ def landed_slots(slots, count, slot, at):
     return slots + [found.get(i) for i in range(len(slots), max(found, default=len(slots) - 1) + 1)]
 
 
+def place_slots(slots, n_tx, slot, at):
+    """[slots] extended to [n_tx] transfers. A transfer further back than the walk is unknown for
+    good (None). A read that fails leaves the new transfers unplaced, so the next refresh tries
+    again, instead of marking them unknown for good."""
+    if n_tx <= len(slots):
+        return slots
+    try:
+        slots = landed_slots(slots, n_tx, slot, at)
+    except Exception:  # noqa: BLE001 — a failed read, or a client without JIP-2 parent
+        return slots
+    return slots + [None] * (n_tx - len(slots))
+
+
 def refresh():
     leaves, sealed, nfs, events, slots = [], [], [], [], []   # append-only: read only what is new
     while True:
@@ -151,12 +166,7 @@ def refresh():
             sealed = sealed + [rd(b"enc:" + struct.pack("<Q", i)).hex() for i in range(len(sealed), n)]
             nfs = nfs + [rd(b"nfl:" + struct.pack("<Q", i)).hex() for i in range(len(nfs) + 1, null_size)]
             events = events + [event(i, B.read(PUBLIC, b"ev:" + struct.pack("<Q", i), at)) for i in range(len(events), n_ev)]
-            if n_tx > len(slots):
-                try:
-                    slots = landed_slots(slots, n_tx, slot, at)
-                except Exception:  # noqa: BLE001 — a client without JIP-2 parent: no slots
-                    pass
-                slots = slots + [None] * (n_tx - len(slots))
+            slots = place_slots(slots, n_tx, slot, at)
             s = {"ok": True, "net": os.environ.get("NET_NAME", ""), "slot": slot, "head": at.hex(),
                  "privacy_id": PRIVACY, "public_id": PUBLIC,
                  "note_root": rd(b"root:note").hex(), "null_root": rd(b"root:null").hex(),
@@ -216,6 +226,8 @@ class H(BaseHTTPRequestHandler):
             if len(parts) == 2 and parts[0] == "deposit":
                 v = B.read(PRIVACY, b"dep:" + bytes.fromhex(parts[1]))
                 return self._json(200, {"amount": u64(v) if v else None})
+            if len(parts) == 2 and parts[0] == "seen":
+                return self._json(200, {"seen": bool(B.read(PUBLIC, b"seen:" + bytes.fromhex(parts[1])))})
             if len(parts) == 2 and parts[0] == "key":
                 v = B.read(PUBLIC, b"key:" + bytes.fromhex(parts[1]))
                 return self._json(200, {"key": v.hex() if v else None})

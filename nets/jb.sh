@@ -116,7 +116,7 @@ case "${1:-}" in
     # the interpreter: PolkaJam's recompiler is Linux-only. JB_TELEMETRY=host:port sends its JIP-3
     # telemetry there (e.g. PolkaJam's jam-telemetry-dumper, for refine times)
     [ "$PJN" -gt 0 ] && cmds+=(--cmd "polkajam[$PJN]=$PJ --chain $SPEC run --temp --pvm-backend interpreter --finality-mode grandpa --dev-validator {i} --port {port} --rpc-port \$((42900+{i}))${JB_TELEMETRY:+ --telemetry $JB_TELEMETRY}")
-    [ "$LZN" -gt 0 ] && cmds+=(--cmd "lasair[$LZN]=NET=$NET $HERE/jb.sh lasair-node {i} {port}")
+    [ "$LZN" -gt 0 ] && cmds+=(--cmd "lasair[$LZN]=NET=$NET $HERE/jb.sh lasair-node {i} {port}${JB_TELEMETRY:+ $JB_TELEMETRY}")
     cmds+=(--cmd "rpc=NET=$NET $HERE/jb.sh rpc-node {port}")
     ( cd "$RUN" || exit 1
       nohup "$JB" --headless "${JB_MINUTES:-240}m" --move-ports "${cmds[@]}" \

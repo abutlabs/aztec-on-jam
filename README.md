@@ -71,6 +71,9 @@ Every stage takes a net in `NET` ([nets/README.md](nets/README.md)):
 balance the pages show. `node client/e2e/race.mjs` has
 two wallets send at the same moment. Both proofs start from the same trees, so the one that
 accumulates second is refused, and its page must prove again from the new trees.
+`node client/e2e/pay-both.mjs` has Alice and Bob pay each other in public at the same moment:
+each balance ends where it started, so a page knows its payment landed by its nonce
+(`/seen/<nonce>`), not by its balance.
 
 The wallet keeps its notes in the browser. When the net is restarted or switched, the chain no
 longer holds those notes where the wallet found them, so the page forgets the old chain and
@@ -213,9 +216,9 @@ Reduced:
 | --- | --- |
 | `circuits/transfer/` | the Noir join-split (`hash_cli`, `path_cli`: the client's cross-checks) |
 | `services/privacy/`, `services/public-balance/` | the two services; `crates/service-util/` what they share |
-| `client/` | `privacy.py` (notes, trees, witnesses, payloads), `notecrypt.py`, `soak.py`, `wallet.py` (a static server), `seed.mjs` (the dev accounts), `e2e/` (`e2e.mjs`, `race.mjs`, `explorer.mjs`; `film.mjs` and `film.html` make the README's GIF) |
+| `client/` | `privacy.py` (notes, trees, witnesses, payloads), `notecrypt.py`, `soak.py`, `wallet.py` (a static server), `seed.mjs` (the dev accounts; `test-seed.mjs`), `queue_soak.py` (packages kept waiting on one core), `e2e/` (`e2e.mjs`, `race.mjs`, `pay-both.mjs`, `explorer.mjs`; `film.mjs` and `film.html` make the README's GIF) |
 | `../demo-wallet/jam/` | the wallet page and the explorer (branch `jam` of our demo-wallet fork) |
-| `indexer/` | follows the chain over JIP-2 and serves it over HTTP; relays submissions |
+| `indexer/` | follows the chain over JIP-2 and serves it over HTTP; relays submissions (`test_indexer.py`) |
 | `nets/` | `demo.sh` (the stages), `net.sh` (the Docker nets lasair6 and pj6), `jb.sh` (the native nets: polkajam, and the nets jamboree launches) |
 | `scripts/` | `bootstrap.sh` (the pinned toolchain; `bootstrap-clean.sh` runs it from nothing in a container), `offline-proof.sh`, `fetch-crs.sh`, `bench-refine-polkajam.sh` |
 | `spikes/` | the measurements behind the numbers |

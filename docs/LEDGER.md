@@ -1844,3 +1844,36 @@ Open (review, 2026-10-25):
   The wallet is rebranded the JAM Rebel Wallet and the explorer the Imperial Ledger (demo-wallet
   `jam`: a starfield bar, "The Empire sees" beside each move). e2e.mjs no longer records.
 Next: Aodh's review and commit; then a fresh net, the GIF, and the two fixes.
+
+## 2026-10-26 72 — The demo's four bugs from entry 71, fixed, each with a test that fails without its fix
+Why: Aodh's order for a stable demo on lasair (#57): the demo's bugs first, then lasair#94, then
+the reader's lag (#83). lasair resends more than PolkaJam, so these bugs bite harder there.
+Fixed:
+- **Pay and mint judged by their nonce.** The wallet judged "landed" by the payer's balance, so a
+  payment arriving at the same moment hid the debit and the page resent until it reported
+  failure. The indexer now serves `/seen/<nonce>` (public-balance's `seen:<nonce>`), and the
+  page asks it. Test `client/e2e/pay-both.mjs`: Alice and Bob pay each other 25 at the same
+  moment. On lasair before the fix, Bob's page reported "never reached the chain after 3 sends"
+  although its payment landed (slot 75, once). After the fix, both report done, the chain's log
+  has each payment once, and both balances end at 1000.
+- **Seed mints are one operation per account and balance.** `seed.mjs` built a fresh payload,
+  with a fresh nonce, for every resend and every run. The first fix (the same bytes per run)
+  was not enough: a cut-short `up` and the `seed` after it minted Eve twice (2000). The nonce now
+  comes from the account and the balance the mint tops up from. Test `client/test-seed.mjs`: two
+  seeding runs at once against a fake indexer that applies each operation 2.5 s late, once per
+  nonce. The original and the first fix both mint 2000; the fix mints 1000.
+- **A failed slot lookup is retried.** The indexer marked a private transfer's slot unknown for
+  good after one failed JIP-2 `parent` read. `place_slots` now leaves it unplaced, so the next
+  refresh tries again; only a transfer further back than the walk is unknown. Test
+  `indexer/test_indexer.py`: 4 tests. A mutation putting the old behaviour back fails one.
+- **`up` starts the wallet before seeding.** A seeding pass that fell short ended `up` before
+  the wallet started. Now the wallet is up first, and a short pass says to finish with
+  `nets/demo.sh seed`.
+Evidence (jb-lasair6, lasair branch guarantee-while-engaged 118b671, 2026-10-26):
+- `SEED_WAIT_S=0 nets/demo.sh up`: exit 1 with that message, and the wallet answers (HTTP 200).
+  `nets/demo.sh seed` then finishes, and each dev account has exactly one 1000 mint.
+- `check`: 37 of 37. `e2e.mjs`: 5 of 5. `race.mjs`: a stale proof proved again. `explorer.mjs`:
+  19 of 19. `pay-both.mjs`, `test-seed.mjs` and `test_indexer.py` pass.
+Also new: `client/queue_soak.py` (packages kept waiting on one core, for lasair#94), and lasair
+nodes take `JB_TELEMETRY` on the native nets.
+Next: lasair#94's last part (the previous rotation across an epoch turn), then #83.
