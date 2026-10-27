@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Which parts of Aztec run on JAM unchanged, which are ours, which need the proposed curve host calls, and the plan.">
+<title>Aztec on JAM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+html { color-scheme: light; } body { margin: 0; } :root { padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); }
+
+/* Layout: one column; the stack drawn as horizontal bands from the user's device down to the JAM
+   chain, each component a tile coloured by whose code it is, with a chip for the curve calls. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #17202b; --muted: #5a6573; --rule: #d9dee5;
+  --aztec: #127a5c; --aztec-bg: #e3f4ee;         /* Aztec's code, unchanged */
+  --build: #2357a8; --build-bg: #e5edfa;         /* Aztec's source, our build for the PVM */
+  --port: #9a6200; --port-bg: #fbf0d9;           /* ours, ported from Aztec's spec each release */
+  --ours: #b23a2a; --ours-bg: #fbe7e3;           /* ours, new: takes Ethereum's place */
+  --demo: #6b7380; --demo-bg: #eceef1;           /* ours, the demo only: retired by the move */
+  --ok: #127a5c; --warn: #9a6200; --no: #b23a2a;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f141a; --panel: #161d26; --ink: #e6ebf1; --muted: #9aa5b3; --rule: #2a3442;
+  --aztec: #5fd3a8; --aztec-bg: #12302a; --build: #8db4f5; --build-bg: #172540;
+  --port: #f0b85a; --port-bg: #33280f; --ours: #f08a78; --ours-bg: #3a1c17;
+  --demo: #a3abb7; --demo-bg: #222a35; --ok: #5fd3a8; --warn: #f0b85a; --no: #f08a78; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f141a; --panel: #161d26; --ink: #e6ebf1; --muted: #9aa5b3; --rule: #2a3442;
+  --aztec: #5fd3a8; --aztec-bg: #12302a; --build: #8db4f5; --build-bg: #172540;
+  --port: #f0b85a; --port-bg: #33280f; --ours: #f08a78; --ours-bg: #3a1c17;
+  --demo: #a3abb7; --demo-bg: #222a35; --ok: #5fd3a8; --warn: #f0b85a; --no: #f08a78; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 400 15.5px/1.55 var(--body); }
+a { color: var(--build); text-underline-offset: 2px; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 36px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 36px; }
+h1, h2, h3 { font-family: var(--display); font-stretch: 85%; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 24px; font-weight: 750; }
+h3 { font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; max-width: 68ch; }
+.lede { font-size: 17.5px; }
+section { display: grid; gap: 14px; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+.meta { color: var(--muted); font-size: 13.5px; }
+
+/* the legend */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; flex: none; }
+.sw.aztec { background: var(--aztec-bg); border-color: var(--aztec); }
+.sw.build { background: var(--build-bg); border-color: var(--build); }
+.sw.port { background: var(--port-bg); border-color: var(--port); }
+.sw.ours { background: var(--ours-bg); border-color: var(--ours); }
+.sw.demo { background: var(--demo-bg); border-color: var(--demo); border-style: dashed; }
+
+/* the stack */
+.stack { display: grid; gap: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.band { display: grid; grid-template-columns: 170px 1fr; border-top: 1px solid var(--rule); }
+.band:first-child { border-top: 0; }
+.band > .where { padding: 16px; border-right: 1px solid var(--rule); display: grid; align-content: start; gap: 4px; }
+.where b { font-family: var(--display); font-stretch: 85%; font-size: 17px; font-weight: 750; }
+.where small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.tiles { padding: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; min-width: 0; }
+.tile { border: 2px solid; border-radius: 7px; padding: 10px 12px; display: grid; gap: 5px; align-content: start; min-width: 0; }
+.tile.aztec { background: var(--aztec-bg); border-color: var(--aztec); }
+.tile.build { background: var(--build-bg); border-color: var(--build); }
+.tile.port { background: var(--port-bg); border-color: var(--port); }
+.tile.ours { background: var(--ours-bg); border-color: var(--ours); }
+.tile.other { background: var(--panel); border-color: var(--rule); }
+.tile.demo { background: var(--demo-bg); border-color: var(--demo); border-style: dashed; }
+.tile .name { font-weight: 600; line-height: 1.3; }
+.tile .what { font-size: 13.5px; line-height: 1.45; }
+.tile .status { font-size: 12.5px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font: 600 11.5px/1 var(--mono); padding: 4px 6px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); white-space: nowrap; }
+.chip.need { color: var(--no); border-color: var(--no); }
+.chip.fast { color: var(--warn); border-color: var(--warn); }
+.chip.none { color: var(--muted); }
+.link { padding: 6px 16px; font: 600 12px/1.3 var(--mono); color: var(--muted); border-top: 1px dashed var(--rule); background: var(--bg); }
+@media (max-width: 640px) {
+  .band { grid-template-columns: 1fr; }
+  .band > .where { border-right: 0; border-bottom: 1px solid var(--rule); }
+}
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-top: 1px solid var(--rule); }
+thead th { border-top: 0; font: 700 12px/1.3 var(--body); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--mono); font-size: 13px; }
+.paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.path { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.path h3 { color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 18px; }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 12px; }
+ol.steps li::before { content: counter(s); font: 800 20px/1 var(--display); color: var(--muted); }
+ol.steps li > div { display: grid; gap: 4px; min-width: 0; }
+.state { font: 600 11.5px/1 var(--mono); }
+.state.next { color: var(--warn); } .state.done { color: var(--ok); } .state.block { color: var(--no); } .state.todo { color: var(--muted); }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <p class="meta"><a href="https://github.com/abutlabs/jam-privacy-service">jam-privacy-service</a> · updated 2026-10-27 · source: <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/aztec/STACK.md">docs/aztec/STACK.md</a></p>
+    <h1>Aztec on JAM</h1>
+    <p class="lede">Aztec's software runs as released, above the settlement layer. JAM takes Ethereum's place below
+      it. This page sorts each part by whose code it is, says how it keeps up with Aztec's releases, and says
+      which parts need the proposed curve host calls.</p>
+  </header>
+
+  <section>
+    <h2>The stack</h2>
+    <div class="legend" aria-label="Legend">
+      <span><i class="sw aztec"></i>Aztec's code, unchanged: a new release is a re-pin</span>
+      <span><i class="sw build"></i>Aztec's source, unchanged, our build for the PVM</span>
+      <span><i class="sw port"></i>Ours, ported from Aztec's spec each release</span>
+      <span><i class="sw ours"></i>Ours, new</span>
+      <span><i class="sw demo"></i>Ours, today's demo only</span>
+    </div>
+    <div class="stack">
+      <div class="band">
+        <div class="where"><b>User's device</b><small>keys, notes, proving</small></div>
+        <div class="tiles">
+          <div class="tile ours"><div class="name">Our wallet</div>
+            <div class="what">Our own interface, written on Aztec's libraries. Aztec's demo-wallet shows how they fit together; its code carries no licence, so none of it is copied.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">To build: <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a>.</div></div>
+          <div class="tile aztec"><div class="name">wallet-sdk, PXE, aztec.js, accounts</div>
+            <div class="what">Sync notes, simulate private functions, build transactions, find notes by Aztec's tagging. A full PXE runs in a browser tab (SQLite on OPFS). Apache-2.0.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">The PXE ran unchanged on JAM, 2026-10-24 (<code>send-tx.mjs</code>).</div></div>
+          <div class="tile aztec"><div class="name">Barretenberg prover (bb, bb.js)</div>
+            <div class="what">Folds the app circuits and private kernels into one client proof (CHONK): 80 to 128 KB, 2.2 to 8.2 s natively.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">Real proofs in Chrome: 3.6 to 3.9 s for a token transfer, 2.2 s natively.</div></div>
+          <div class="tile aztec"><div class="name">Aztec.nr contracts, kernel circuits</div>
+            <div class="what">Token, account and fee contracts; private kernels; rollup circuits. They take chain id, slots and roots as values.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">Compiled with Aztec's pinned toolchain.</div></div>
+        </div>
+      </div>
+      <div class="link">↓ transactions with their client proofs, over the node's JSON-RPC</div>
+      <div class="band">
+        <div class="where"><b>Aztec network</b><small>run as released, <code>@aztec-labs/aztec</code> 6.0.0</small></div>
+        <div class="tiles">
+          <div class="tile aztec"><div class="name">Aztec node: sequencer, archiver, world state, AVM, P2P</div>
+            <div class="what">Checks each client proof on receipt (bb, native), executes public calls, builds checkpoints with their blobs and proposes them to "L1".</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">Built on a PolkaJam devnet: 7 checkpoints settled. Test mode (<a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a>), one sequencer (<a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a>).</div></div>
+          <div class="tile aztec"><div class="name">Prover node and rollup circuits</div>
+            <div class="what">Proves each epoch: one root rollup proof (UltraHonk, Keccak, 113 public inputs) that covers every transaction's client proof.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">Not run here: real epoch proving needs hardware (<a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>).</div></div>
+        </div>
+      </div>
+      <div class="link">↓ Ethereum JSON-RPC: blob transactions to <code>Rollup.propose</code>, epoch proofs, contract reads</div>
+      <div class="band">
+        <div class="where"><b>The seam</b><small>where Ethereum was</small></div>
+        <div class="tiles">
+          <div class="tile ours"><div class="name">jam-l1 facade</div>
+            <div class="what">Answers the node exactly as its L1 would: about 40 contract reads, blocks, logs, receipts and traces, from the settlement service's storage. Relays each <code>propose</code> as a work package. Aztec's code is not patched.</div>
+            <div class="chips"><span class="chip none">no curve call</span></div>
+            <div class="status">Built (#53). Follows each release's L1 interface changes; v5→v6 moved 459 lines on Aztec's side.</div></div>
+        </div>
+      </div>
+      <div class="link">↓ work packages over JIP-2: checkpoints (blobs as extrinsics) and epoch proofs</div>
+      <div class="band">
+        <div class="where"><b>JAM services</b><small>refine checks, accumulate keeps state</small></div>
+        <div class="tiles">
+          <div class="tile port"><div class="name">Settlement service</div>
+            <div class="what">Aztec's Rollup, Inbox and Outbox contracts as refine and accumulate. Refine checks blobs (KZG), the epoch proof (UltraHonk, verifier ported from bb's Solidity) and the proposer's signatures (ECDSA). Accumulate keeps the tips, the inbox ring and the outbox.</div>
+            <div class="chips"><span class="chip fast">101–104: 2.9–5.6× cheaper</span><span class="chip none">ECDSA: no call</span></div>
+            <div class="status">Built and tested on PolkaJam (#49–#51, #54). Encodings match Aztec's 6 L1 fixtures.</div></div>
+          <div class="tile build"><div class="name">Client-proof checker (optional path)</div>
+            <div class="what">Barretenberg 6.0.0's own CHONK verifier, its C++ unchanged, compiled for the PVM. Its Grumpkin MSM is linked to call 105.</div>
+            <div class="chips"><span class="chip need">105 required</span><span class="chip need">full 5e9 refine</span></div>
+            <div class="status">One proof verified and finalized on six lasair validators: 3.46B gas (<a href="https://github.com/abutlabs/jam-privacy-service/issues/62">#62</a>).</div></div>
+          <div class="tile demo"><div class="name">Today's demo: privacy and public-balance services</div>
+            <div class="what">Our Noir join-split, our note format and trees, our wallet, indexer and explorer. Aztec's PXE cannot use them.</div>
+            <div class="chips"><span class="chip fast">101–102: 147M → 49M</span></div>
+            <div class="status">Retired by the move to Aztec's stack (<a href="https://github.com/abutlabs/jam-privacy-service/issues/70">#70</a>).</div></div>
+        </div>
+      </div>
+      <div class="link">↓ blocks, finality, data availability</div>
+      <div class="band">
+        <div class="where"><b>JAM chain</b><small>Gray Paper 0.8.0</small></div>
+        <div class="tiles">
+          <div class="tile ours"><div class="name">lasair (our client)</div>
+            <div class="what">Implements the proposed calls 101–105 behind activation flags. Blob data stays as exported segments for 28 days, longer than Ethereum's 18.2-day blob window.</div>
+            <div class="chips"><span class="chip fast">101–105</span></div>
+            <div class="status">The Aztec devnet moves here: <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a>.</div></div>
+          <div class="tile other"><div class="name">PolkaJam (Parity's client)</div>
+            <div class="what">No curve calls. Every service above falls back to PVM code and still fits, except the client-proof checker.</div>
+            <div class="chips"><span class="chip none">no calls</span></div>
+            <div class="status">The Aztec devnet's net today.</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="meta">PolkaJam's tile is outlined only: it is neither Aztec's code nor ours.</p>
+  </section>
+
+  <section>
+    <h2>Who checks the client proofs: two paths</h2>
+    <div class="paths">
+      <div class="path"><h3>A. Aztec's own design</h3>
+        <p>The sequencer checks each client proof when it arrives, and the rollup circuits fold them all into one
+          epoch proof. JAM checks that epoch proof, the blobs and the signatures. Everything above the seam
+          stays Aztec's code, and <b>no curve call is required</b>. The calls make an epoch's settlement 5.6× cheaper and a checkpoint's blob check 2.9×.</p>
+        <p class="meta">Needs a real prover for epochs. That is the hardware question.</p></div>
+      <div class="path"><h3>B. JAM checks each client proof</h3>
+        <p>Refine runs Aztec's own verifier on every transaction's proof, so JAM's validators re-execute the check
+          themselves. <b>Call 105 is required:</b> without it one proof costs 11.36B gas, more than two full
+          packages. Accumulate would also have to keep Aztec's trees.</p>
+        <p class="meta">Built as far as one proof, finalized on lasair. A research path, not needed for path A.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the curve calls change</h2>
+    <p>Refine gas, the protocol's, measured on lasair. A tiny package holds 1e9; a full one 5e9.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Check in refine</th><th>Without calls</th><th>With calls</th><th>Calls</th><th>Needed?</th></tr></thead>
+      <tbody>
+        <tr><td>Settling an epoch: the root rollup proof and the batched blob opening</td><td class="num">340.8M</td><td class="num">60.6M</td><td>101–104</td><td>No: fits a tiny package either way</td></tr>
+        <tr><td>Aztec's 2^24 epoch proof alone (UltraHonk)</td><td class="num">155.9M</td><td class="num">52.4M</td><td>101, 102</td><td>No</td></tr>
+        <tr><td>A checkpoint's 6 blobs against their KZG commitments, batched</td><td class="num">937.1M</td><td class="num">328.0M</td><td>103, 104</td><td>No, but without the calls it nearly fills a tiny package</td></tr>
+        <tr><td>Proposer and attestation signatures (ECDSA, secp256k1)</td><td class="num">433M</td><td class="num">433M</td><td>none proposed</td><td>No</td></tr>
+        <tr><td>One Aztec client proof (CHONK), path B</td><td class="num">11.36B</td><td class="num">3.46B</td><td>105</td><td><b>Yes</b>, and the full refine budget</td></tr>
+        <tr><td>Today's demo transfer (our UltraHonk proof)</td><td class="num">147.0M</td><td class="num">49.1M</td><td>101, 102</td><td>No</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Keeping up with Aztec's releases</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Part</th><th>Whose code</th><th>Per Aztec release</th></tr></thead>
+      <tbody>
+        <tr><td>Wallet, PXE, aztec.js, contracts, circuits, node, prover node</td><td>Aztec's, unchanged</td><td>Re-pin the version. Re-run <code>tools/aztec-local</code>'s L1 record to catch new RPC expectations.</td></tr>
+        <tr><td>CHONK verifier in refine</td><td>Aztec's C++, our PVM build</td><td>Export bb's sources at the new tag and rebuild. The two wrapped MSM symbols may move.</td></tr>
+        <tr><td>Epoch-proof verifier in refine</td><td>Ours, ported</td><td>Port from bb's Solidity verifier diff. v5→v6 was two changes; days, not weeks.</td></tr>
+        <tr><td>Settlement service</td><td>Ours, ported</td><td>Follow <code>ProposeLib</code>, <code>EpochProofLib</code>, Inbox and Outbox. v6 rewrote the Inbox (273 lines). A stale service is caught by the epoch proof, not silently wrong.</td></tr>
+        <tr><td>jam-l1 facade</td><td>Ours, new</td><td>Follow the node's L1 calls. v5→v6: 80 lines in <code>rollup.ts</code>, 379 in the publisher, same methods.</td></tr>
+        <tr><td>Node configuration</td><td>Aztec's code, our values</td><td>Chain id, contract addresses, genesis values.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>What we checked</h2>
+    <p>One Apple M-series Mac, 2026-10-27. Every browser proof was also verified by native bb, and a proof with one bit flipped was refused.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Aztec client proof</th><th>Threads</th><th>Chrome, median of 3</th><th>Native bb</th><th>Peak memory, Chrome</th></tr></thead>
+      <tbody>
+        <tr><td>Token transfer, sponsored fee (6 circuits)</td><td class="num">10</td><td class="num">3.6–3.9 s</td><td class="num">2.2 s</td><td>1.3–1.4 GB in all</td></tr>
+        <tr><td>The same</td><td class="num">1</td><td class="num">14.3 s</td><td class="num">9.5 s</td><td></td></tr>
+        <tr><td>Storage proof, 7 layers (10 circuits, the slowest)</td><td class="num">10</td><td class="num">15.4 s</td><td class="num">8.5 s</td><td>1.85 GB in all</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="plain">
+      <li><b>A full PXE runs in a browser tab,</b> cross-origin isolated for bb.js threads. Aztec's demo-wallet build is 31.1 MB gzipped, most of it 52 kernel circuits loaded on demand. The tab downloads about 20 MB of proving parameters from Aztec's CDN the first time it proves.</li>
+      <li><b>Fees go to our own sequencer.</b> They are paid in Aztec's fee token to whoever builds the block: on our devnet, our node. A new account pays through Aztec's sponsored-fee contract, which genesis must fund (<code>SPONSORED_FPC=true</code>). That moves the genesis root the settlement service is configured with.</li>
+      <li><b>The committee is open today:</b> anyone proposes and nobody attests, as on Aztec's own local network.</li>
+    </ul>
+    <div class="tbl"><table>
+      <thead><tr><th>Code</th><th>Licence</th></tr></thead>
+      <tbody>
+        <tr><td>Aztec's node, PXE, aztec.js and wallet-sdk sources; aztec-packages; Aztec.nr</td><td>Apache-2.0</td></tr>
+        <tr><td>bb.js</td><td>MIT</td></tr>
+        <tr><td>Noir packages</td><td>MIT or Apache-2.0</td></tr>
+        <tr><td>Aztec's demo-wallet</td><td><b>None</b>: all rights reserved by default, so we write our own wallet</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>The plan</h2>
+    <p>Tracked in <a href="https://github.com/abutlabs/jam-privacy-service/issues/71">#71</a>. In order:</p>
+    <ol class="steps">
+      <li><div><span class="state next">NEXT</span><b>The devnet ready for a wallet</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/64">#64</a><p>Sponsored fees at genesis, the new genesis root, the node on :8080.</p></div></li>
+      <li><div><span class="state todo">TO DO</span><b>Our wallet on Aztec's libraries</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a><p>The PXE and real client proofs in the tab; Aztec's token; a private transfer from Alice to Bob.</p></div></li>
+      <li><div><span class="state todo">TO DO</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Six lasair validators with the curve calls on.</p></div></li>
+      <li><div><span class="state todo">TO DO</span><b>The node checks real client proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a></div></li>
+      <li><div><span class="state todo">TO DO</span><b>A committee and P2P</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a></div></li>
+      <li><div><span class="state block">HARDWARE</span><b>Real epoch proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a><p>A prover node; needs a decision on hardware.</p></div></li>
+      <li><div><span class="state todo">TO DO</span><b>The demo on Aztec's stack</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/70">#70</a><p>Re-recorded; today's circuit, services and wallet retired.</p></div></li>
+    </ol>
+  </section>
+</div>
+</body>
+</html>

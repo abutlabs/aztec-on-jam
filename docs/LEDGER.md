@@ -1968,3 +1968,21 @@ RECORD=1 FILM_NET=lasair-calls node client/e2e/explorer.mjs                     
 lasair main aa67aa9, six validators, calls on every node; privacy refines 49,114,159 and
 49,141,408 gas (node logs). docs/images/demo.gif 59.4 s, 1.7 MB (the PolkaJam film with the crawl
 was 6.8 MB); screenshots 11 to 14 retaken on the same run.
+
+## 2026-10-27 76 — Aztec's own stack on JAM: the map, the research, the plan (#63, #71)
+
+Aodh: get onto Aztec's full stack, unmodified where it can be, before the lasair demo is
+published; a map of what is Aztec's, what is ours and what needs the curve calls. Decided: our own
+wallet on Aztec's Apache-2.0 libraries (demo-wallet's code has no licence, so none is copied); the
+map lives in `docs/aztec/STACK.md` (Mermaid) and as a GitHub Pages page (`docs/aztec/index.html`).
+
+Research (#63, closed), one Apple M-series Mac:
+- demo-wallet v6.0.0's `web` app runs a full PXE in the tab; build 31.1 MB gzipped.
+- Real client proofs in Chrome (bb.js 6.0.0, `@aztec-foundation/bb.js`): transfer 3.6–3.9 s at 10
+  threads against 2.2 s native; slowest flow 15.4 s against 8.5 s; all verified by native bb.
+- Fees go to the sequencer (ours on the devnet). New accounts pay through the SponsoredFPC, which
+  needs `SPONSORED_FPC=true`: genesis archive root 0x0ad1dcc0…db48 (the current root reproduces
+  with the same computation).
+- Committee: open (empty) today, as Aztec's local network.
+
+Plan: #64 to #70 under #71.

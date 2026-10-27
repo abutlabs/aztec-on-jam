@@ -38,6 +38,12 @@ Ten minutes, for a JAM implementer: [docs/DEMO.md](docs/DEMO.md). Why this exist
 beside Aztec](https://abutlabs.github.io/the-gray-tutor/jam-beside-aztec). How it got here:
 [docs/LEDGER.md](docs/LEDGER.md), every step with its command and output.
 
+**Where this is going:** Aztec's own software on JAM, as released, with our own wallet on
+Aztec's libraries in place of this demo's circuit and wallet. The map of what is Aztec's, what is
+ours and what needs the curve calls: [docs/aztec/STACK.md](docs/aztec/STACK.md) (as a page:
+[Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/aztec/)); the plan:
+[#71](https://github.com/abutlabs/jam-privacy-service/issues/71).
+
 ## Run it
 
 The default net is PolkaJam's own tiny testnet. `polkajam-testnet`, from Parity's PolkaJam
