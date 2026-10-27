@@ -1,0 +1,58 @@
+diff --git a/barretenberg/cpp/src/barretenberg/benchmark/ipa_bench/ipa.bench.cpp b/barretenberg/cpp/src/barretenberg/benchmark/ipa_bench/ipa.bench.cpp
+index 9cbab25..fa9621c 100644
+--- a/barretenberg/cpp/src/barretenberg/benchmark/ipa_bench/ipa.bench.cpp
++++ b/barretenberg/cpp/src/barretenberg/benchmark/ipa_bench/ipa.bench.cpp
+@@ -1,3 +1,4 @@
++#include <map>
+ #include "barretenberg/commitment_schemes/ipa/ipa.hpp"
+ #include "barretenberg/common/assert.hpp"
+ #include "barretenberg/polynomials/polynomial.hpp"
+@@ -60,7 +61,13 @@ void ipa_verify(State& state) noexcept
+         auto opening_claim = opening_claims[static_cast<size_t>(state.range(0)) - MIN_POLYNOMIAL_DEGREE_LOG2];
+         // initialize verifier transcript from proof data
+         auto verifier_transcript = std::make_shared<NativeTranscript>();
+-        verifier_transcript->load_proof(prover_transcript->export_proof());
++        // export once: a second export_proof() on the same transcript returns nothing
++        static std::map<size_t, NativeTranscript::Proof> exported;
++        auto& proof = exported[static_cast<size_t>(state.range(0))];
++        if (proof.empty()) {
++            proof = prover_transcript->export_proof();
++        }
++        verifier_transcript->load_proof(proof);
+ 
+         state.ResumeTiming();
+         auto result = IPA<Curve>::reduce_verify(vk, opening_claim, verifier_transcript);
+@@ -68,6 +75,27 @@ void ipa_verify(State& state) noexcept
+     }
+ }
+ 
++// jam-privacy-service#46/#61: the deferred IPA discharge of a CHONK batch. Each proof leaves a
++// NativeAccumulator (15 round challenges and a claimed G_0); batch_verify_accumulators checks N of them
++// with one 2^15-point SRS MSM. The cost does not depend on the values, so the accumulators are random
++// (the check itself fails; only its time is measured).
++void ipa_batch_discharge(State& state) noexcept
++{
++    numeric::RNG& engine = numeric::get_debug_randomness();
++    using Acc = IPA<Curve>::NativeAccumulator;
++    std::vector<Acc> accs(static_cast<size_t>(state.range(0)));
++    for (auto& acc : accs) {
++        for (size_t i = 0; i < CONST_ECCVM_LOG_N; ++i) {
++            acc.u_challenges_inv.push_back(Fr::random_element(&engine));
++        }
++        acc.claimed_commitment = vk.get_monomial_points()[1];
++        acc.relation_succeeded = true;
++    }
++    for (auto _ : state) {
++        benchmark::DoNotOptimize(IPA<Curve>::batch_verify_accumulators(vk, std::span<const Acc>(accs)));
++    }
++}
++
+ } // namespace
+ BENCHMARK(ipa_open)
+     ->Unit(kMillisecond)
+@@ -81,4 +109,5 @@ BENCHMARK(ipa_verify)
+     // size corrupts the heap (the round loop indexes past the witness). Only the fixed size is valid.
+     ->Arg(CONST_ECCVM_LOG_N)
+     ->Setup(DoSetup);
++BENCHMARK(ipa_batch_discharge)->Unit(kMillisecond)->Arg(1)->Arg(8)->Arg(64)->Arg(512)->Setup(DoSetup);
+ BENCHMARK_MAIN();

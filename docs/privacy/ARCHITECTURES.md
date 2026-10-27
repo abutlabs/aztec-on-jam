@@ -31,8 +31,11 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   check 341 × 29 ≈ 9,900 users' proofs every 6 s. Folding there would be a cost with nothing
   to buy (*reasoning* from measured inputs). This holds for proofs the size of this demo's
   (UltraHonk, verified in about 170M gas). Aztec's client proofs (CHONK) would cost about 12B
-  gas each in the PVM, 2.4 full packages (estimated from native verify times, `spikes/chonk`),
-  so Aztec's circuits as they are need Aztec's folding: candidate 1.
+  gas each in the PVM, 2.4 full packages (estimated from native verify times, `spikes/chonk`).
+  Batched, one discharge serves every proof's deferred IPA, but each proof's reduction stays:
+  about 5.2 to 5.7B gas a proof at batches of 64 to 512, still a full package
+  (`spikes/chonk-ipa`, #46, by the same ratio). So Aztec's circuits as they are need Aztec's
+  folding: candidate 1. A direct check needs the reduction itself cut, which is #62.
 - **The ordering problem moves out of the proofs.** In 2, each proof names the exact current
   root, so proofs on one tree serialize at one a slot. In 3, a proof names any recent root
   (Zcash's anchors), and double spends are stopped by the nullifier set in accumulate, which
