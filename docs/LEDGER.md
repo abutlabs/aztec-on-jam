@@ -2100,3 +2100,13 @@ refused transfer's original is never sent, and the earlier mint's balance proves
 `wallet/e2e.mjs` passes unchanged in this mode (7 of 7; deploy 16.5 s, mint 20.5 s, send 11.6 s,
 proofs made in the tab, verified by the node — "verify Chonk proof" per transaction in its log).
 The 141 ms includes the RPC round trip. One Apple M-series Mac.
+
+## 2026-10-27 82 — The docs home: one private transfer, step by step (Aodh)
+
+The Pages home gains a walkthrough: eight steps from the browser tab to finality, each lighting
+its stage tile and naming who acts, which library runs, what it hands over, and the measured
+number (prove 3.6 s; a tampered proof refused in 141 ms; a checkpoint's refine 64M gas with the
+calls, 251M without; send to settled 11–20 s; the epoch proof verified for 60.6M). Below it, "Who
+proves what": the user proves transactions (privacy requires it), JAM's validators check
+checkpoints by re-execution, an off-chain prover makes the epoch proof and JAM verifies it.
+Plain JS, no library; light and dark; phone width clean.

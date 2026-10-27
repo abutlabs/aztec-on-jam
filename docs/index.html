@@ -46,20 +46,45 @@
     </div>
   </section>
 
-  <section>
-    <h2>The shape of it</h2>
-    <div class="flow">
-      <div class="tile aztec"><div class="name">Aztec wallet &amp; prover</div><div class="what">proves each transaction on the user's device</div></div>
-      <div class="arrow">→</div>
-      <div class="tile aztec"><div class="name">Aztec node</div><div class="what">unchanged, as released</div></div>
-      <div class="arrow">→</div>
-      <div class="tile ours"><div class="name">jam-l1 facade</div><div class="what">answers the node as Ethereum would</div></div>
-      <div class="arrow">→</div>
-      <div class="tile port"><div class="name">Settlement service</div><div class="what">Aztec's L1 contracts as JAM code</div></div>
-      <div class="arrow">→</div>
-      <div class="tile other"><div class="name">JAM chain</div><div class="what">executes, audits, finalizes</div></div>
+  <section class="walk" id="walk">
+    <h2>One private transfer, step by step</h2>
+    <p>Every number below was measured on this stack, on one Apple&nbsp;M-series Mac; each step
+      names who acts and what they hand to the next. Green is Aztec's code, unchanged.</p>
+    <div class="stage-row" id="stages">
+      <div class="stage aztec" data-s="browser"><div class="name">Browser tab</div><div class="what">the user's PXE and prover (bb.js)</div></div>
+      <div class="stage aztec" data-s="node"><div class="name">Aztec node</div><div class="what">verifies, pools, sequences — unchanged</div></div>
+      <div class="stage ours" data-s="facade"><div class="name">jam-l1 facade</div><div class="what">answers the node as Ethereum would</div></div>
+      <div class="stage port" data-s="jam"><div class="name">lasair validators</div><div class="what">refine · accumulate · finalize</div></div>
+      <div class="stage future" data-s="prover"><div class="name">Prover node</div><div class="what">the epoch proof — <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a></div></div>
     </div>
-    <p class="meta">Green is Aztec's code, untouched. The full map, tile by tile: <a href="aztec/">Architecture</a>.</p>
+    <div class="step-card" aria-live="polite">
+      <h3 id="w-title"></h3>
+      <p id="w-text"></p>
+      <div class="step-meta">
+        <span><b>who:</b> <em id="w-who"></em></span>
+        <span><b>runs:</b> <code id="w-lib"></code></span>
+        <span><b>hands over:</b> <em id="w-out"></em></span>
+        <span><b>measured:</b> <em id="w-num"></em></span>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="w-prev" aria-label="previous step">←</button>
+      <button id="w-next" aria-label="next step">→</button>
+      <button id="w-play" aria-pressed="false">Play</button>
+      <div class="dots" id="w-dots" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Who proves what</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Work</th><th>Who does it</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>The transaction's proof</td><td><b>The user</b>, in their own browser</td><td>Privacy requires it: proving needs the private inputs, and no chain can hold them</td></tr>
+        <tr><td>Checkpoint validity on JAM</td><td><b>JAM's validators</b>, by re-executing refine and auditing each other</td><td>JAM verifies by re-execution — stronger than the lightweight-validator assumption Aztec makes on Ethereum</td></tr>
+        <tr><td>The epoch proof</td><td>An <b>off-chain prover node</b>; JAM verifies its output in refine (60.6M gas with the proposed calls)</td><td>Succinctness: anyone can sync from proofs alone. JAM could run without it — the auditors re-executed everything — but Aztec's circuits and sync model expect it</td></tr>
+      </tbody>
+    </table></div>
   </section>
 
   <section>
@@ -69,14 +94,15 @@
         <p>A browser proves a private transfer in about a second; six JAM validators verify it
         and update encrypted state; the receiver finds the money with their key. Runs on two
         independent JAM clients.</p></div></li>
-      <li><div><span class="state done">LIVE</span><b><a href="aztec/">Aztec v6's own node, settling on JAM</a></b>
-        <p>Aztec's released node proposes its blocks to JAM through our facade. Seven
-        checkpoints settled; no Aztec code patched.</p></div></li>
+      <li><div><span class="state done">LIVE</span><b><a href="aztec/">Aztec's own stack, settling on JAM</a></b>
+        <p>Aztec's released node and wallet libraries, our facade and settlement service under
+        them: real client proofs made in the tab, verified by the node, checkpoints finalized on
+        six lasair validators.</p></div></li>
       <li><div><span class="state done">LIVE</span><b><a href="jip/">Aztec's proofs, verified by JAM validators</a></b>
         <p>Aztec's own verifier, compiled for JAM's VM, checked a real Aztec transaction proof
         on a live six-validator net — practical only with our proposed host calls.</p></div></li>
-      <li><div><span class="state next">NEXT</span><b>The full stack</b>
-        <p>Our wallet on Aztec's libraries, real proofs end to end, a prover node. Tracked in
+      <li><div><span class="state next">NEXT</span><b>The rest of the plan</b>
+        <p>A committee, a prover node, the rebrand, the film. Tracked in
         <a href="https://github.com/abutlabs/jam-privacy-service/issues/71">#71</a>.</p></div></li>
     </ol>
   </section>
@@ -86,5 +112,56 @@
     <div>An independent project. Not affiliated with Aztec Labs or the Polkadot Fellowship.</div>
   </footer>
 </div>
+<script>
+// the walkthrough: plain data, no library
+const STEPS = [
+  { s: 'browser', title: '1 · Simulate, privately', who: 'the user', lib: '@aztec-labs/pxe',
+    out: 'witnesses', num: 'runs over the user’s own notes',
+    text: 'The PXE in the tab holds the keys and notes. It runs the Token contract’s transfer and Aztec’s private kernel circuits over the user’s own state. Nothing leaves the browser.' },
+  { s: 'browser', title: '2 · Prove, in the tab', who: 'the user', lib: '@aztec-foundation/bb.js',
+    out: 'one client proof (CHONK, 80,096 bytes)', num: '3.6 s for a transfer; 15 s for the heaviest flow',
+    text: 'Barretenberg folds the app and kernel circuits into one client proof, on WASM threads. The user is the prover of their own transaction — that is Aztec’s privacy model.' },
+  { s: 'node', title: '3 · Verify and pool', who: 'Aztec’s node, unchanged', lib: 'native bb',
+    out: 'a pooled transaction', num: 'a tampered proof is refused in 141 ms',
+    text: 'The node verifies the proof before anything else sees it. One field changed anywhere in the proof and the transaction never enters the pool.' },
+  { s: 'node', title: '4 · Sequence', who: 'Aztec’s sequencer', lib: '@aztec-labs/sequencer-client',
+    out: 'an L2 block in a checkpoint, with its blob', num: 'a checkpoint every 36 s',
+    text: 'The sequencer builds an L2 block and proposes a checkpoint to what it believes is Ethereum.' },
+  { s: 'facade', title: '5 · Relay to JAM', who: 'our facade', lib: 'tools/aztec-local/jam-l1.mjs',
+    out: 'a JAM work package (the blob travels as an extrinsic)', num: 'about 40 Ethereum RPC methods answered',
+    text: 'The facade answers the node’s JSON-RPC exactly as Ethereum would, and turns each proposed checkpoint into a JAM work package. No Aztec code is patched.' },
+  { s: 'jam', title: '6 · Refine: six validators check it', who: 'lasair validators', lib: 'services/aztec-settlement',
+    out: 'a guaranteed, audited work report', num: '64M gas with the proposed calls; 251M without',
+    text: 'Refine checks the blob against its KZG commitment and the checkpoint’s header. Guarantors compute it, auditors re-execute it — JAM verifies by re-execution, not trust.' },
+  { s: 'jam', title: '7 · Accumulate and finalize', who: 'lasair validators', lib: 'services/aztec-settlement',
+    out: 'the rollup’s new tip, finalized', num: '11–20 s, send to settled, in the wallet e2e',
+    text: 'Accumulate advances the rollup’s tip from the chain’s own state; GRANDPA finalizes the block. The receiver’s wallet finds the note by its tag.' },
+  { s: 'prover', title: '8 · The epoch proof (next)', who: 'an off-chain prover node', lib: 'Aztec’s rollup circuits',
+    out: 'one root proof over many checkpoints', num: 'verified in refine for 60.6M gas with the calls',
+    text: 'Aztec’s prover folds checkpoints into one succinct proof, so anyone can sync from proofs alone. JAM verifies it in refine. The prover node is the one piece not running yet (#69).' },
+];
+let i = 0, timer = null;
+const $ = (id) => document.getElementById(id);
+const dots = $('w-dots');
+STEPS.forEach(() => dots.appendChild(document.createElement('i')));
+function show(n) {
+  i = (n + STEPS.length) % STEPS.length;
+  const st = STEPS[i];
+  for (const el of document.querySelectorAll('#stages .stage')) el.classList.toggle('on', el.dataset.s === st.s);
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+  $('w-title').textContent = st.title; $('w-text').textContent = st.text;
+  $('w-who').textContent = st.who; $('w-lib').textContent = st.lib;
+  $('w-out').textContent = st.out; $('w-num').textContent = st.num;
+}
+function stop() { clearInterval(timer); timer = null; $('w-play').setAttribute('aria-pressed', 'false'); $('w-play').textContent = 'Play'; }
+$('w-prev').onclick = () => { stop(); show(i - 1); };
+$('w-next').onclick = () => { stop(); show(i + 1); };
+$('w-play').onclick = () => {
+  if (timer) return stop();
+  $('w-play').setAttribute('aria-pressed', 'true'); $('w-play').textContent = 'Pause';
+  show(i + 1); timer = setInterval(() => show(i + 1), 4000);
+};
+show(0);
+</script>
 </body>
 </html>

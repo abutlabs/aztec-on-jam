@@ -126,3 +126,29 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72
 
 /* the site's footer */
 .site-foot { border-top: 1px solid var(--rule); margin-top: 8px; padding-top: 16px; display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+
+/* the walkthrough: one private transfer, step by step */
+.walk { display: grid; gap: 14px; }
+.walk .stage-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.walk .stage { flex: 1 1 150px; border: 2px solid var(--rule); border-radius: 7px; padding: 10px 12px;
+  display: grid; gap: 4px; align-content: start; min-width: 0; opacity: 0.75; transition: opacity 0.2s, border-color 0.2s; }
+.walk .stage .name { font-weight: 600; line-height: 1.3; }
+.walk .stage .what { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.walk .stage.aztec { background: var(--aztec-bg); } .walk .stage.ours { background: var(--ours-bg); }
+.walk .stage.port { background: var(--port-bg); } .walk .stage.other { background: var(--panel); }
+.walk .stage.future { border-style: dashed; background: var(--demo-bg); }
+.walk .stage.on { opacity: 1; border-color: var(--ink); box-shadow: 0 0 0 2px var(--rule); }
+.walk .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.walk button { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 7px;
+  padding: 7px 14px; font: 600 13.5px/1 var(--body); cursor: pointer; }
+.walk button:hover { border-color: var(--ink); }
+.walk button[aria-pressed="true"] { border-color: var(--port); color: var(--port); }
+.walk .dots { display: flex; gap: 6px; margin-left: 4px; }
+.walk .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--rule); }
+.walk .dots i.on { background: var(--port); }
+.walk .step-card { background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--port);
+  border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; min-height: 148px; align-content: start; }
+.walk .step-card h3 { color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 17px; }
+.walk .step-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 12.5px; }
+.walk .step-meta span { border: 1px solid var(--rule); border-radius: 5px; padding: 3px 7px; background: var(--bg); }
+.walk .step-meta b { font-weight: 650; color: var(--muted); }
