@@ -38,7 +38,7 @@
         (Noir and Barretenberg): about one second.</p></div></li>
       <li><div><b>JAM validators verify it.</b>
         <p>The proof travels in a work-package; the service verifies it on-chain for 49M gas with
-        the <a href="../jip/">proposed curve calls</a>, 147M without — 1 to 3% of a package.</p></div></li>
+        our <a href="../jip/">proposed JIP</a>, 147M without — 1 to 3% of a package.</p></div></li>
       <li><div><b>The chain writes only ciphertext.</b>
         <p>New note commitments, spent-note nullifiers, and two sealed notes. No sender, no
         receiver, no amount.</p></div></li>
@@ -91,10 +91,10 @@
       <thead><tr><th>What</th><th>Measured</th></tr></thead>
       <tbody>
         <tr><td>Prove a transfer in Chrome</td><td class="num">1.0 s</td></tr>
-        <tr><td>Verify it on-chain (with the proposed calls / without)</td><td class="num">49.1M / 147.0M gas</td></tr>
+        <tr><td>Verify it on-chain (with our JIP / without)</td><td class="num">49.1M / 147.0M gas</td></tr>
         <tr><td>Apply it to state</td><td class="num">103k gas</td></tr>
         <tr><td>Submission to settled state (median, 600 transfers in an hour, none lost)</td><td class="num">13.4 s</td></tr>
-        <tr><td>Verifications per JAM core per 6-second slot, full spec, with the calls</td><td class="num">101</td></tr>
+        <tr><td>Verifications per JAM core per 6-second slot, full spec, with our JIP</td><td class="num">101</td></tr>
       </tbody>
     </table></div>
     <p class="meta">The same service blob runs on PolkaJam (Parity's client, v0.8.0) and on lasair

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Architecture · Aztec on JAM</title>
-<meta name="description" content="Which parts of Aztec run on JAM unchanged, which are ours, and which need the proposed curve host calls.">
+<meta name="description" content="Which parts of Aztec run on JAM unchanged, which are ours, and which need our proposed JIP.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../site.css">
@@ -25,8 +25,9 @@
     <p class="meta"><a href="https://github.com/abutlabs/jam-privacy-service">jam-privacy-service</a> · updated 2026-10-27 · source: <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/aztec/STACK.md">docs/aztec/STACK.md</a></p>
     <h1>Aztec on JAM</h1>
     <p class="lede">Aztec's software runs as released, above the settlement layer. JAM takes Ethereum's place below
-      it. This page sorts each part by whose code it is, says how it keeps up with Aztec's releases, and says
-      which parts need the proposed curve host calls.</p>
+      it. This page sorts each part by whose code it is, says how it keeps up with Aztec's releases, and
+      marks which parts need our proposed JIP — host calls that do the elliptic-curve math natively
+      instead of in JAM's VM.</p>
   </header>
 
   <section>
@@ -38,7 +39,7 @@
       <span><i class="sw ours"></i>Ours, new</span>
       <span><i class="sw demo"></i>Ours, today's demo only</span>
     </div>
-    <p class="meta">Chips mark where the proposed curve host calls matter — every tile without one runs with no call at all.</p>
+    <p class="meta">Chips mark where the JIP matters — a tile without one needs nothing from it.</p>
     <div class="stack">
       <div class="band">
         <div class="where"><b>User's device</b><small>keys, notes, proving</small></div>
@@ -84,11 +85,11 @@
         <div class="tiles">
           <div class="tile port"><div class="name">Settlement service</div>
             <div class="what">Aztec's Rollup, Inbox and Outbox contracts as refine and accumulate. Refine checks blobs (KZG), the epoch proof (UltraHonk, verifier ported from bb's Solidity) and the proposer's signatures (ECDSA). Accumulate keeps the tips, the inbox ring and the outbox.</div>
-            <div class="chips"><span class="chip fast">101–104: 2.9–5.6× cheaper</span><span class="chip none">ECDSA: no call</span></div>
+            <div class="chips"><span class="chip fast">2.9–5.6× cheaper with the JIP</span></div>
             <div class="status">Built and tested on PolkaJam (#49–#51, #54). Encodings match Aztec's 6 L1 fixtures.</div></div>
           <div class="tile build"><div class="name">Client-proof checker (optional path)</div>
-            <div class="what">Barretenberg 6.0.0's own CHONK verifier, its C++ unchanged, compiled for the PVM. Its Grumpkin MSM is linked to call 105.</div>
-            <div class="chips"><span class="chip need">105 required</span><span class="chip need">full 5e9 refine</span></div>
+            <div class="what">Barretenberg 6.0.0's own verifier for Aztec's transaction proofs, its C++ unchanged, compiled for JAM's VM. Its heaviest operation goes through the JIP.</div>
+            <div class="chips"><span class="chip need">needs the JIP</span><span class="chip need">needs a full refine budget</span></div>
             <div class="status">One proof verified and finalized on six lasair validators: 3.46B gas (<a href="https://github.com/abutlabs/jam-privacy-service/issues/62">#62</a>).</div></div>
           <div class="tile demo"><div class="name">Today's demo: privacy and public-balance services</div>
             <div class="what">Our Noir join-split, our note format and trees, our wallet, indexer and explorer. Aztec's PXE cannot use them.</div>
@@ -101,12 +102,11 @@
         <div class="where"><b>JAM chain</b><small>Gray Paper 0.8.0</small></div>
         <div class="tiles">
           <div class="tile ours"><div class="name">lasair (our client)</div>
-            <div class="what">Implements the proposed calls 101–105 behind activation flags. Blob data stays as exported segments for 28 days, longer than Ethereum's 18.2-day blob window.</div>
-            <div class="chips"><span class="chip fast">101–105</span></div>
-            <div class="status">The Aztec devnet runs here: a checkpoint refines in 64M gas with the calls, 251M without.</div></div>
+            <div class="what">Implements the proposed JIP behind activation flags, allowing native host calls instead of PVM execution of the elliptic-curve math.</div>
+            <div class="chips"><span class="chip fast">the JIP, end to end</span></div>
+            <div class="status">The Aztec devnet runs here: a checkpoint verifies in 64M gas with the JIP, 251M without.</div></div>
           <div class="tile other"><div class="name">PolkaJam (Parity's client)</div>
-            <div class="what">No curve calls. Every service above falls back to PVM code and still fits, except the client-proof checker.</div>
-            <div class="chips"><span class="chip none">implements no curve calls</span></div>
+            <div class="what">Does not implement the JIP. Every service above falls back to VM code and still fits — except the client-proof checker.</div>
             <div class="status">The Aztec devnet's net today.</div></div>
         </div>
       </div>
@@ -120,21 +120,21 @@
       <div class="path"><h3>A. Aztec's own design</h3>
         <p>The sequencer checks each client proof when it arrives, and the rollup circuits fold them all into one
           epoch proof. JAM checks that epoch proof, the blobs and the signatures. Everything above the seam
-          stays Aztec's code, and <b>no curve call is required</b>. The calls make an epoch's settlement 5.6× cheaper and a checkpoint's blob check 2.9×.</p>
+          stays Aztec's code, and <b>nothing needs the JIP</b> — with it, settlement is simply 2.9–5.6× cheaper.</p>
         <p class="meta">Needs a real prover for epochs. That is the hardware question.</p></div>
       <div class="path"><h3>B. JAM checks each client proof</h3>
         <p>Refine runs Aztec's own verifier on every transaction's proof, so JAM's validators re-execute the check
-          themselves. <b>Call 105 is required:</b> without it one proof costs 11.36B gas, more than two full
-          packages. Accumulate would also have to keep Aztec's trees.</p>
+          themselves. <b>The JIP is required:</b> without it one proof costs 11.4B gas — more than two packages'
+          whole budget; with it, 3.5B. Accumulate would also have to keep Aztec's trees.</p>
         <p class="meta">Built as far as one proof, finalized on lasair. A research path, not needed for path A.</p></div>
     </div>
   </section>
 
   <section>
-    <h2>What the curve calls change</h2>
+    <h2>What the JIP changes</h2>
     <p>Refine gas, the protocol's, measured on lasair. A tiny package holds 1e9; a full one 5e9.</p>
     <div class="tbl"><table>
-      <thead><tr><th>Check in refine</th><th>Without calls</th><th>With calls</th><th>Calls</th><th>Needed?</th></tr></thead>
+      <thead><tr><th>Verification on JAM</th><th>Without the JIP</th><th>With</th><th>Its calls</th><th>JIP needed?</th></tr></thead>
       <tbody>
         <tr><td>Settling an epoch: the root rollup proof and the batched blob opening</td><td class="num">340.8M</td><td class="num">60.6M</td><td>101–104</td><td>No: fits a tiny package either way</td></tr>
         <tr><td>Aztec's 2^24 epoch proof alone (UltraHonk)</td><td class="num">155.9M</td><td class="num">52.4M</td><td>101, 102</td><td>No</td></tr>
@@ -194,7 +194,7 @@
     <ol class="steps">
       <li><div><span class="state done">DONE</span><b>The devnet ready for a wallet</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/64">#64</a><p>Done 2026-10-27: a never-deployed, unfunded account transacted with a sponsored fee; six checkpoints accepted on JAM.</p></div></li>
       <li><div><span class="state done">DONE</span><b>Our wallet on Aztec's libraries</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a><p>Done 2026-10-27: Alice and Bob in two browser tabs, real client proofs proved in the tab, a private transfer found by Aztec's tagging.</p></div></li>
-      <li><div><span class="state done">DONE</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Done 2026-10-27: the wallet's whole story on six lasair validators; a checkpoint refines in 64M gas with the calls, 251M without.</p></div></li>
+      <li><div><span class="state done">DONE</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Done 2026-10-27: the wallet's whole story on six lasair validators; a checkpoint verifies in 64M gas with the JIP, 251M without.</p></div></li>
       <li><div><span class="state done">DONE</span><b>The node checks real client proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a><p>Done 2026-10-27: real-proof mode is the devnet default; a tampered proof is refused in 141 ms.</p></div></li>
       <li><div><span class="state next">NEXT</span><b>A committee and P2P</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a></div></li>
       <li><div><span class="state block">HARDWARE</span><b>Real epoch proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a><p>A prover node; needs a decision on hardware.</p></div></li>

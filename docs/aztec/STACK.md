@@ -1,4 +1,4 @@
-# Aztec on JAM: what is Aztec's, what is ours, what needs the curve calls
+# Aztec on JAM: what is Aztec's, what is ours, what needs the JIP
 
 Aztec's software runs as released, above the settlement layer; JAM takes Ethereum's place below
 it. This file sorts each part by whose code it is, says how it keeps up with Aztec's releases,
@@ -25,7 +25,7 @@ flowchart TB
     demo["Today's demo: privacy and public-balance services"]
   end
   subgraph chain["JAM chain"]
-    lasair["lasair: calls 101-105"]
+    lasair["lasair: the JIP, natively"]
     pj["PolkaJam: no calls"]
   end
   wallet --> sdk --> prover
@@ -36,7 +36,7 @@ flowchart TB
   facade -- "work packages (JIP-2)" --> settle
   settle --> lasair
   settle --> pj
-  chonk -. "needs call 105" .-> lasair
+  chonk -. "needs the JIP" .-> lasair
 
   classDef aztec fill:#d5efe5,stroke:#127a5c,color:#10251d
   classDef build fill:#dbe6f8,stroke:#2357a8,color:#0f1d33
@@ -66,7 +66,7 @@ Ethereum's place. Grey, dashed: today's demo, retired by the move to Aztec's wal
   proof (`spikes/chonk-pvm`, #62). Call 105 is required: without it one proof is 11.36B gas, more
   than two full packages; with it, 3.46B. Accumulate would also keep Aztec's trees (#21).
 
-## What the curve calls change
+## What the JIP changes
 
 Refine gas, the protocol's, measured on lasair. A tiny package holds 1e9, a full one 5e9.
 
