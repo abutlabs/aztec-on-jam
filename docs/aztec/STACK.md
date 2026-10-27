@@ -139,12 +139,12 @@ random), so it pays through Aztec's sponsored-fee contract (SponsoredFPC, salt 0
 `0x2d8fff82…69d3`), which genesis funds. With the account type that needs no deployment
 ("Schnorr, initializerless"), nothing else is needed.
 
-**The devnet needs one setting and a new genesis root.** `aztec start --node` funds the
-SponsoredFPC only with `SPONSORED_FPC=true`. That changes the genesis archive root, which the
-settlement service is configured with: from `0x0189bb92…85bb` (test accounts only) to
-`0x0ad1dcc0e08d2b1c82a79af5685598e631e881187c3c9734ad28df5dbcf5db48` (test accounts and the
-SponsoredFPC), computed with the node's own `getGenesisValues`. The node must also answer on
-`localhost:8080` where a wallet built for Aztec's local network looks; `on-jam.sh` uses 8081.
+**The devnet funds the sponsor at genesis (#64, done).** `aztec start --node` funds the
+SponsoredFPC only with `SPONSORED_FPC=true`; `on-jam.sh` now sets it, configures the settlement
+service with the matching genesis archive root
+(`0x0ad1dcc0e08d2b1c82a79af5685598e631e881187c3c9734ad28df5dbcf5db48`, computed with the node's
+own `getGenesisValues`), and serves the node on `localhost:8080` (NODE_PORT overrides), where a
+wallet built for Aztec's local network looks.
 
 **The committee is open today.** The facade reports an empty committee, which Aztec's node
 treats as open: anyone proposes and nobody attests (`epoch-cache/src/committee_lookup.ts`), as

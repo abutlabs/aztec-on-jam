@@ -2004,3 +2004,27 @@ proposal without assuming the reader knows what a JIP is.
   page: independent project, not affiliated with Aztec Labs or the Polkadot Fellowship.
 - No new public uses of the provisional JIP number; the draft file keeps its name.
 - Checked: no horizontal overflow at 400 px, light and dark, no AI mentions.
+
+## 2026-10-27 78 — The devnet ready for a wallet: sponsored fees at genesis, node on :8080 (#64)
+
+`on-jam.sh`: `SPONSORED_FPC=true`; genesis archive
+0x0ad1dcc0e08d2b1c82a79af5685598e631e881187c3c9734ad28df5dbcf5db48 (test accounts + the
+SponsoredFPC, the node's own getGenesisValues), the settlement service configured with it; the
+node on `NODE_PORT` (default 8080, where a wallet built for Aztec's local network looks); a
+Node 22+ guard (the facade's WebSocket needs it — the shell's Node 20 broke the archiver's
+getState until the guard; nvm's newest node is picked up).
+
+`send-tx.mjs` is now #64's check. On the devnet (PolkaJam, test mode):
+
+```
+fresh account 0x2b17…5240; SponsoredFPC 0x2d8f…69d3
+token deployed at 0x174e…1628 (admin pays with its own fee juice): block 5 after 5 s
+admin mints 1000 to fresh, privately: block 6 after 10 s
+fresh transfers 40 to admin, fee paid by the SponsoredFPC: block 7 after 31 s
+private balances: fresh 960, admin 40
+PASS: a never-deployed, unfunded account transacted with a sponsored fee, settled on JAM
+```
+
+The facade relayed 6 checkpoints, all `accepted:true` by the settlement service, none refused.
+The node printed the new genesis root at start (it refuses on a mismatch). API shapes learned:
+interaction `.send({from, wait})` → `{receipt}`, `.simulate()` → `{result}`.

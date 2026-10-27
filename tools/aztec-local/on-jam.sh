@@ -6,11 +6,21 @@
 # proofs as Aztec's local network uses them.
 #   on-jam.sh [aztec start flags...]       stop with Ctrl-C; everything it started stops
 # Its out dir is ../../out/aztec-devnet: devnet.log, jam-l1.log (every L1 request, "unhandled"
-# marks a gap), node.log.
+# marks a gap), node.log. The node answers on NODE_PORT (default 8080, where a wallet built for
+# Aztec's local network looks). Genesis funds the test accounts and the SponsoredFPC (#64), so a
+# fresh account can pay fees through SponsoredFeePaymentMethod.
 set -euo pipefail
+# Aztec v6's packages need Node 22+ (global WebSocket; the facade uses it too). Prefer the
+# newest nvm node when the shell's is older.
+if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -lt 22 ]; then
+  for v in $(ls -d "$HOME"/.nvm/versions/node/v* 2>/dev/null | sort -V); do PATH="$v/bin:$PATH"; done
+  export PATH
+  [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || { echo "on-jam.sh: Node 22+ needed" >&2; exit 2; }
+fi
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
-# Aztec v6's genesis with its test accounts and its circuits (the node prints them at start)
-GENESIS_ARCHIVE=0x0189bb922c113beb6b4775dda11137fdb00319358374411f35e019a3dd4785bb
+# Aztec v6's genesis: the test accounts and the SponsoredFPC funded (TEST_ACCOUNTS=true,
+# SPONSORED_FPC=true; computed by the node's own getGenesisValues, #64), and its circuits
+GENESIS_ARCHIVE=0x0ad1dcc0e08d2b1c82a79af5685598e631e881187c3c9734ad28df5dbcf5db48
 VK_TREE_ROOT=0x22fff5de6ce590153df4468f7f0b152188a803d91b3c9c648b91d93d5913f219
 PROTOCOL_CONTRACTS_HASH=0x0f54271c52865841a77aaa66036eed901aff22fdce9f08e123ec8b205c9854d7
 REGISTRY=0x00000000000000000000000000000000a11ce001
@@ -39,9 +49,9 @@ KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcaee95b6caee5d1b5
 SEQ_PUBLISHER_PRIVATE_KEYS=$KEY VALIDATOR_PRIVATE_KEYS=$KEY COINBASE=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \
 SEQ_BUILD_CHECKPOINT_IF_EMPTY=${SEQ_BUILD_CHECKPOINT_IF_EMPTY:-true} \
 PROVER_REAL_PROOFS=false \
-ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true P2P_ENABLED=false \
+ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true SPONSORED_FPC=true P2P_ENABLED=false \
 DATA_DIRECTORY=$D/node-data BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
 ARCHIVER_POLLING_INTERVAL_MS=1000 ARCHIVER_VIEM_POLLING_INTERVAL_MS=1000 LOG_LEVEL=${LOG_LEVEL:-info} \
-  "$HERE/node_modules/.bin/aztec" start ${@:---node} --port 8081 > "$D/node.log" 2>&1 & pids+=($!)
-echo "Aztec on JAM: devnet, jam-l1 on :8545, Aztec's node on :8081 (logs in $D)"
+  "$HERE/node_modules/.bin/aztec" start ${@:---node} --port "${NODE_PORT:-8080}" > "$D/node.log" 2>&1 & pids+=($!)
+echo "Aztec on JAM: devnet, jam-l1 on :8545, Aztec's node on :${NODE_PORT:-8080} (logs in $D)"
 wait
