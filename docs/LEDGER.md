@@ -1877,3 +1877,22 @@ Evidence (jb-lasair6, lasair branch guarantee-while-engaged 118b671, 2026-10-26)
 Also new: `client/queue_soak.py` (packages kept waiting on one core, for lasair#94), and lasair
 nodes take `JB_TELEMETRY` on the native nets.
 Next: lasair#94's last part (the previous rotation across an epoch turn), then #83.
+
+### 2026-10-27: the verifier through the curve host calls (#58, #55)
+
+`crates/curve-hooks` gains `HostCallHooks` (5cd1c9a, review fixes 6326a8f): the MSM by host call
+101, the pairing check by 102, each call's first use its probe, `FieldHooks` where the net does
+not have them. Both services use it; for the privacy service that is also #55's switch from `()`.
+- **Code hashes:** privacy 0xbc5b94a9adca7097e986b7c4f186c2e73a5359915cb05c0af5d63ded7450ff23
+  (was 0x97e7677f…), aztec-settlement 0x9be9c6d461e8af99a33958249926db64f0428372a10b6cef021d03d65296d37a.
+- **Refine gas** (lasair's in-process refine; equal to PolkaJam v0.8.0's to the unit): an
+  Aztec-shaped 2^24 proof 181.1M with `()`, 155.9M with `FieldHooks`, 156.2M with `HostCallHooks`
+  and no calls, 52.4M with them. One private transfer: 147.0M without the calls (146,986,352
+  for the final blob; PolkaJam measured 146,996,585 for the first), 49.1M with them.
+- **PolkaJam** (`spikes/jip8-lasair/pj-fallback.sh`): valid verdicts, both curve paths PVM code,
+  250k/284k gas over `FieldHooks`. The privacy soak (`client/soak.py`, 5 minutes): 50 of 50, pace
+  1.0, PASS. The demo's `check` and e2e pass.
+- **lasair jb-lasair6 with the calls on every node:** `check`, e2e, pay-both, race and explorer
+  pass; every privacy refine about 49.1M gas; the privacy soak 47 of 47, pace 0.94, PASS, after
+  lasair's `--block-time` cadence fix (lasair#113; before it, blocks 6.7 s apart capped the pace
+  at 0.88).
