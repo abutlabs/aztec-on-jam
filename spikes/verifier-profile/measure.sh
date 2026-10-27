@@ -20,6 +20,10 @@ for tag, (k, hooks) in enumerate([(16, 0), (16, 1), (20, 0), (20, 1), (24, 0), (
     open(f"{out}/p{tag}.bin", "wb").write(body)
 for tag, (which, n) in enumerate([(0, 1), (0, 16), (0, 64), (0, 128), (1, 1), (1, 2), (1, 4), (1, 8)], 7):
     open(f"{out}/p{tag}.bin", "wb").write(bytes([2, tag, which]) + n.to_bytes(2, "little"))
+# call 105 as PVM code (lasair#130), for lasair's bin/jip8_bench (p23..p26) and, past a package's
+# gas, bin/jip8_refine with JIP8_GAS_LIMIT (p27, 2^15 points, the size of Aztec's IPA)
+for tag, n in zip(range(23, 28), (1, 16, 64, 128, 32768)):
+    open(f"{out}/p{tag}.bin", "wb").write(bytes([2, tag, 4]) + n.to_bytes(2, "little"))
 PY
 BLOB=$("$BUILD" "$HERE/service" --out "$O" | awk '{print $1}')
 pj_start "$O"

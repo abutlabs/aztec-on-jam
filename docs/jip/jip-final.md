@@ -29,7 +29,7 @@ row with its script in [jam-privacy-service](https://github.com/abutlabs/jam-pri
 | One BN254 128-point G1 MSM, end to end | 110,727,638 | 12,852,234 (8.6×) | 12,852,234, the price | The same |
 | EIP-4844 KZG point evaluation | 199,453,527 | about 8.9M plus a SHA-256 (about 22×) | 12,111,139 (16.5×) | Composed from calls 103 and 104 (*Suggestions & examples*): the calls 8,879,921, the rest decompressing C and π and the SHA-256 |
 
-**Measured on a client.** lasair implements calls 101–104 behind an activation flag:
+**Measured on a client.** lasair implements calls 101–105 behind an activation flag:
 - The services verify through them where the net has them, and fall back to PVM code where not:
   - `crates/curve-hooks`' `HostCallHooks` for UltraHonk;
   - `crates/kzg-verify` for EIP-4844.
@@ -68,8 +68,10 @@ which only a host call reaches.
   field. Aztec's client proofs (CHONK) end in an inner-product argument over it. A batch of
   them shares one 2^15-point Grumpkin MSM, which costs 9.0 to 9.8B gas as PVM code. That is more
   than a package, so no package can check even one batch without this call
-  (jam-privacy-service#62, measured with Barretenberg's own verifier compiled for the PVM). With
-  it, two client proofs fit a package that discharges its own batch. Grumpkin has no pairing, so
+  (jam-privacy-service#62, measured with Barretenberg's own verifier compiled for the PVM).
+  arkworks' MSM alone, as PVM code, costs 11.06B at that size, and the call costs 1.93B
+  (`spikes/verifier-profile`, run by lasair). With the call, two client proofs fit a package
+  that discharges its own batch. Grumpkin has no pairing, so
   the MSM is its only call.
 - **Not in this JIP.** These each need their own measured case and their own proposal:
   - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
@@ -347,7 +349,7 @@ functions. It is for the GP's maintainers, who decide the activation and the ver
    kernels, a widening multiply and an add-with-carry together save about 11 to 16% of their
    gas. They would help the uncovered 36M and the curves this JIP leaves out by about as much.
 
-**Found implementing the calls in a client** (lasair, all four; tested against the JIP's
+**Found implementing the calls in a client** (lasair, all five; tested against the JIP's
 vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second library over
 10,000 random and adversarial inputs a call):
 
@@ -358,7 +360,14 @@ vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second l
      gas pays. Past 512 the table's slope (33,836 a point) is the 256→512 segment's, while
      this machine's per-point time stays about twice the x86 runner's;
    - `bls12_381_g1_msm`: mostly ≥ 2;
-   - `bls12_381_pairing_check`: 1.3–1.7.
+   - `bls12_381_pairing_check`: 1.3–1.7;
+   - `grumpkin_g1_msm`, over three runs:
+     - against the median time: 1.7–3.0;
+     - against p99: from 8,192 points, 1.25–1.65; below that, 0.8–1.9, with tails that move
+       between runs (one run's single sizes fell to 0.2–0.9);
+     - the first size timed (n = 1): 0.6 in every run;
+     - at 2^15 points, this machine's arkworks takes a 349 ms median, against the 289 ms p99
+       the price allows the runner, so it is about 1.2× slower, as for `bn254_g1_msm`.
    The prices are the x86 runner's p99 × 2 with no further headroom, so a machine slower than
    the runner on any one operation falls under the margin there.
 5. **An empty BLS12-381 pairing input.** EIP-2537 refuses it ("invalid input length"); this

@@ -9,7 +9,7 @@
 //!          3 its FieldHooks (the services' fallback, without a gauge's gas reads)]
 //!          [vk_len u16 LE][vk][n_pubs u16 LE][n_pubs × 32][proof]
 //!       or [2][tag][call u8: 0 bn254_g1_msm, 1 bn254_pairing_check, 2 bls12_381_g1_msm,
-//!          3 bls12_381_pairing_check][n u16 LE]: JIP-8's call as
+//!          3 bls12_381_pairing_check, 4 grumpkin_g1_msm][n u16 LE]: JIP-8's call as
 //!          PVM code, end to end as `spikes/jip-bench`'s e2e runs it natively (#45). The input,
 //!          n random points of the group in the EIP-196/197 encoding, is made unmetered; then
 //!          decoding, every check and the result are metered. Refine outputs [tag][1][gas u64].
@@ -260,15 +260,61 @@ mod call_bls {
     }
 }
 
+mod call_gk {
+    //! Call 105, grumpkin_g1_msm (lasair#130), as PVM code: arkworks' Grumpkin, the code the
+    //! host runs, with the same decoding and checks (coordinates below r, on the curve, (0, 0)
+    //! infinity; scalars reduced mod p).
+    use alloc::vec::Vec;
+    use ark_ec::{AffineRepr, CurveGroup, PrimeGroup, VariableBaseMSM};
+    use ark_ff::{BigInteger, PrimeField, Zero};
+    use ark_grumpkin::{Affine, Fq, Fr, Projective};
+    fn fq(b: &[u8]) -> Option<Fq> {
+        let v = Fq::from_be_bytes_mod_order(b);
+        (v.into_bigint().to_bytes_be() == b).then_some(v)
+    }
+    fn point(b: &[u8]) -> Option<Affine> {
+        let (x, y) = (fq(&b[..32])?, fq(&b[32..64])?);
+        if x.is_zero() && y.is_zero() { return Some(Affine::identity()); }
+        let p = Affine::new_unchecked(x, y);
+        p.is_on_curve().then_some(p)
+    }
+    fn put(o: &mut Vec<u8>, f: Fq) { o.extend_from_slice(&f.into_bigint().to_bytes_be()); }
+    pub fn msm(input: &[u8]) -> Option<Vec<u8>> {
+        if input.is_empty() || input.len() % 96 != 0 { return None; }
+        let (mut bases, mut scalars) = (Vec::new(), Vec::new());
+        for item in input.chunks_exact(96) {
+            bases.push(point(&item[..64])?);
+            scalars.push(Fr::from_be_bytes_mod_order(&item[64..]));
+        }
+        let r = Projective::msm(&bases, &scalars).ok()?.into_affine();
+        let mut o = Vec::new();
+        if let Some((x, y)) = r.xy() { put(&mut o, x); put(&mut o, y); }
+        Some(o)
+    }
+    /// n items, from fixed pseudo-random scalars: not metered.
+    pub fn input(n: usize) -> Vec<u8> {
+        let mut st = 0x2545F4914F6CDD1Du64;
+        let mut fr = || { let mut v = [0u8; 32]; for c in v.chunks_mut(8) { st = st.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); c.copy_from_slice(&st.to_be_bytes()); } Fr::from_be_bytes_mod_order(&v) };
+        let mut o = Vec::new();
+        for _ in 0..n {
+            let (x, y) = (Projective::generator() * fr()).into_affine().xy().unwrap();
+            put(&mut o, x); put(&mut o, y);
+            o.extend_from_slice(&fr().into_bigint().to_bytes_be());
+        }
+        o
+    }
+}
+
 fn bench(p: &[u8]) -> Option<(bool, u64)> {
     let which = *p.get(2)?;
     let n = le16(p.get(3..)?)?;
-    let input = if which < 2 { call::input(which, n) } else { call_bls::input(which, n) };
+    let input = match which { 0 | 1 => call::input(which, n), 4 => call_gk::input(n), _ => call_bls::input(which, n) };
     let before = gas();
     let ok = match which {
         0 => call::msm(&input).is_some(),
         1 => call::pairing(&input).is_some(),
         2 => call_bls::msm(&input).is_some(),
+        4 => call_gk::msm(&input).is_some(),
         _ => call_bls::pairing(&input).is_some(),
     };
     Some((ok, before - gas()))

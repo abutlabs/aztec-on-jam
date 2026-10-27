@@ -15,6 +15,8 @@ curve-hooks = { path = "../../../crates/curve-hooks" }
 ark-bn254-ext = { git = "https://github.com/zkVerify/accelerated-bn-cryptography.git", default-features = false, tag = "v0.6.0" }
 ark-bn254 = { version = "0.5.0", default-features = false, features = ["curve"] }
 ark-bls12-381 = { version = "0.5.0", default-features = false, features = ["curve"] }
+# call 105 as PVM code (lasair#130)
+ark-grumpkin = { version = "0.5.0", default-features = false }
 ark-ec = { version = "0.5.0", default-features = false }
 ark-ff = { version = "0.5.0", default-features = false }
 
