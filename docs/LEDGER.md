@@ -1896,3 +1896,50 @@ not have them. Both services use it; for the privacy service that is also #55's 
   pass; every privacy refine about 49.1M gas; the privacy soak 47 of 47, pace 0.94, PASS, after
   lasair's `--block-time` cadence fix (lasair#113; before it, blocks 6.7 s apart capped the pace
   at 0.88).
+
+## 2026-10-27 74 — The prediction table measured on lasair (#59)
+
+`spikes/jip8-lasair/measure.sh` (one command; the run of 2026-10-27, local: no observability
+run id, the JSON lines in its out/measure/). Each workload refined in lasair's in-process refine
+(`bin/jip8_refine`) with the curve host calls off and on. The gas is the protocol's: without
+the calls it equals PolkaJam v0.8.0's to the unit on the same payloads (`pj-fallback.sh`). The
+wall time is lasair's interpreter on one Apple M-series Mac, and only that.
+
+| workload | calls off: gas | calls on: gas | saving | lasair wall, off / on (this machine) |
+|---|---|---|---|---|
+| ultrahonk-2^16-field | 147,756,359 | 147,756,359 |  | 910 / 550 ms |
+| ultrahonk-2^16-calls | 148,003,882 | 48,129,253 | 3.1x | 582 / 128 ms |
+| ultrahonk-2^20-field | 151,840,856 | 151,840,856 |  | 543 / 537 ms |
+| ultrahonk-2^20-calls | 152,105,494 | 50,242,471 | 3.0x | 533 / 116 ms |
+| ultrahonk-2^24-field | 155,913,559 | 155,913,559 |  | 552 / 545 ms |
+| ultrahonk-2^24-calls | 156,194,680 | 52,377,458 | 3.0x | 548 / 127 ms |
+| pvm-bn254_pairing_check-2 | 105,068,186 | 105,068,186 |  | 400 / 365 ms |
+| pvm-bn254_g1_msm-128 | 476,349,738 | 476,349,738 |  | 1884 / 1877 ms |
+| pvm-bls12_381_pairing_check-2 | 194,703,391 | 194,703,391 |  | 691 / 657 ms |
+| pvm-bls12_381_g1_msm-128 | 1,465,461,993 | 1,465,461,993 |  | 6097 / 6735 ms |
+| privacy-transfer | 146,997,014 | 49,135,330 | 3.0x | 883 / 128 ms |
+| kzg-point-evaluation | 199,510,453 | 12,111,139 | 16.5x | 979 / 23 ms |
+| kzg-blob-1 | 251,379,363 | 63,976,882 | 3.9x | 1045 / 248 ms |
+| kzg-batch-2 | 393,930,040 | 117,656,626 | 3.3x | 1638 / 475 ms |
+| kzg-batch-6 | 937,104,057 | 327,967,931 | 2.9x | 4069 / 1366 ms |
+| proofs-1 | 147,865,431 | 47,995,242 | 3.1x | 870 / 126 ms |
+| proofs-20 | 2,949,603,013 | 958,438,936 | 3.1x | 11046 / 2183 ms |
+| proofs-21 | 3,097,009,112 | 1,006,338,215 | 3.1x | 11652 / 2357 ms |
+| proofs-104.bin | None | 4983500420 | | |
+| settlement-epoch-proof | 340,843,877 | 60,640,551 | 5.6x | 1711 / 133 ms |
+
+- **UltraHonk:** the "-calls" rows with the calls off are HostCallHooks' fallback (field-wise
+  arkworks after a WHAT probe); on, the calls. Aztec's 2^24: 155.9M → 52.4M; projected 52.1M.
+- **KZG point evaluation:** 199.5M → 12.1M; projected "8.9M plus a SHA-256". The calls take
+  8,879,921 of it; the rest is decompressing C and π and the SHA-256 of C.
+- **Blobs:** the polynomial evaluation and the blob's SHA-256 stay PVM code, so one blob is 3.9×
+  and a batch of 6 is 2.9×. Without the calls, one blob is 11.3M cheaper than before (C is
+  decompressed once now).
+- **Proofs a package:** 2^16 proofs at 47.9M each. Measured packages: 20 fit the tiny 1e9 and 21
+  do not; 104 fit the full 5e9 and 105 run out. At 2^24, 95 and 19.
+- **Settling an epoch:** the settlement service's epoch-proof package (its UltraHonk check and the
+  point evaluation) 340.8M → 60.6M. With Aztec's 2^24 proof, 52.4M + 12.1M + 433M of signature
+  recovery (no call) ≈ 497.5M; projected 494M.
+- **The privacy demo on a JIP-8 net** (jb-lasair6, all four calls on 6 of 6 nodes): check and
+  e2e pass (a shield and a send in the wallet). Queue soak 49/49 at pace 0.98; privacy soak
+  48/48 at pace 0.96 (5 minutes each); nothing expired.
