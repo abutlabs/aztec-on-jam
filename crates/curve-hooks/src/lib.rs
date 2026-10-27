@@ -7,6 +7,11 @@
 
 extern crate alloc;
 
+mod host_calls;
+pub use host_calls::{used as host_calls_used, HostCallHooks};
+#[cfg(not(target_env = "polkavm"))]
+pub use host_calls::host as host_calls_stand_in;
+
 use alloc::vec::Vec;
 use ark_bn254_ext::{g1, g2, Bn254, CurveHooks};
 use ark_ec::{
@@ -19,11 +24,11 @@ use ark_ec::{
 type ArkG1 = ark_bn254::g1::Config;
 type ArkG2 = ark_bn254::g2::Config;
 
-fn affine<E: SWCurveConfig, A: SWCurveConfig<BaseField = E::BaseField>>(p: &Affine<E>) -> Affine<A> {
+pub(crate) fn affine<E: SWCurveConfig, A: SWCurveConfig<BaseField = E::BaseField>>(p: &Affine<E>) -> Affine<A> {
     if p.infinity { Affine::identity() } else { Affine::new_unchecked(p.x, p.y) }
 }
 
-fn projective<E: SWCurveConfig, A: SWCurveConfig<BaseField = E::BaseField>>(p: &Projective<E>) -> Projective<A> {
+pub(crate) fn projective<E: SWCurveConfig, A: SWCurveConfig<BaseField = E::BaseField>>(p: &Projective<E>) -> Projective<A> {
     Projective::new_unchecked(p.x, p.y, p.z)
 }
 

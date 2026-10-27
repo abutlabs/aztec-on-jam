@@ -351,6 +351,11 @@ dependencies = [
  "ark-bn254",
  "ark-bn254-ext",
  "ark-ec",
+ "ark-ff",
+ "ark-std",
+ "polkavm-derive",
+ "ultrahonk-no-std 0.1.0 (git+https://github.com/abutlabs/ultrahonk_verifier?rev=2ae44db)",
+ "ultrahonk-no-std 0.1.0 (git+https://github.com/abutlabs/ultrahonk_verifier?rev=a4b2a4af5d)",
 ]
 
 [[package]]
@@ -846,6 +851,7 @@ name = "privacy-service"
 version = "0.0.1"
 dependencies = [
  "blake2",
+ "curve-hooks",
  "jam-pvm-common",
  "polkavm-derive",
  "service-util",

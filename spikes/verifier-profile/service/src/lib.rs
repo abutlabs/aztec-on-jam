@@ -4,7 +4,9 @@
 //! but converts points field by field instead of by encoding and decoding, and reads the
 //! remaining gas (host call 0) around each one.
 //!
-//! Payload: [flavour u8: 0 plain, 1 zk][tag u8][hooks u8: 0 the default (), 1 Gauge]
+//! Payload: [flavour u8: 0 plain, 1 zk][tag u8][hooks u8: 0 the default (), 1 Gauge,
+//!          2 crates/curve-hooks' HostCallHooks (the curve host calls where the net has them, #59),
+//!          3 its FieldHooks (the services' fallback, without a gauge's gas reads)]
 //!          [vk_len u16 LE][vk][n_pubs u16 LE][n_pubs × 32][proof]
 //!       or [2][tag][call u8: 0 bn254_g1_msm, 1 bn254_pairing_check][n u16 LE]: JIP-8's call as
 //!          PVM code, end to end as `spikes/jip-bench`'s e2e runs it natively (#45). The input,
@@ -12,7 +14,8 @@
 //!          decoding, every check and the result are metered. Refine outputs [tag][1][gas u64].
 //! Refine outputs [tag][1 valid | 0][then u64 LE: verify's gas, then for MSM G1, scalar
 //! multiplication G1, Miller loop and final exponentiation: gas, calls, points]; accumulate
-//! stores it at "v:" ++ tag.
+//! stores it at "v:" ++ tag. Last, two octets: the paths HostCallHooks took for the MSM and the
+//! pairing (0 not used, 1 the host call, 2 PVM code).
 #![no_std]
 #![no_main]
 
@@ -203,7 +206,7 @@ fn le16(b: &[u8]) -> Option<usize> {
 fn check(p: &[u8]) -> Option<(bool, u64)> {
     if *p.first()? == 2 { return bench(p); }
     let zk = *p.first()? == 1;
-    let gauge = *p.get(2)? == 1;
+    let hooks = *p.get(2)?;
     let vk_len = le16(p.get(3..)?)?;
     let vk = p.get(5..5 + vk_len)?;
     let at = 5 + vk_len;
@@ -212,7 +215,12 @@ fn check(p: &[u8]) -> Option<(bool, u64)> {
     let proof = p.get(at + 2 + 32 * n..)?;
     let proof = if zk { ProofType::ZK(proof.into()) } else { ProofType::Plain(proof.into()) };
     let before = gas();
-    let ok = if gauge { verify::<Gauge>(vk, &proof, &pubs).is_ok() } else { verify::<()>(vk, &proof, &pubs).is_ok() };
+    let ok = match hooks {
+        1 => verify::<Gauge>(vk, &proof, &pubs).is_ok(),
+        2 => verify::<curve_hooks::HostCallHooks>(vk, &proof, &pubs).is_ok(),
+        3 => verify::<curve_hooks::FieldHooks>(vk, &proof, &pubs).is_ok(),
+        _ => verify::<()>(vk, &proof, &pubs).is_ok(),
+    };
     Some((ok, before - gas()))
 }
 
@@ -228,6 +236,9 @@ impl Service for Spike {
                 out.extend_from_slice(&v.to_le_bytes());
             }
         }
+        let path = |u: Option<bool>| match u { None => 0u8, Some(true) => 1, Some(false) => 2 };
+        let (msm, pairing) = curve_hooks::host_calls_used();
+        out.extend_from_slice(&[path(msm), path(pairing)]);
         out.into()
     }
 

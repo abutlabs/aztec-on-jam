@@ -11,6 +11,7 @@ jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", def
 polkavm-derive = "0.36"
 # the same verifier as the epoch-proof and settlement spikes
 ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }
+curve-hooks = { path = "../../../crates/curve-hooks" }
 ark-bn254-ext = { git = "https://github.com/zkVerify/accelerated-bn-cryptography.git", default-features = false, tag = "v0.6.0" }
 ark-bn254 = { version = "0.5.0", default-features = false, features = ["curve"] }
 ark-ec = { version = "0.5.0", default-features = false }

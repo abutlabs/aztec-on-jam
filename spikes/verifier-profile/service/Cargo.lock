@@ -277,6 +277,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "curve-hooks"
+version = "0.0.1"
+dependencies = [
+ "ark-bn254",
+ "ark-bn254-ext",
+ "ark-ec",
+ "ark-ff",
+ "polkavm-derive",
+]
+
+[[package]]
 name = "derive_more"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -884,6 +895,7 @@ dependencies = [
  "ark-bn254-ext",
  "ark-ec",
  "ark-ff",
+ "curve-hooks",
  "jam-pvm-common",
  "polkavm-derive",
  "ultrahonk-no-std",

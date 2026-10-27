@@ -11,4 +11,6 @@ jam-pvm-common = { path = "../../../jamswap/tools/jam080/jam-pvm-common", defaul
 polkavm-derive = "0.36"
 blake2 = { version = "0.10", default-features = false }
 service-util = { path = "../../crates/service-util" }
+# the curve host calls 101 and 102 where the net has them, field-wise arkworks where not (#58, #55)
+curve-hooks = { path = "../../crates/curve-hooks" }
 ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "a4b2a4af5d", default-features = false }  # zkVerify PR #9: bb 5.0.x proofs

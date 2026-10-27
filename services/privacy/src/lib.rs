@@ -133,7 +133,7 @@ impl Service for Privacy {
         if logs_hash(logs) != pubs[LOGS_HASH] {
             return invalid();
         }
-        if verify::<()>(VK, &ProofType::ZK(Box::from(proof)), &pubs).is_err() {
+        if verify::<curve_hooks::HostCallHooks>(VK, &ProofType::ZK(Box::from(proof)), &pubs).is_err() {
             return invalid();
         }
         let mut out = Vec::with_capacity(1 + pubs_bytes.len() + LOGS_LEN);
