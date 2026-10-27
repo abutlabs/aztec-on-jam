@@ -75,7 +75,8 @@ pub fn verify_kzg_proof(c: &[u8; 48], z: &[u8; 32], y: &[u8; 32], pi: &[u8; 48])
     // C and pi decompressed once, their subgroup checked by call 103 where the net has the
     // curve host calls, else here
     let (c, pi) = (on_curve(c)?, on_curve(pi)?);
-    if !calls::may_have() {
+    let checked = !calls::may_have();
+    if checked {
         in_subgroup(&[c, pi])?;
     }
     let (z, y) = (scalar(z)?, scalar(y)?);
@@ -83,7 +84,9 @@ pub fn verify_kzg_proof(c: &[u8; 48], z: &[u8; 32], y: &[u8; 32], pi: &[u8; 48])
     if let Some(r) = calls::check(&[(pi, Scalar::ONE)], &[(c, -Scalar::ONE), (G1Affine::generator(), y), (pi, -z)]) {
         return r;
     }
-    in_subgroup(&[c, pi])?; // no calls after all (103's probe said WHAT): check here
+    if !checked {
+        in_subgroup(&[c, pi])?; // no calls after all (103's probe said WHAT): check here
+    }
     let s = G2Affine::from_compressed(&SETUP_G2_S).unwrap();
     let x_minus_z = G2Affine::from(G2Projective::from(s) - G2Affine::generator() * z);
     let c_minus_y = G1Affine::from(G1Projective::from(c) - G1Affine::generator() * y);
@@ -364,6 +367,27 @@ mod tests {
         set_modes([Mode::Present, Mode::Present, Mode::Present, Mode::WhatAfterFirst]);
         assert_eq!(calls::check(&[o], &[o]), Some(Ok(true)), "104: the first check");
         assert_eq!(calls::check(&[o], &[o]), Some(Err(Error::BadPoint)), "104 WHAT after an answer: refused");
+    }
+
+    // an on-curve point outside G1, as C or as pi, is refused from a fresh state whether the
+    // calls are present, absent (the probe says WHAT, then PVM code checks), or only 103 is
+    #[test]
+    fn a_point_outside_g1_is_refused_in_every_mode() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        // x = 0 is on y^2 = x^3 + 4 with y = 2: of order 3, outside G1; compressed with the
+        // compression flag and y's sign bit for 2 (the smaller root): 0x80 then zeros
+        let mut t = [0u8; 48];
+        t[0] = 0x80;
+        let tp = G1Affine::from_compressed_unchecked(&t).unwrap();
+        assert!(!bool::from(tp.is_torsion_free()), "the test point is outside G1");
+        let good = G1Affine::generator().to_compressed();
+        let (z, y) = ([0u8; 32], [0u8; 32]);
+        for modes in [[Mode::Present; 4], [Mode::Absent; 4], [Mode::Present, Mode::Present, Mode::Present, Mode::Absent]] {
+            for (what, c, pi) in [("C", t, good), ("pi", good, t)] {
+                set_modes(modes);
+                assert_eq!(verify_kzg_proof(&c, &z, &y, &pi), Err(Error::BadPoint), "{what} outside G1, {modes:?}");
+            }
+        }
     }
 
     #[test]

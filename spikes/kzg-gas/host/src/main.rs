@@ -18,7 +18,13 @@ fn field<'a>(y: &'a str, k: &str) -> &'a str {
 
 fn main() {
     let dir = env::args().nth(1).expect("usage: kzg-host <vectors dir>");
-    curve_calls::stand_in::set_absent(env::var("KZG_CALLS").as_deref() == Ok("absent"));
+    // each vector from a fresh state, as each refine starts: the probe, then the path it picks
+    let absent = env::var("KZG_CALLS").as_deref() == Ok("absent");
+    let fresh = || curve_calls::stand_in::set_absent(absent);
+    let verify_kzg_proof = |c: &[u8; 48], z: &[u8; 32], v: &[u8; 32], pi: &[u8; 48]| { fresh(); kzg_verify::verify_kzg_proof(c, z, v, pi) };
+    let verify_blob_kzg_proof = |b: &[u8], c: &[u8; 48], pi: &[u8; 48]| { fresh(); kzg_verify::verify_blob_kzg_proof(b, c, pi) };
+    let verify_blob_kzg_proof_batch = |b: &[&[u8]], c: &[[u8; 48]], pi: &[[u8; 48]]| { fresh(); kzg_verify::verify_blob_kzg_proof_batch(b, c, pi) };
+    let point_evaluation = |i: &[u8]| { fresh(); kzg_verify::point_evaluation(i) };
     let (mut pass, mut fail) = (0, 0);
     let mut names: Vec<_> = fs::read_dir(format!("{dir}/ckzg")).unwrap().map(|e| e.unwrap().path()).collect();
     names.sort();
@@ -27,7 +33,7 @@ fn main() {
         let want = field(&y, "output");
         // a field of the wrong length counts as refused input, as c-kzg's bindings do
         let got = match (hex::<48>(field(&y, "commitment")), hex::<32>(field(&y, "z")), hex::<32>(field(&y, "y")), hex::<48>(field(&y, "proof"))) {
-            (Some(c), Some(z), Some(v), Some(pi)) => match kzg_verify::verify_kzg_proof(&c, &z, &v, &pi) {
+            (Some(c), Some(z), Some(v), Some(pi)) => match verify_kzg_proof(&c, &z, &v, &pi) {
                 Ok(true) => "true", Ok(false) => "false", Err(_) => "null",
             },
             _ => "null",
@@ -44,7 +50,7 @@ fn main() {
         let blob_hex = field(&y, "blob").trim_matches('\'').trim_start_matches("0x");
         let blob: Option<Vec<u8>> = (blob_hex.len() % 2 == 0).then(|| (0..blob_hex.len() / 2).map(|i| u8::from_str_radix(&blob_hex[2 * i..2 * i + 2], 16).ok()).collect::<Option<Vec<u8>>>()).flatten();
         let got = match (blob, hex::<48>(field(&y, "commitment")), hex::<48>(field(&y, "proof"))) {
-            (Some(b), Some(c), Some(pi)) => match kzg_verify::verify_blob_kzg_proof(&b, &c, &pi) {
+            (Some(b), Some(c), Some(pi)) => match verify_blob_kzg_proof(&b, &c, &pi) {
                 Ok(true) => "true", Ok(false) => "false", Err(_) => "null",
             },
             _ => "null",
@@ -76,7 +82,7 @@ fn main() {
         let got = match (blobs, cs, pis) {
             (Some(b), Some(c), Some(pi)) => {
                 let bs: Vec<&[u8]> = b.iter().map(|x| x.as_slice()).collect();
-                match kzg_verify::verify_blob_kzg_proof_batch(&bs, &c, &pi) { Ok(true) => "true", Ok(false) => "false", Err(_) => "null" }
+                match verify_blob_kzg_proof_batch(&bs, &c, &pi) { Ok(true) => "true", Ok(false) => "false", Err(_) => "null" }
             }
             _ => "null",
         };
@@ -86,9 +92,9 @@ fn main() {
     let g = fs::read_to_string(format!("{dir}/geth-pointEvaluation.json")).unwrap();
     let input = g.split("\"Input\": \"").nth(1).unwrap().split('"').next().unwrap();
     let bytes: Vec<u8> = (0..input.len() / 2).map(|i| u8::from_str_radix(&input[2 * i..2 * i + 2], 16).unwrap()).collect();
-    let geth = kzg_verify::point_evaluation(&bytes);
+    let geth = point_evaluation(&bytes);
     let mut bad = bytes.clone(); bad[70] ^= 1; // y altered
-    let geth_bad = kzg_verify::point_evaluation(&bad);
+    let geth_bad = point_evaluation(&bad);
     println!("c-kzg verify_kzg_proof vectors: {pass} agree, {fail} differ");
     println!("geth pointEvaluation1: {geth:?}; with y altered: {geth_bad:?}");
     if fail > 0 || bfail > 0 || tfail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
