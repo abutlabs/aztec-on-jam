@@ -33,13 +33,22 @@
   </header>
 
   <section>
+    <h2>Get the code</h2>
+    <pre>git clone https://github.com/abutlabs/jam-privacy-service
+cd jam-privacy-service
+scripts/bootstrap.sh      # the pinned toolchain and the sibling checkouts; Node 22+ for Aztec's packages</pre>
+    <p class="meta">lasair's source is not public yet, so the six-validator lasair net needs the
+      sibling checkout; everything else — the node, the facade, the prover, the wallet — runs
+      from this repository alone against <code>DEVNET_NET=polkajam</code>.</p>
+  </section>
+
+  <section>
     <h2>One command</h2>
     <pre>DEVNET_NET=jb-lasair6 PROOF_SUBMISSION_EPOCHS=10000 PROVER=1 \
   tools/aztec-local/on-jam.sh --node --sequencer</pre>
     <p>That brings up, in order: six lasair validators with the settlement service deployed;
       the jam-l1 facade (the node's "Ethereum"); Aztec's node with the sequencer; the prover
-      broker; the prover node with one agent. Needs Node 22+, the pinned toolchain
-      (<code>scripts/bootstrap.sh</code>) and lasair built. Logs land in
+      broker; the prover node with one agent. Logs land in
       <code>out/aztec-devnet/</code>: <code>node.log</code>, <code>broker.log</code>,
       <code>prover.log</code>, <code>jam-l1.log</code>, <code>devnet.log</code>.</p>
   </section>
