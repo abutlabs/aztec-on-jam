@@ -16,12 +16,23 @@ in order.
     `spikes/jip-bench/e2e-pricing.py < spikes/jip-bench/ci/e2e-40026200133.txt`.
   - **Vectors:** `spikes/jip-bench` `e2e --vectors`, which writes the same file byte for byte.
 
+- **One client implements all four calls:** lasair (2026-10-27, #56).
+  - Tested against this JIP's vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537
+    vectors, and a second library each.
+  - Measured with the services on them: `spikes/jip8-lasair/measure.sh`, *Motivation*'s
+    measured column.
+  - The privacy demo runs on a lasair net with the calls on, and the same blobs fall back to
+    PVM code on PolkaJam.
+
 ## Before submitting
 
 1. **Constants from bare metal.** Today's are one shared GitHub VM's p99 (open question 1). Run
    `e2e` on two or more pinned-frequency machines, take the maximum, and choose m.
-2. **A BLS12-381 baseline as PVM code.** BN254's calls have one (7–13×), and BLS12-381's do not.
-   `spikes/verifier-profile`'s kind 2 extends to them in the same way.
+2. **~~A BLS12-381 baseline as PVM code.~~** Done (#59): `spikes/verifier-profile` kinds 2 and 3;
+   as calls, 103 saves 7.4–25.5× and 104 saves 18.7–23.1× (lasair bench, one Mac).
+2b. **A second client.** lasair is the only implementation. Another team's, against the same
+   vectors, is what turns this from one team's measurement into the protocol's. The client
+   work also left the text five questions (*Open questions* 4–8).
 3. **The companion GP diff.** Appendix B entries, `definitions.tex` constants, and the Ψ_R and
    Ψ_A dispatch lines (*Process*).
 4. **Check the number.** JIP-8 was free at polkadot-fellows/JIPs 5202db1 on 2026-10-21. Rename
