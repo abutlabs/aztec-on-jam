@@ -38,11 +38,10 @@
         their own code; validators execute it, audit each other, and finalize the result.</p>
         <p class="meta"><a href="https://graypaper.com">graypaper.com</a></p></div>
       <div class="card"><h3>Aztec on JAM</h3>
-        <p>Everything Aztec takes from Ethereum — ordering, data availability, proof
-        verification — JAM also provides, with far more verification capacity. We built the
-        proof-of-concept, benchmarked, and drafted the one JAM protocol addition
-        (a <a href="https://github.com/polkadot-fellows/JIPs">JIP</a>) that makes ZK
-        verification fast on JAM.</p>
+        <p>Everything Aztec takes from Ethereum — JAM provides, with far more capacity. We built the
+        proof-of-concept, benchmarked, and drafted a JAM-Improvement-Proposal
+        (a <a href="https://github.com/polkadot-fellows/JIPs">JIP</a>) that makes AZTEC's ZK
+        verification possible on JAM.</p>
         <p class="meta"><a href="https://github.com/abutlabs/jam-privacy-service">the repository</a></p></div>
     </div>
   </section>
@@ -60,7 +59,7 @@
       <div class="arrow">→</div>
       <div class="stage port" data-s="jam"><div class="name">JAM chain</div><div class="what">six lasair validators execute and audit our settlement service — a JAM service deployed on-chain, where the rollup's rules and state live</div></div>
       <div class="arrow">⇢</div>
-      <div class="stage future" data-s="prover"><div class="name">Prover node</div><div class="what">a prover operator's process, Aztec's circuits (<a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>); its proof returns through the facade to the JAM chain ⤴</div></div>
+      <div class="stage future" data-s="prover"><div class="name">Prover cluster</div><div class="what">one operator, three of Aztec's processes: the prover node (watches the chain for unproven epochs), the broker (queues jobs), agents (prove — 32 cores, 128 GB each by Aztec's guidance). Its proof returns through the facade ⤴ (<a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>)</div></div>
     </div>
     <p class="meta">Three operators at most: the user (browser), whoever runs the Aztec node with its facade beside it, and a
       prover. The chain trusts none of them — finality comes from the validators, and never waits for the prover.</p>
@@ -143,9 +142,9 @@ const STEPS = [
   { s: 'jam', title: '7 · Accumulate and finalize', who: 'JAM validators, executing our on-chain settlement service', lib: 'services/aztec-settlement',
     out: 'the rollup’s new tip, finalized', num: '11–20 s, send to settled, in the wallet e2e',
     text: 'Accumulate advances the rollup’s tip from the chain’s own state; GRANDPA finalizes the block. The receiver’s wallet finds the note by its tag. The transfer is final here — nothing waits for the prover.' },
-  { s: 'prover', title: '8 · Later: the epoch proof (next, #69)', who: 'an off-chain prover node', lib: 'Aztec’s rollup circuits',
+  { s: 'prover', title: '8 · Later: the epoch proof (next, #69)', who: 'a prover operator, running Aztec’s three proving processes', lib: 'prover node · broker · agents',
     out: 'one root proof over many checkpoints', num: 'not running yet — the one missing piece',
-    text: 'On its own clock, Aztec’s prover reads the finalized checkpoints back from JAM and folds them into one succinct root proof, so anyone can sync from proofs alone, without re-executing.' },
+    text: 'On its own clock, Aztec’s prover node reads the finalized checkpoints back from JAM and cuts them into jobs; the broker queues them; stateless agents prove them and the node assembles one succinct root proof — so anyone can sync from proofs alone, without re-executing.' },
   { s: 'jam', title: '9 · The proof returns to JAM', who: 'JAM validators, executing our on-chain settlement service', lib: 'services/aztec-settlement',
     out: 'the proven tip advances', num: 'verified in refine for 60.6M gas with the calls',
     text: 'The prover submits its root proof through the facade like any checkpoint. Refine verifies it; accumulate compares its public inputs with the stored checkpoints and advances the proven tip. Finality never waited for it.' },

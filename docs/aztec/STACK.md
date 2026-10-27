@@ -14,7 +14,7 @@ flowchart TB
   end
   subgraph aztec["Aztec network, @aztec-labs/aztec 6.0.0 as released"]
     node["Aztec node: sequencer, archiver, world state, AVM, P2P"]
-    pnode["Prover node and rollup circuits: the epoch proof"]
+    pnode["Prover cluster, three processes: the prover node (jobs),<br/>the broker (queue), agents (prove) - the epoch proof"]
   end
   subgraph seam["Where Ethereum was"]
     facade["jam-l1 facade: Ethereum JSON-RPC from JAM state"]

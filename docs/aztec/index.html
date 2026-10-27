@@ -67,8 +67,8 @@
             <div class="what">Checks each client proof on receipt (bb, native), executes public calls, builds checkpoints with their blobs and proposes them to "L1".</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Settling on PolkaJam and on six lasair validators; verifies every client proof (a tampered one is refused in 141 ms). One sequencer (<a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a>).</div></div>
-          <div class="tile aztec"><div class="name">Prover node and rollup circuits</div>
-            <div class="what">Proves each epoch: one root rollup proof (UltraHonk, Keccak, 113 public inputs) that covers every transaction's client proof.</div>
+          <div class="tile aztec"><div class="name">Prover cluster: node · broker · agents</div>
+            <div class="what">Aztec's three proving processes, unchanged. The prover node watches the chain for unproven epochs and cuts them into jobs; the broker queues them; stateless agents prove them (Aztec's guidance: 32 cores, 128 GB per agent). The output is one root rollup proof (UltraHonk, Keccak, 113 public inputs) covering every transaction.</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Not run here: real epoch proving needs hardware (<a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>).</div></div>
         </div>
