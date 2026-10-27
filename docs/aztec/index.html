@@ -37,7 +37,6 @@
       <span><i class="sw build"></i>Aztec's source, unchanged, our build for the PVM</span>
       <span><i class="sw port"></i>Ours, ported from Aztec's spec each release</span>
       <span><i class="sw ours"></i>Ours, new</span>
-      <span><i class="sw demo"></i>Ours, today's demo only</span>
     </div>
     <p class="meta">Chips mark where the JIP matters — a tile without one needs nothing from it.</p>
     <div class="stack">
@@ -87,14 +86,10 @@
             <div class="what">Aztec's Rollup, Inbox and Outbox contracts as refine and accumulate. Refine checks blobs (KZG), the epoch proof (UltraHonk, verifier ported from bb's Solidity) and the proposer's signatures (ECDSA). Accumulate keeps the tips, the inbox ring and the outbox.</div>
             <div class="chips"><span class="chip fast">2.9–5.6× cheaper with the JIP</span></div>
             <div class="status">Built and tested on PolkaJam (#49–#51, #54). Encodings match Aztec's 6 L1 fixtures.</div></div>
-          <div class="tile build"><div class="name">Client-proof checker (optional path)</div>
+          <div class="tile build"><div class="name">Client-proof checker: refine checks every transaction's proof</div>
             <div class="what">Barretenberg 6.0.0's own verifier for Aztec's transaction proofs, its C++ unchanged, compiled for JAM's VM. Its heaviest operation goes through the JIP.</div>
             <div class="chips"><span class="chip need">needs the JIP</span><span class="chip need">needs a full refine budget</span></div>
-            <div class="status">One proof verified and finalized on six lasair validators: 3.46B gas (<a href="https://github.com/abutlabs/jam-privacy-service/issues/62">#62</a>).</div></div>
-          <div class="tile demo"><div class="name">Today's demo: privacy and public-balance services</div>
-            <div class="what">Our Noir join-split, our note format and trees, our wallet, indexer and explorer. Aztec's PXE cannot use them.</div>
-            <div class="chips"><span class="chip fast">101–102: 147M → 49M</span></div>
-            <div class="status">Retired by the move to Aztec's stack (<a href="https://github.com/abutlabs/jam-privacy-service/issues/70">#70</a>).</div></div>
+            <div class="status">Two distinct Aztec proofs verified and finalized on six lasair validators (<a href="https://github.com/abutlabs/jam-privacy-service/issues/62">#62</a>; the rest: <a href="https://github.com/abutlabs/jam-privacy-service/issues/73">#73</a>).</div></div>
         </div>
       </div>
       <div class="link">↓ blocks, finality, data availability</div>
@@ -126,7 +121,7 @@
         <p>Refine runs Aztec's own verifier on every transaction's proof, so JAM's validators re-execute the check
           themselves. <b>The JIP is required:</b> without it one proof costs 11.4B gas — more than two packages'
           whole budget; with it, 3.5B. Accumulate would also have to keep Aztec's trees.</p>
-        <p class="meta">Built as far as one proof, finalized on lasair. A research path, not needed for path A.</p></div>
+        <p class="meta">Two distinct Aztec proofs verified and finalized on lasair. Refine checking the work is JAM's point — the remaining pieces (batching, the CRS as a preimage, Aztec's trees in accumulate) are <a href="https://github.com/abutlabs/jam-privacy-service/issues/73">#73</a>.</p></div>
     </div>
   </section>
 
@@ -141,7 +136,7 @@
         <tr><td>A checkpoint's 6 blobs against their KZG commitments, batched</td><td class="num">937.1M</td><td class="num">328.0M</td><td>103, 104</td><td>No, but without the calls it nearly fills a tiny package</td></tr>
         <tr><td>Proposer and attestation signatures (ECDSA, secp256k1)</td><td class="num">433M</td><td class="num">433M</td><td>none proposed</td><td>No</td></tr>
         <tr><td>One Aztec client proof (CHONK), path B</td><td class="num">11.36B</td><td class="num">3.46B</td><td>105</td><td><b>Yes</b>, and the full refine budget</td></tr>
-        <tr><td>Today's demo transfer (our UltraHonk proof)</td><td class="num">147.0M</td><td class="num">49.1M</td><td>101, 102</td><td>No</td></tr>
+        <tr><td>The first demo's transfer (our UltraHonk proof, being retired)</td><td class="num">147.0M</td><td class="num">49.1M</td><td>101, 102</td><td>No</td></tr>
       </tbody>
     </table></div>
   </section>

@@ -22,7 +22,6 @@ flowchart TB
   subgraph services["JAM services"]
     settle["Settlement service: Aztec's Rollup, Inbox, Outbox<br/>blobs (KZG), epoch proof (UltraHonk), signatures (ECDSA)"]
     chonk["Client-proof checker (path B)<br/>bb's CHONK verifier, unchanged, PVM build"]
-    demo["Today's demo: privacy and public-balance services"]
   end
   subgraph chain["JAM chain"]
     lasair["lasair: the JIP, natively"]
@@ -42,19 +41,17 @@ flowchart TB
   classDef build fill:#dbe6f8,stroke:#2357a8,color:#0f1d33
   classDef port fill:#f8e9c9,stroke:#9a6200,color:#2e1f00
   classDef ours fill:#f8dcd6,stroke:#b23a2a,color:#33120d
-  classDef demo fill:#e6e8eb,stroke:#6b7380,color:#22262c,stroke-dasharray:5 4
   classDef other fill:#ffffff,stroke:#8a929c,color:#22262c
   class sdk,prover,node,pnode aztec
   class chonk build
   class settle port
   class facade,lasair,wallet ours
-  class demo demo
   class pj other
 ```
 
 Green: Aztec's code, unchanged (a release is a re-pin). Blue: Aztec's source, unchanged, our
 build for the PVM. Amber: ours, ported from Aztec's spec each release. Red: ours, new, in
-Ethereum's place. Grey, dashed: today's demo, retired by the move to Aztec's wallet.
+Ethereum's place. 
 
 ## Who checks the client proofs: two paths
 
@@ -62,7 +59,7 @@ Ethereum's place. Grey, dashed: today's demo, retired by the move to Aztec's wal
   circuits fold them into one epoch proof. JAM checks the epoch proof, the blobs and the
   signatures. No curve call is required; the calls make an epoch's settlement 5.6× cheaper and a
   checkpoint's blob check 2.9×.
-- **B. JAM checks each client proof.** Refine runs Aztec's own verifier on every transaction's
+- **B. JAM checks each client proof — refine checking the work is JAM's point.** Refine runs Aztec's own verifier on every transaction's
   proof (`spikes/chonk-pvm`, #62). Call 105 is required: without it one proof is 11.36B gas, more
   than two full packages; with it, 3.46B. Accumulate would also keep Aztec's trees (#21).
 
@@ -77,7 +74,7 @@ Refine gas, the protocol's, measured on lasair. A tiny package holds 1e9, a full
 | A checkpoint's 6 blobs against their KZG commitments, batched | 937.1M | 328.0M | 103, 104 | No; without them it nearly fills a tiny package |
 | Proposer and attestation signatures (ECDSA, secp256k1) | 433M | 433M | none proposed | No |
 | One Aztec client proof (CHONK), path B | 11.36B | 3.46B | 105 | **Yes**, and the full refine budget |
-| Today's demo transfer (our UltraHonk proof) | 147.0M | 49.1M | 101, 102 | No |
+| The first demo's transfer (our UltraHonk proof, being retired) | 147.0M | 49.1M | 101, 102 | No |
 
 Sources: `spikes/jip8-lasair` (LEDGER 74), `spikes/chonk-pvm/RESULTS.md`, `spikes/ecdsa-gas`.
 
