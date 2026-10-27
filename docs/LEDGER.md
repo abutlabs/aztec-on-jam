@@ -2053,3 +2053,29 @@ Times are one Apple M-series Mac, headless Chrome, 10 threads; they include prov
 the node's block and the PXE's sync. The CRS comes from Aztec's CDN on first proof (documented
 in wallet/README.md). Fixed on the way: v6 renamed `AztecAddress.fromString` →
 `fromStringUnsafe`; interaction results are `{receipt}`; `simulate` returns `{result}`.
+
+## 2026-10-27 80 — The Aztec devnet on lasair: wallet, real proofs, checkpoints finalized (#66)
+
+`DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh`: the settlement service on six lasair
+validators (nets/jb.sh, curve calls on from slot 0), Aztec v6's node and sequencer unchanged,
+`wallet/e2e.mjs` PASS 7 of 7 on it — accounts in the tab, Aztec's Token deployed 18.8 s, private
+mint 11.0 s, private send 20.2 s, Bob's note found by tagging, OPFS persistence.
+
+A checkpoint's refine on lasair (1 blob, header checks, KZG batched): **64,057,914 gas with the
+curve calls, 251,459,989 without** (the same blob falls back to PVM code), 3.9×. Both runs: every
+checkpoint accepted by the service, none refused.
+
+Three timing fixes, each found by a refused checkpoint or a rejected transaction:
+- **One timebase.** The service clocked Aztec from JAM's common era; a jb net is paced from
+  slot 0, so its clock sat in 2025, before genesisTime: every slot "in the future" (reason 12),
+  checkpoints pruned. cfg gains `jamEra` (unix time of JAM slot 0; devnet.sh computes it from
+  the running head; 645-byte cfgs keep the common era), and the facade's L1-block timestamps use
+  the same field, so the two agree to the second.
+- **One slot of tolerance** in SLOT_IN_FUTURE: on Ethereum a propose is timed by the L1 block
+  that includes it; here the clock is the JAM timeslot of the accumulating block, which lags the
+  proposer's wall clock by guaranteeing and finality (12–18 s on lasair).
+- **The wallet waits for the chain's first synced block** before acting: a transaction anchored
+  to genesis is only valid in block 1 (Aztec's rule), and lasair's first checkpoint takes about
+  a minute through finality.
+
+One Apple M-series Mac; gas is the protocol's.

@@ -38,7 +38,7 @@ names = ["registry", "rollup", "inbox", "outbox", "feeJuice", "feeJuicePortal", 
          "governance", "stakingAsset", "feeAssetHandler", "stakingAssetHandler", "zkPassportVerifier", "gse", "dateGatedRelayer"]
 addresses = {n: a(i + 1) for i, n in enumerate(names)} | {"multicall3": "0xca11bde05977b3631167028862be2a173976ca11"}
 cfg = d["cfg"] | {"manaLimit": str(d["cfg"]["manaLimit"])}
-json.dump(dict(port=8545, jip2="ws://127.0.0.1:19800", chainSpec=d["chainSpec"], service=d["service"], jamboree=sys.argv[4],
+json.dump(dict(port=8545, jip2=d.get("jip2", "ws://127.0.0.1:19800"), chainSpec=d["chainSpec"], service=d["service"], jamboree=sys.argv[4],
                cfg=cfg, addresses=addresses, work=f"{D}/relay", log=f"{D}/jam-l1.log"), open(sys.argv[2], "w"), indent=1)
 PY
 node "$HERE/jam-l1.mjs" "$D/jam-l1.json" > "$D/jam-l1.out" 2>&1 & pids+=($!)

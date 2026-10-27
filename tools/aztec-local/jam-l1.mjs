@@ -62,8 +62,11 @@ async function jip2(method, ...params) {
 
 // --- JAM's head as "L1 blocks" ------------------------------------------------------------
 // L1 block n is the n-th finalized JAM block this facade saw, starting from 1 at its start. Its
-// timestamp is the JAM timeslot as Unix time (GP 0.8.0 overview.tex:91).
-const JAM_COMMON_ERA = 1_735_732_800n;
+// timestamp is the JAM timeslot as Unix time: cfg's jamEra plus 6 s a slot. The era is JAM's
+// common era on a wall-clock chain (PolkaJam's dev chain), and the net's own on one paced from
+// slot 0 (nets/jb.sh's) — devnet.sh sets it, and the settlement service's clock uses the same
+// field, so the facade and the chain agree to the second.
+const slotEpoch = BigInt(C.jamEra ?? 1_735_732_800);
 const blocks = [{ number: 0n, hash: '0x' + '00'.repeat(32), slot: 0n, timestamp: BigInt(C.genesisTime), txs: [] }];
 let head = blocks[0];
 async function poll() {
@@ -72,7 +75,7 @@ async function poll() {
     const hash = bytesToHex(Buffer.from(f.header_hash, 'base64'));
     if (hash !== head.hash) {
       const slot = BigInt(f.slot);
-      head = { number: BigInt(blocks.length), hash, jamHash: f.header_hash, slot, timestamp: JAM_COMMON_ERA + slot * 6n, txs: [] };
+      head = { number: BigInt(blocks.length), hash, jamHash: f.header_hash, slot, timestamp: slotEpoch + slot * 6n, txs: [] };
       blocks.push(head);
       await onNewBlock(head);
     }

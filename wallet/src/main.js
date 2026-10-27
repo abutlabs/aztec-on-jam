@@ -78,6 +78,11 @@ async function boot() {
   const fpc = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, { salt: new Fr(SPONSORED_FPC_SALT) });
   fpcAddress = fpc.address;
   await wallet.registerContract(fpc, SponsoredFPCContract.artifact);
+  // a transaction anchors to the PXE's synced block; one anchored to genesis is only valid in
+  // block 1, so wait for the chain's first synced block before acting (the first checkpoint
+  // takes about a minute through finality on a fresh net)
+  say('waiting for the chain\u2019s first block');
+  while ((await node.getBlockNumber()) < 1) await new Promise((r) => setTimeout(r, 2000));
   const accounts = await wallet.getAccounts();
   if (accounts.length) { me = accounts[0].item; showAddress(); await showSenders(); }
   const block = await node.getBlockNumber();

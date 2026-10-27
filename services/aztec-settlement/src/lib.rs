@@ -76,7 +76,7 @@ declare_service!(Settlement);
 struct Settlement;
 
 const CFG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/cfg.bin"));
-const _: () = assert!(CFG.len() == 645, "cfg.bin must be 645 bytes");
+const _: () = assert!(CFG.len() == 645 || CFG.len() == 653, "cfg.bin must be 645 bytes, or 653 with the JAM era");
 /// JAM's Common Era, 2025-01-01 12:00 UTC (GP 0.8.0 `overview.tex:91`), and its 6-second slots.
 const JAM_COMMON_ERA: u64 = 1_735_732_800;
 const JAM_SLOT_SECONDS: u64 = 6;
@@ -97,6 +97,8 @@ struct Cfg {
     rollup: [u8; 20],
     seed: [u8; 32],
     committee: Vec<[u8; 20]>,
+    /// Unix time of JAM timeslot 0: the common era, or the net's own (a devnet paced from slot 0).
+    jam_era: u64,
 }
 
 fn cfg() -> Cfg {
@@ -117,6 +119,10 @@ fn cfg() -> Cfg {
         rollup: CFG[272..292].try_into().unwrap(),
         seed: CFG[292..324].try_into().unwrap(),
         committee: CFG[325..325 + 20 * (CFG[324] as usize).min(16)].chunks_exact(20).map(|a| a.try_into().unwrap()).collect(),
+        jam_era: match CFG.len() {
+            n if n >= 653 && u(645) != 0 => u(645),
+            _ => JAM_COMMON_ERA,
+        },
     }
 }
 
@@ -283,8 +289,8 @@ fn inbox_seq() -> u64 {
     get_storage(b"inbox:seq").map_or(0, |v| u64::from_le_bytes(v[..8].try_into().unwrap()))
 }
 
-fn unix_time(timeslot: u32) -> u64 {
-    JAM_COMMON_ERA + timeslot as u64 * JAM_SLOT_SECONDS
+fn unix_time(era: u64, timeslot: u32) -> u64 {
+    era + timeslot as u64 * JAM_SLOT_SECONDS
 }
 
 /// `Inbox.sendL2Message` and `_absorbIntoBucket`, for one incoming transfer.
@@ -362,8 +368,13 @@ fn accept(o: &[u8], timeslot: u32) -> u8 {
     if slot <= t.slot {
         return SLOT_NOT_AFTER_TIP;
     }
-    let now = unix_time(timeslot);
-    let current_slot = now.saturating_sub(c.genesis_time) / c.slot_seconds;
+    let now = unix_time(c.jam_era, timeslot);
+    // One slot of tolerance: on Ethereum a propose is timed by the L1 block that includes it,
+    // which is at or after the slot's start. Here the clock is the JAM timeslot of the block
+    // that accumulates the package, which lags the proposer's wall clock by guaranteeing and
+    // finality (about 12 to 18 s on lasair), so a checkpoint proposed at its slot's start can
+    // arrive with the service's clock still in the previous slot.
+    let current_slot = (now + c.slot_seconds).saturating_sub(c.genesis_time) / c.slot_seconds;
     if slot > current_slot {
         return SLOT_IN_FUTURE;
     }
@@ -501,7 +512,7 @@ fn accept_epoch(o: &[u8], timeslot: u32) -> u8 {
     if start - 1 > proven_before {
         return NOT_ON_PROVEN;
     }
-    let current_epoch = epoch(unix_time(timeslot).saturating_sub(c.genesis_time) / c.slot_seconds);
+    let current_epoch = epoch(unix_time(c.jam_era, timeslot).saturating_sub(c.genesis_time) / c.slot_seconds);
     if current_epoch >= epoch(first.slot) + c.proof_submission_epochs + 1 {
         return PAST_DEADLINE;
     }
@@ -562,7 +573,7 @@ impl Service for Settlement {
         for item in accumulate_items() {
             let rec = match item {
                 AccumulateItem::Transfer(t) => {
-                    if !absorb(t.source, &t.memo.0[..], unix_time(timeslot), &c) {
+                    if !absorb(t.source, &t.memo.0[..], unix_time(c.jam_era, timeslot), &c) {
                         let n = get_storage(b"inbox:refused").map_or(0u64, |v| u64::from_le_bytes(v[..8].try_into().unwrap()));
                         set_storage(b"inbox:refused", &(n + 1).to_le_bytes()).ok();
                     }
