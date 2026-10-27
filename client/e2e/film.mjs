@@ -23,7 +23,8 @@ export class Film {
   async titles(scene) {
     const page = await this.browser.newPage();
     await page.setViewport({ width: W, height: H });
-    await page.goto(`${TITLES}?scene=${scene}`);
+    // the card's net: lasair with the curve host calls on, or PolkaJam (FILM_NET, explorer.mjs)
+    await page.goto(`${TITLES}?scene=${scene}&net=${process.env.FILM_NET || "polkajam"}`);
     const { length, still } = await page.evaluate(() => ({ length: window.film.length, still: Boolean(window.film.still) }));
     const frames = path.join(this.dir, scene); mkdirSync(frames);
     const n = still ? 1 : Math.round(length * FPS);
