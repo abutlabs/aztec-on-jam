@@ -7,7 +7,8 @@
 #      (ipa_bench.patch: ipa_verify fixed to export its proof once, and ipa_batch_discharge added):
 #      IPA verify at 2^15 (CONST_ECCVM_LOG_N), and IPA<Grumpkin>::batch_verify_accumulators over
 #      N deferred accumulators. The discharge's cost does not depend on the accumulators' values.
-# The reduction is (1) minus the single discharge, as bb's verifier does one discharge per proof.
+#   3. bb's own timing scopes (BB_BENCH) extended to verify and its steps (bb_verify_bench.patch):
+#      the CRS setup, each step, Poseidon2 transcript hashing, BN254 KZG batch-mul and pairings.
 # Needs: spikes/chonk/measure.sh run first (out/chonk), bb 6.0.0 at ~/.bb/versions/bb-6.0.0, and an
 # aztec-packages v6.0.0 checkout (BB_SRC, default ../bb-v6.0.0) with cmake, ninja and clang.
 set -euo pipefail
@@ -31,3 +32,11 @@ echo "== 2. the IPA, from source (MULTITHREADING=OFF)"
   [ -f build/build.ninja ] || cmake --preset default -DMULTITHREADING=OFF >/dev/null
   ninja -C build ipa_bench >/dev/null
   for r in 1 2; do ./build/bin/ipa_bench 2>/dev/null | grep -E '^ipa_(verify|batch)'; done )
+
+echo "== 3. bb's own timing scopes on verify (bb_verify_bench.patch; threading on, run on one thread)"
+( cd "$SRC"
+  git apply --check "$HERE/bb_verify_bench.patch" 2>/dev/null && git apply "$HERE/bb_verify_bench.patch" || true
+  [ -f build-mt/build.ninja ] || cmake --preset default -B build-mt >/dev/null
+  ninja -C build-mt bb >/dev/null )
+"$SRC/build-mt/bin/bb" verify --scheme chonk -p "$ROOT/out/chonk/flows/$F/proof" -k "$ROOT/out/chonk/vk" \
+  --print_bench 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tee "$HERE/verify-split.txt"

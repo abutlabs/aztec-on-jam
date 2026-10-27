@@ -1,0 +1,250 @@
+diff --git a/barretenberg/cpp/src/barretenberg/bb/cli.cpp b/barretenberg/cpp/src/barretenberg/bb/cli.cpp
+index 44c0690..84bfe90 100644
+--- a/barretenberg/cpp/src/barretenberg/bb/cli.cpp
++++ b/barretenberg/cpp/src/barretenberg/bb/cli.cpp
+@@ -559,6 +559,7 @@ int parse_and_run_cli_command(int argc, char* argv[])
+     add_vk_path_option(verify);
+ 
+     add_verbose_flag(verify);
++    add_print_bench_flag(verify); // jam-privacy-service#62: the CHONK verifier's split
+     add_debug_flag(verify);
+     add_scheme_option(verify);
+     add_crs_path_option(verify);
+@@ -1081,7 +1082,14 @@ int parse_and_run_cli_command(int argc, char* argv[])
+                 api.proof_stats(proof_path, output_path);
+                 return 0;
+             }
+-            return execute_non_prove_command(api);
++            {
++                const int rc = execute_non_prove_command(api);
++                if (print_bench) { // jam-privacy-service#62: the CHONK verifier's split
++                    bb::detail::GLOBAL_BENCH_STATS.print_aggregate_counts_hierarchical(std::cout);
++                    std::cout << std::flush;
++                }
++                return rc;
++            }
+         } else if (flags.scheme == "ultra_honk") {
+             UltraHonkAPI api;
+             if (prove->parsed()) {
+diff --git a/barretenberg/cpp/src/barretenberg/chonk/chonk_verifier.cpp b/barretenberg/cpp/src/barretenberg/chonk/chonk_verifier.cpp
+index 9d10a0c..5805749 100644
+--- a/barretenberg/cpp/src/barretenberg/chonk/chonk_verifier.cpp
++++ b/barretenberg/cpp/src/barretenberg/chonk/chonk_verifier.cpp
+@@ -28,21 +28,33 @@ ChonkVerifier<false>::TripleIpaReductionResult ChonkVerifier<false>::reduce_to_t
+ {
+     BB_BENCH_NAME("ChonkVerifier::reduce_to_triple_ipa_opening");
+     auto transcript = std::make_shared<Transcript>();
+-    if (!proof.has_valid_structure()) {
++    if (![&] {
++            BB_BENCH_NAME("Chonk::0_structure (jps#62)");
++            return proof.has_valid_structure();
++        }()) {
+         info("ChonkVerifier: proof has invalid segment lengths");
+         return { false };
+     }
+ 
+     // Step 1: Verify MegaZK Oink on the shared transcript
+-    BatchedHonkTranslatorVerifier batched_verifier(vk_and_hash, transcript);
+-    auto oink_result = batched_verifier.verify_mega_zk_oink(proof.hiding_oink_proof);
++    auto batched_verifier = [&] {
++        BB_BENCH_NAME("Chonk::0_batched_verifier_ctor (jps#62)");
++        return BatchedHonkTranslatorVerifier(vk_and_hash, transcript);
++    }();
++    auto oink_result = [&] {
++        BB_BENCH_NAME("Chonk::1_mega_zk_oink (jps#62)");
++        return batched_verifier.verify_mega_zk_oink(proof.hiding_oink_proof);
++    }();
+ 
+     // Extract public inputs and kernel data
+     HidingKernelIO kernel_io;
+     kernel_io.reconstruct_from_public(oink_result.public_inputs);
+ 
+     // Check accumulated pairing points from the IVC chain (inner recursive verifications)
+-    if (!kernel_io.pairing_inputs.check()) {
++    if (![&] {
++            BB_BENCH_NAME("Chonk::1b_kernel_pairing (jps#62)");
++            return kernel_io.pairing_inputs.check();
++        }()) {
+         info("ChonkVerifier: verification failed at PI pairing points check");
+         return { false };
+     }
+@@ -63,21 +75,33 @@ ChonkVerifier<false>::TripleIpaReductionResult ChonkVerifier<false>::reduce_to_t
+     MergeCommitments merge_commitments{ .t_commitments = oink_result.ecc_op_wires,
+                                         .T_prev_commitments = kernel_io.ecc_op_tables };
+     GoblinVerifier::MergeVerifier merge_verifier{ transcript };
+-    auto merge_result = merge_verifier.reduce_to_pairing_check(proof.merge_proof, merge_commitments);
++    auto merge_result = [&] {
++        BB_BENCH_NAME("Chonk::3_merge (jps#62)");
++        return merge_verifier.reduce_to_pairing_check(proof.merge_proof, merge_commitments);
++    }();
+     vinfo("ChonkVerifier: Merge reduced to pairing check: ", merge_result.reduction_succeeded ? "true" : "false");
+ 
+     if (!merge_result.reduction_succeeded) {
+         info("ChonkVerifier: verification failed at Merge reduction");
+         return { false };
+     }
+-    if (!merge_result.pairing_points.check()) {
++    if (![&] {
++            BB_BENCH_NAME("Chonk::3b_merge_pairing (jps#62)");
++            return merge_result.pairing_points.check();
++        }()) {
+         info("ChonkVerifier: verification failed at Merge pairing check");
+         return { false };
+     }
+ 
+     // Step 4: ECCVM verification (reconstruct TripleIPA claim; proof is carried separately)
+-    ECCVMVerifier_<ECCVMFlavor> eccvm_verifier{ transcript, proof.eccvm_proof };
+-    auto eccvm_result = eccvm_verifier.reduce_to_triple_ipa_claim();
++    auto eccvm_verifier = [&] {
++        BB_BENCH_NAME("Chonk::4a_eccvm_verifier_ctor (jps#62)");
++        return ECCVMVerifier_<ECCVMFlavor>{ transcript, proof.eccvm_proof };
++    }();
++    auto eccvm_result = [&] {
++        BB_BENCH_NAME("Chonk::4_eccvm (jps#62)");
++        return eccvm_verifier.reduce_to_triple_ipa_claim();
++    }();
+     vinfo("ChonkVerifier: ECCVM reduced to TripleIPA claim: ", eccvm_result.reduction_succeeded ? "true" : "false");
+ 
+     if (!eccvm_result.reduction_succeeded) {
+@@ -87,24 +111,33 @@ ChonkVerifier<false>::TripleIpaReductionResult ChonkVerifier<false>::reduce_to_t
+     auto translator_input = eccvm_verifier.get_translator_input_data();
+ 
+     // Step 5: Translator Oink + Joint sumcheck + Joint PCS
+-    auto batched_result = batched_verifier.verify(proof.joint_proof,
+-                                                  translator_input.evaluation_challenge_x,
+-                                                  translator_input.batching_challenge_v,
+-                                                  translator_input.accumulated_result,
+-                                                  merge_result.merged_commitments);
++    auto batched_result = [&] {
++        BB_BENCH_NAME("Chonk::5_translator_joint (jps#62)");
++        return batched_verifier.verify(proof.joint_proof,
++                                       translator_input.evaluation_challenge_x,
++                                       translator_input.batching_challenge_v,
++                                       translator_input.accumulated_result,
++                                       merge_result.merged_commitments);
++    }();
+     vinfo("ChonkVerifier: Batched translator+joint reduction: ", batched_result.reduction_succeeded ? "true" : "false");
+ 
+     if (!batched_result.reduction_succeeded) {
+         info("ChonkVerifier: verification failed at batched translator+joint reduction");
+         return { false };
+     }
+-    if (!batched_result.pairing_points.check()) {
++    if (![&] {
++            BB_BENCH_NAME("Chonk::5b_joint_pairing (jps#62)");
++            return batched_result.pairing_points.check();
++        }()) {
+         info("ChonkVerifier: verification failed at batched translator+joint pairing check");
+         return { false };
+     }
+ 
+     // Covers all segments loaded into the shared transcript (hiding oink, merge, ECCVM, joint).
+-    transcript->enforce_proof_fully_consumed("ChonkVerifier");
++    {
++        BB_BENCH_NAME("Chonk::7_consumed (jps#62)");
++        transcript->enforce_proof_fully_consumed("ChonkVerifier");
++    }
+ 
+     return { .all_checks_passed = true,
+              .triple_ipa_opening = { .claim = std::move(eccvm_result.triple_ipa_claim), .proof = proof.ipa_proof } };
+@@ -120,7 +153,11 @@ template <> ChonkVerifier<false>::Output ChonkVerifier<false>::verify(const Proo
+     if (!result.all_checks_passed) {
+         return false;
+     }
+-    return ECCVMVerifier::verify_accumulator(result.triple_ipa_opening.reduce_to_accumulator());
++    auto acc = result.triple_ipa_opening.reduce_to_accumulator();
++    return [&] {
++        BB_BENCH_NAME("Chonk::6_ipa_discharge_incl_crs (jps#62)");
++        return ECCVMVerifier::verify_accumulator(acc);
++    }();
+ }
+ 
+ /**
+diff --git a/barretenberg/cpp/src/barretenberg/commitment_schemes/kzg/kzg.hpp b/barretenberg/cpp/src/barretenberg/commitment_schemes/kzg/kzg.hpp
+index fd7c25d..77898c9 100644
+--- a/barretenberg/cpp/src/barretenberg/commitment_schemes/kzg/kzg.hpp
++++ b/barretenberg/cpp/src/barretenberg/commitment_schemes/kzg/kzg.hpp
+@@ -168,10 +168,13 @@ template <typename Curve_> class KZG {
+         BB_ASSERT_EQ(batch_opening_claim.commitments.size(),
+                      batch_opening_claim.scalars.size(),
+                      "BatchOpeningClaim: commitments and scalars must have equal length");
+-        P_0 = GroupElement::batch_mul(batch_opening_claim.commitments,
+-                                      batch_opening_claim.scalars,
+-                                      /*max_num_bits=*/0,
+-                                      /*with_edgecases=*/true);
++        P_0 = [&] {
++            BB_BENCH_NAME("KZG::batch_mul (jps#62)");
++            return GroupElement::batch_mul(batch_opening_claim.commitments,
++                                           batch_opening_claim.scalars,
++                                           /*max_num_bits=*/0,
++                                           /*with_edgecases=*/true);
++        }();
+         auto P_1 = -quotient_commitment;
+ 
+         return PairingPointsType(P_0, P_1);
+diff --git a/barretenberg/cpp/src/barretenberg/eccvm/eccvm_verifier.hpp b/barretenberg/cpp/src/barretenberg/eccvm/eccvm_verifier.hpp
+index 5ea83ff..19f1820 100644
+--- a/barretenberg/cpp/src/barretenberg/eccvm/eccvm_verifier.hpp
++++ b/barretenberg/cpp/src/barretenberg/eccvm/eccvm_verifier.hpp
+@@ -5,6 +5,7 @@
+ // =====================
+ 
+ #pragma once
++#include "barretenberg/common/bb_bench.hpp"
+ #include "barretenberg/commitment_schemes/triple_ipa/triple_ipa.hpp"
+ #include "barretenberg/eccvm/eccvm_flavor.hpp"
+ #include "barretenberg/goblin/translation_evaluations.hpp"
+@@ -95,9 +96,15 @@ template <typename Flavor> class ECCVMVerifier_ {
+         , transcript(transcript)
+     {
+         // ECCVM VK is constant
+-        auto native_vk = std::make_shared<ECCVMFlavor::VerificationKey>();
++        auto native_vk = [&] {
++            BB_BENCH_NAME("ECCVM::ctor_vk (jps#62)");
++            return std::make_shared<ECCVMFlavor::VerificationKey>();
++        }();
+         // G1 identity is the first point of the SRS (used for PCS operations)
+-        auto native_pcs_g1_identity = ECCVMFlavor::VerifierCommitmentKey(1).get_g1_identity();
++        auto native_pcs_g1_identity = [&] {
++            BB_BENCH_NAME("ECCVM::ctor_pcs_key (jps#62)");
++            return ECCVMFlavor::VerifierCommitmentKey(1).get_g1_identity();
++        }();
+         if constexpr (IsRecursive) {
+             builder = proof.get_context();
+             key = std::make_shared<VerificationKey>(builder, native_vk);
+@@ -105,7 +112,10 @@ template <typename Flavor> class ECCVMVerifier_ {
+             pcs_g1_identity = Commitment(native_pcs_g1_identity);
+         } else {
+             key = native_vk;
+-            vk_hash = native_vk->get_hash();
++            vk_hash = [&] {
++                BB_BENCH_NAME("ECCVM::ctor_vk_hash (jps#62)");
++                return native_vk->get_hash();
++            }();
+             pcs_g1_identity = native_pcs_g1_identity;
+         }
+     }
+diff --git a/barretenberg/cpp/src/barretenberg/transcript/transcript.hpp b/barretenberg/cpp/src/barretenberg/transcript/transcript.hpp
+index c1c2904..4454ddf 100644
+--- a/barretenberg/cpp/src/barretenberg/transcript/transcript.hpp
++++ b/barretenberg/cpp/src/barretenberg/transcript/transcript.hpp
+@@ -6,6 +6,7 @@
+ 
+ #pragma once
+ 
++#include "barretenberg/common/bb_bench.hpp"
+ #include "barretenberg/common/assert.hpp"
+ #include "barretenberg/common/debug_log.hpp"
+ #include "barretenberg/common/serialize.hpp"
+@@ -118,7 +119,10 @@ template <typename Codec_, typename HashFunction_> class BaseTranscript {
+         current_round_data.clear();
+ 
+         // Hash the full buffer
+-        DataType new_challenge = HashFunction::hash(full_buffer);
++        DataType new_challenge = [&] {
++            BB_BENCH_NAME("Transcript::hash (jps#62)");
++            return HashFunction::hash(full_buffer);
++        }();
+         // update previous challenge buffer for next time we call this function
+         previous_challenge = new_challenge;
+         return new_challenge;
