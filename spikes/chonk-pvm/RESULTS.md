@@ -74,9 +74,13 @@ Grumpkin's base field costs the PVM more per native millisecond than the sumchec
   100 ms natively (`spikes/chonk-ipa`), so about 9 to 10B gas: two full packages. A lone proof's
   whole check is 11.0B. The MSM can be split, since its parts add up, but then each batch needs
   two or three packages for the discharge, plus an accumulate that adds their results.
-- **With call 105, about four proofs fit a package.** Each costs 0.98B to reduce, plus about 0.1B
-  to fold its IPA claim into the batch (#46: 1.27 ms natively). The discharge becomes one call at
-  its priced floor, about 0.65B (`docs/privacy/ARCHITECTURES.md`). (5.0 − 0.65) / 1.1 ≈ 4.
+- **With call 105, two proofs fit a package that discharges its own batch.** Each costs 0.98B to
+  reduce, plus about 0.1B to fold its IPA claim into the batch (#46: 1.27 ms natively). The
+  discharge becomes one call, G_GK_MSM(32,768) = 1.93B (priced in lasair#130):
+  2 × 1.08 + 1.93 = 4.1B. Packages that only reduce (four proofs, 4.3B) could instead hand their
+  claims to one discharge package, about 30 claims a call: about four proofs a package overall
+  (not built). This page first said four a package with its own discharge, from an estimated
+  call price of 0.65B; the priced call is 1.93B.
 - **What remains is the reduction.** Step 1 (`spikes/chonk-ipa`) splits its native time: Poseidon2
   transcript hashing 43%, BN254 work 25% (calls 101 and 102), field arithmetic 32%.
 

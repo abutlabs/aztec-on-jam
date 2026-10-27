@@ -34,7 +34,8 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   with bb's own verifier compiled for the PVM (`spikes/chonk-pvm`, #62), one proof's whole check
   is 11.0B gas, two full packages. Batched, the proofs share one IPA discharge, but that is a
   2^15 Grumpkin MSM of 9 to 10B gas, itself two packages. Each proof's reduction is 0.98B. With
-  a Grumpkin MSM call (the proposed index 105), about four proofs fit a package. That is a direct
+  a Grumpkin MSM call (the proposed index 105, 1.93B at 2^15), two proofs fit a package that
+  discharges its own batch. That is a direct
   check of Aztec's own client proofs at small scale, without folding. At scale, Aztec's folding
   (candidate 1) still costs far less a transaction.
 - **The ordering problem moves out of the proofs.** In 2, each proof names the exact current
@@ -93,14 +94,15 @@ with Barretenberg 6.0.0's own verifier, unchanged, compiled for the PVM and run 
 - **Once a batch:** the IPA discharge, one 2^15-point Grumpkin MSM, is 9.0 to 9.8B gas, about
   100 ms natively.
 
-A Grumpkin MSM host call (the proposed index 105) is priced here at its floor under the
-proposal's rule: at least the native time × 10/3 gas a nanosecond × 2. That is about 0.65B gas for
-the 2^15 MSM.
+A Grumpkin MSM host call (the proposed index 105) costs G_GK_MSM(32,768) = 1,926,735,634 gas, priced
+by the proposal's rule on its reference machine (arkworks' p99 there is 289 ms). An earlier version
+of this page used a floor of about 0.65B from bb's native time on this Mac; the priced call costs
+three times that.
 
 | Proofs in the batch | Gas a proof, no calls | With a Grumpkin MSM call |
 | --- | --- | --- |
-| 1 | 10.0 to 10.8B | 1.6B |
-| 8 | 2.2 to 2.3B | 1.2B |
+| 1 | 10.0 to 10.8B | 2.9B |
+| 8 | 2.2 to 2.3B | 1.3B |
 | 64 | 1.2B | 1.1B |
 | 512 | 1.1B | 1.1B |
 
@@ -109,8 +111,11 @@ It can be split, since an MSM's parts add up. Two or three packages each take a 
 accumulate adds the results and compares them with the batch's claim. That works, but every batch
 then spans several packages.
 
-**With call 105, about four proofs fit a package:** (5.0 − 0.65) / 1.1 ≈ 4. The call matters at
-every batch size, because without it no single package can finish a batch.
+**With call 105, two proofs fit a package that discharges its own batch:** 2 × 1.08 + 1.93 = 4.1B.
+A batch can be larger if packages that only reduce (four proofs each, 4.3B) hand their deferred
+claims to one package that folds them and calls 105: (5.0 − 1.93) / 0.1 ≈ 30 claims. That is
+about four proofs a package overall (*reasoning*; not built). The call matters at every batch
+size, because without it no single package can finish a batch.
 
 **What is left is the reduction**, 0.98B a proof. Natively (#62 step 1) it splits into:
 - Poseidon2 transcript hashing, 43%;

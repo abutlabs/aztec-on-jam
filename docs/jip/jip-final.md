@@ -1,10 +1,11 @@
 # JIP-8: Curve host calls for proof verification
 
-Four host calls give services native-speed elliptic-curve arithmetic for checking
+Five host calls give services native-speed elliptic-curve arithmetic for checking
 zero-knowledge proofs and BLS-style commitments: multi-scalar multiplication and the pairing
-check, on BN254 and on BLS12-381. Each takes its input in the encoding of the matching Ethereum
-precompile, with the same semantics, and is priced from end-to-end benchmarks under an invariant
-stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification would fall from
+check, on BN254 and on BLS12-381, and multi-scalar multiplication on Grumpkin, BN254's cycle
+partner. Each takes its input in the encoding of the matching Ethereum precompile (Grumpkin's
+by analogy with BN254's), with the same semantics, and is priced from end-to-end benchmarks
+under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification would fall from
 about 181M gas to about 52M.
 
 *README line:* `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254 and BLS12-381 multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
@@ -60,15 +61,20 @@ which only a host call reaches.
   and a host-call boundary per multiplication costs more than that recovers. MSMs and pairings
   are where the PVM is furthest from native, because native libraries use algorithms (Pippenger
   windows, endomorphisms, optimised Miller loops) that a service would otherwise carry as code.
-- **These two curves.** BN254 is what deployed proof systems target: Noir and Barretenberg,
+- **These curves.** BN254 is what deployed proof systems target: Noir and Barretenberg,
   Groth16 on Ethereum, Aztec. BLS12-381 is already in the GP (`beefy.tex`) and is the curve of
   Ethereum's KZG commitments and BLS signatures.
+- **Grumpkin's MSM.** Grumpkin is BN254's cycle partner: its base field is BN254's scalar
+  field. Aztec's client proofs (CHONK) end in an inner-product argument over it. A batch of
+  them shares one 2^15-point Grumpkin MSM, which costs 9.0 to 9.8B gas as PVM code. That is more
+  than a package, so no package can check even one batch without this call
+  (jam-privacy-service#62, measured with Barretenberg's own verifier compiled for the PVM). With
+  it, two client proofs fit a package that discharges its own batch. Grumpkin has no pairing, so
+  the MSM is its only call.
 - **Not in this JIP.** These each need their own measured case and their own proposal:
   - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
   - Poseidon2 over BN254: a refine-side note tree already appends 11,350 notes a package
     without it;
-  - Grumpkin: needed only to check Aztec's client proofs directly. Measured, such a check does
-    not fit one package without it: its IPA's 2^15 MSM is 9 to 10B gas (jam-privacy-service#62);
   - a dedicated KZG point evaluation: it composes from 103 and 104 for less than a dedicated
     call would cost.
 - **Separate indices,** one per operation, as JIP-1 uses. A selector argument adds a failure
@@ -113,7 +119,8 @@ Every call takes φ7 = input offset and φ8 = input length, and evaluates in thi
 3. **Validation.** If the input is malformed (below), φ'7 = `HUH`, and nothing is written.
 4. **Result.** Otherwise φ'7 = `OK`, and the result is written.
 
-**Semantics are those of the named EIP,** with this mapping: wherever the EIP's precompile fails,
+**Semantics are those of the named EIP** (for 105, which has none, those stated below, EIP-196's
+by analogy), with this mapping: wherever the EIP's precompile fails,
 the call returns `HUH`. Where the precompile returns output, the call returns `OK` and writes the
 same bytes, or, for a pairing check, sets φ'8 to the precompile's 0 or 1. Scalars are any 32-byte
 big-endian integer, as in the EIPs. Malformed means:
@@ -122,7 +129,7 @@ big-endian integer, as in the EIPs. Malformed means:
   has nonzero top 16 bytes;
 - a point that is not on the curve and is not the all-zero encoding of infinity;
 - a point outside the prime-order subgroup where the EIP requires the check. That is G2 for
-  BN254; for BLS12-381, G1 and G2 in both calls (EIP-2537). BN254's G1 has cofactor 1.
+  BN254; for BLS12-381, G1 and G2 in both calls (EIP-2537). BN254's G1 and Grumpkin have cofactor 1.
 
 ### 101. `bn254_g1_msm`
 
@@ -157,6 +164,21 @@ an MSM of two points with scalars 1.
 
 - input: k ≥ 0 items of (G1, 128 bytes; G2, 256 bytes: x_c0 ‖ x_c1 ‖ y_c0 ‖ y_c1, as EIP-2537).
 - `OK` with φ'8 = 1 if ∏ e(G1_i, G2_i) = 1, else φ'8 = 0. With k = 0, φ'8 = 1.
+
+### 105. `grumpkin_g1_msm`
+
+**Gas usage**: G_GK_MSM(n), n = ⌊φ8 / 96⌋. **Input registers**: φ7, φ8, φ9 = output offset.
+
+- The curve: Grumpkin, y² = x³ − 17 over F_r, where r is BN254's group order (its scalar
+  field). Its group has prime order p, BN254's base-field modulus, so the cofactor is 1.
+  −17 is not a square mod r, so no point has x = 0 and (0, 0) is free to encode infinity.
+- input: n ≥ 1 items of (point, 64 bytes: x ‖ y, each 32-byte big-endian below r, (0, 0) for
+  infinity; scalar, 32 bytes, any big-endian integer, reduced mod p).
+- `OK`: μ'_{φ9…φ9+64} = Σ scalar_i · point_i, in the same encoding.
+
+No EIP defines Grumpkin. The encoding and checks are EIP-196's G1 with Grumpkin's field and
+equation. Barretenberg writes a point the same way, except that it marks infinity in x's top
+bit; a caller converts that to (0, 0).
 
 ### Side-effects
 
@@ -210,6 +232,26 @@ segment's slope. Each entry is the largest at its size or any smaller size:
 | 512 | 39,471,280 | 208,961,727 |
 | each point past 512 | 33,836 | 493,153 |
 
+**Grumpkin's MSM** (105) was priced the same way after the others, in CI run 40505262470
+(GitHub's 4-vCPU x86-64 runner, AMD EPYC 9V74). arkworks and halo2curves agreed on all 96 inputs;
+arkworks, faster at every size but one, is the reference. Its table runs to 2^15 points, the
+size of Aztec's IPA, because Pippenger's cost a point falls with n and a slope from 512 would
+overcharge there:
+
+| n | G_GK_MSM(n) | n | G_GK_MSM(n) |
+|---|---|---|---|
+| 1 | 1,091,714 | 512 | 58,925,247 |
+| 2 | 1,188,054 | 1,024 | 97,223,727 |
+| 4 | 1,604,020 | 2,048 | 169,894,200 |
+| 8 | 2,386,260 | 4,096 | 304,263,534 |
+| 16 | 3,778,494 | 8,192 | 569,925,254 |
+| 32 | 6,151,940 | 16,384 | 1,034,632,760 |
+| 64 | 10,875,667 | 32,768 | 1,926,735,634 |
+| 128 | 17,737,614 | each point past 32,768 | 54,450 |
+| 256 | 31,408,427 | | |
+
+The 2^15-point call, 1.93B gas, replaces 9.0 to 9.8B of PVM code (jam-privacy-service#62).
+
 Each BN254 call costs less than its own computation as PVM code: a 1-point MSM is 703,667 as a
 call against 9,378,971 as PVM code, and across the sizes measured the saving is 7.2–13.3×
 (`spikes/verifier-profile`). The BLS12-381 calls have no PVM-code baseline here yet.
@@ -228,7 +270,7 @@ gas.
 - **Before activation,** each index is an unknown host call: `WHAT`, for Cgasunknown = 1000 gas.
 - **Detection.** A service probes with `bn254_pairing_check` and φ8 = 0. Before activation it
   gets `WHAT`. After, it gets `OK` with φ'8 = 1, for G_BN_PAIR(0) = 4,196,895 gas.
-- **Indices.** 101–104 are this JIP's. 105–127 are reserved for later cryptographic calls, each
+- **Indices.** 101–105 are this JIP's. 106–127 are reserved for later cryptographic calls, each
   by its own JIP, in order of adoption.
 
 ## Determinism and consensus
@@ -238,7 +280,8 @@ above is normative on its own: curve parameters, encodings, canonicality, subgro
 and infinity. It does not depend on any library. Before activation, at least two independent
 implementations of each call are to be fuzzed against each other and against the vectors.
 BN254 has several mature independent implementations (arkworks, substrate-bn, Barretenberg's
-`ecc`, gnark-crypto, mcl), as BLS12-381 does (blst, arkworks, and others). Clients link one of
+`ecc`, gnark-crypto, mcl), as BLS12-381 does (blst, arkworks, and others), and Grumpkin does
+(arkworks, halo2curves, Barretenberg). Clients link one of
 them rather than write pairing code from scratch. BN254 is a new dependency for a client that
 implements only what GP 0.8.0 needs. BLS12-381 already is one, for BEEFY (`beefy.tex`).
 
@@ -249,12 +292,13 @@ and switch on the probe's result.
 
 ## Test vectors
 
-- **JAM-native:** `vectors/jip8-core.jsonl`, 74 vectors. Each gives the call, the case, the
+- **JAM-native:** `vectors/jip8-core.jsonl`, 97 vectors. Each gives the call, the case, the
   input, the result code, and the output or φ'8, and both implementations of each curve
   produce them. They cover the benchmark's cases at n ≤ 4 and k ≤ 4, k = 0, and the malformed
-  inputs above: a wrong length, x equal to the modulus, a point off the curve, nonzero top
-  bytes in an EIP-2537 field, and a G1 point outside the subgroup.
-- **Ethereum's,** where the semantics coincide:
+  inputs above: a wrong length, x equal to the modulus (and for 105, y), a point off the
+  curve, nonzero top bytes in an EIP-2537 field, and a G1 point outside the subgroup. 105's 23
+  are also produced by Barretenberg's own Grumpkin, a third implementation.
+- **Ethereum's,** where the semantics coincide (none exist for Grumpkin):
   - EIP-197's pairing vectors, for 102;
   - EIP-196's MUL vectors, for 101 with n = 1;
   - EIP-2537's MSM and pairing vectors, for 103 and 104.
@@ -279,7 +323,7 @@ at z if e(π, [s − z]G2) = e(C − [y]G1, G2). Equivalently, with no G2 scalar
 ## Process
 
 A JIP standardises beside the GP; this one changes it. The JIP is the rationale and the
-specification. A companion diff to the GP would add the four functions to Appendix B, the
+specification. A companion diff to the GP would add the five functions to Appendix B, the
 constants to `definitions.tex`, and the dispatch entries to Ψ_R's and Ψ_A's host-call
 functions. It is for the GP's maintainers, who decide the activation and the version.
 
@@ -329,6 +373,7 @@ Comments are the simulated reviewers': Gavin Wood (GW) and Zac Williamson (ZW), 
 | Change | Comments |
 |---|---|
 | Narrowed to four calls; KZG, secp256k1 and Poseidon2 removed, Grumpkin deferred | GW-6, GW-7, GW-11, ZW-5, ZW-8, ZW-12 |
+| Grumpkin's MSM added as call 105, once a direct check of Aztec's client proofs was measured: its 2^15 MSM is 9.0 to 9.8B gas as PVM code, so no package finishes a batch without the call (jam-privacy-service#62). GW's condition for adding it | GW (`reviews/gavin-wood-responds-to-zac-williamson.md`) |
 | Pricing invariant stated in the GP's terms, R_GP = 10/3 gas/ns, replacing one recompiler's R = 8 | GW-2, ZW-11 |
 | Constants re-derived end to end: decoding and every check, adversarial inputs, p99, single-threaded blst, two implementations | GW-3, ZW-10 |
 | One normative schedule per call: an MSM table, pairing bounds, gas from φ8, evaluation order | GW-4, ZW-3 |
