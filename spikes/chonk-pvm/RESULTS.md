@@ -117,8 +117,13 @@ extrinsic, because a package itself is held to 200 KiB.
 - lasair's refine took 7.8 to 13.3 s on this Mac, with six nodes sharing it.
 - On the tiny chain (G_R = 1e9), the reduction alone also finalized: VALID, and INVALID for the
   flipped proof. The whole check ran out of gas there.
-- The four proofs are one proof, submitted three times as it is and once tampered. No other
-  Aztec client proof has been run yet.
+- 2026-10-27, later: a **second, distinct Aztec client proof** — the 7-layer storage proof, the
+  heaviest pinned flow (10 circuits, 128,192 bytes) — verified on the same kind of net: VALID,
+  verifier gas 3,729,308,707, 7 MSMs by call 105, finalized at slot 110. Each flow carries its
+  own hiding VK (public-input counts differ): the transfer's is `out/chonk/vk`, the storage
+  flow's is `storage-hiding.vk` here; the AMM flow's VK differs too and was not kept, so the
+  AMM payload is refused by Oink's public-input check (312M gas, no verdict) — the right VK
+  travels with the extrinsic, nothing is pinned on chain.
 
 ## Not measured here
 

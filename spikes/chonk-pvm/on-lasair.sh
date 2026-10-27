@@ -13,7 +13,8 @@
 # outputs [tag][verdict][the verifier's gas][MSMs done by call 105]; accumulate stores it at
 # "v:" ++ tag. The script waits for each verdict to be in a finalized block.
 #
-#   spikes/chonk-pvm/on-lasair.sh [N]    N valid proofs (default 2), then one tampered
+#   spikes/chonk-pvm/on-lasair.sh [N]    N valid proofs (default 2), then one tampered, then a
+#                                        second distinct Aztec flow (the 7-layer storage proof)
 #   UP=0 ...                             use the net already up (nets/jb.sh up)
 # Needs: build.sh and measure.sh run (out/chonk-pvm-service.jam, out/verify-1.bin), lasair
 # built (dune build in ../lasair), and jamboree built (../jamboree).
@@ -34,6 +35,12 @@ open(sys.argv[2], "wb").write(b[2:])
 bad = bytearray(b[2:]); bad[4 + 40000] ^= 1
 open(sys.argv[3], "wb").write(bad)
 PY
+# a second, distinct Aztec flow: the 7-layer storage proof (10 circuits, 128 KB), the heaviest.
+# Every flow carries its own hiding VK (public-input counts differ): the transfer's is
+# out/chonk/vk, the storage flow's is committed here (bb writes it when proving the pinned
+# CI inputs; the AMM flow's VK differs too and is not kept).
+python3 "$HERE/payload.py" "$ROOT/out/chonk/flows/ecdsar1+storage_proof_7_layers+sponsored_fpc/proof" \
+  "$HERE/storage-hiding.vk" "${BB_CRS:-$HOME/.bb-crs}" 1 32768 "$O/ext-storage.bin"
 
 [ "${UP:-1}" = 1 ] && "$ROOT/nets/jb.sh" up
 SID=$(rpc deploy "$O/chonk-pvm-service.jam" --fresh | sed -n 's/^SERVICE_ID=//p')
@@ -61,4 +68,5 @@ PY
 }
 for t in $(seq 1 "$N"); do submit "$t" "$O/ext-valid.bin"; done
 submit $((N + 1)) "$O/ext-bad.bin"
+submit $((N + 2)) "$O/ext-storage.bin"
 rpc head

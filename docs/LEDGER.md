@@ -2110,3 +2110,17 @@ calls, 251M without; send to settled 11–20 s; the epoch proof verified for 60.
 proves what": the user proves transactions (privacy requires it), JAM's validators check
 checkpoints by re-execution, an off-chain prover makes the epoch proof and JAM verifies it.
 Plain JS, no library; light and dark; phone width clean.
+
+## 2026-10-27 83 — A second, distinct Aztec client proof on lasair (#62)
+
+`on-lasair.sh` now also submits the 7-layer storage proof, the heaviest pinned flow (10
+circuits, 128,192 bytes): **VALID, verifier gas 3,729,308,707, 7 MSMs by call 105, finalized at
+slot 110** on six lasair validators with G_R = 5e9. The transfer proof and its tampered copy
+behaved as before (3.456B VALID / 625.5M INVALID, finalized at slots 14 and 17, 18–19 s each).
+
+Finding: every flow carries its own hiding VK — public-input counts differ — so a proof checked
+against another flow's VK is refused by Oink's first check (the AMM payload cost 312M gas and
+stored no verdict). The right VK travels in the extrinsic; the service pins nothing.
+`spikes/chonk-pvm/storage-hiding.vk` (3,808 bytes) is committed; the transfer's stays
+`out/chonk/vk`. Also found and fixed: five zombie devnet wrappers held delayed `jb.sh down`
+traps that killed fresh nets mid-run — SIGKILL skips the trap.
