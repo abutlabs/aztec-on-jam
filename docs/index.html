@@ -3,8 +3,88 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>jam-privacy-service</title>
-<meta http-equiv="refresh" content="0; url=aztec/">
+<title>Aztec on JAM</title>
+<meta name="description" content="Aztec's private transactions, settled and verified on JAM in Ethereum's place: the port, the measurements, and a proposed protocol addition.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="site.css">
 </head>
-<body><p><a href="aztec/">Aztec on JAM</a> · <a href="https://github.com/abutlabs/jam-privacy-service">the repository</a></p></body>
+<body>
+<nav class="nav"><div class="nav-in">
+  <a class="brand" href="./">Aztec <span>on</span> JAM</a>
+  <div class="nav-links">
+    <a href="aztec/">Architecture</a>
+    <a href="demo/">Demo</a>
+    <a href="jip/">The proposal</a>
+    <a href="https://github.com/abutlabs/jam-privacy-service">GitHub</a>
+  </div>
+</div></nav>
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <h1>Aztec on JAM</h1>
+    <p class="lede">Aztec's private transactions, settled and verified on JAM in Ethereum's place.
+      Aztec's software runs as released; JAM replaces the layer under it.</p>
+  </header>
+
+  <section>
+    <div class="cards">
+      <div class="card"><h3>Aztec</h3>
+        <p>A privacy network. Every transaction is proved on the sender's own device with a
+        zero-knowledge proof, so the chain verifies it without learning sender, receiver or
+        amount. Today it settles on Ethereum.</p>
+        <p class="meta"><a href="https://aztec.network">aztec.network</a></p></div>
+      <div class="card"><h3>JAM</h3>
+        <p>Polkadot's next protocol: hundreds of cores of verifiable compute. Services bring
+        their own code; validators execute it, audit each other, and finalize the result.</p>
+        <p class="meta"><a href="https://graypaper.com">graypaper.com</a></p></div>
+      <div class="card"><h3>This project</h3>
+        <p>Everything Aztec takes from Ethereum — ordering, data availability, proof
+        verification — JAM also provides, with far more verification capacity. We built the
+        bridge, measured every step, and drafted the one protocol addition that makes
+        verification fast.</p>
+        <p class="meta"><a href="https://github.com/abutlabs/jam-privacy-service">the repository</a></p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The shape of it</h2>
+    <div class="flow">
+      <div class="tile aztec"><div class="name">Aztec wallet &amp; prover</div><div class="what">proves each transaction on the user's device</div></div>
+      <div class="arrow">→</div>
+      <div class="tile aztec"><div class="name">Aztec node</div><div class="what">unchanged, as released</div></div>
+      <div class="arrow">→</div>
+      <div class="tile ours"><div class="name">jam-l1 facade</div><div class="what">answers the node as Ethereum would</div></div>
+      <div class="arrow">→</div>
+      <div class="tile port"><div class="name">Settlement service</div><div class="what">Aztec's L1 contracts as JAM code</div></div>
+      <div class="arrow">→</div>
+      <div class="tile other"><div class="name">JAM chain</div><div class="what">executes, audits, finalizes</div></div>
+    </div>
+    <p class="meta">Green is Aztec's code, untouched. The full map, tile by tile: <a href="aztec/">Architecture</a>.</p>
+  </section>
+
+  <section>
+    <h2>What stands today</h2>
+    <ol class="steps">
+      <li><div><span class="state done">LIVE</span><b><a href="demo/">A working private-payment demo on JAM</a></b>
+        <p>A browser proves a private transfer in about a second; six JAM validators verify it
+        and update encrypted state; the receiver finds the money with their key. Runs on two
+        independent JAM clients.</p></div></li>
+      <li><div><span class="state done">LIVE</span><b><a href="aztec/">Aztec v6's own node, settling on JAM</a></b>
+        <p>Aztec's released node proposes its blocks to JAM through our facade. Seven
+        checkpoints settled; no Aztec code patched.</p></div></li>
+      <li><div><span class="state done">LIVE</span><b><a href="jip/">Aztec's proofs, verified by JAM validators</a></b>
+        <p>Aztec's own verifier, compiled for JAM's VM, checked a real Aztec transaction proof
+        on a live six-validator net — practical only with our proposed host calls.</p></div></li>
+      <li><div><span class="state next">NEXT</span><b>The full stack</b>
+        <p>Our wallet on Aztec's libraries, real proofs end to end, a prover node. Tracked in
+        <a href="https://github.com/abutlabs/jam-privacy-service/issues/71">#71</a>.</p></div></li>
+    </ol>
+  </section>
+
+  <footer class="site-foot">
+    <div><a href="https://github.com/abutlabs/jam-privacy-service">abutlabs/jam-privacy-service</a> · Apache-2.0 · every number's command is in the repo</div>
+    <div>An independent project. Not affiliated with Aztec Labs or the Polkadot Fellowship.</div>
+  </footer>
+</div>
+</body>
 </html>

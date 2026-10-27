@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo · Aztec on JAM</title>
+<meta name="description" content="Private payments in Aztec's model, running live on a six-validator JAM testnet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+<nav class="nav"><div class="nav-in">
+  <a class="brand" href="../">Aztec <span>on</span> JAM</a>
+  <div class="nav-links">
+    <a href="../aztec/">Architecture</a>
+    <a href="../demo/" aria-current="page">Demo</a>
+    <a href="../jip/">The proposal</a>
+    <a href="https://github.com/abutlabs/jam-privacy-service">GitHub</a>
+  </div>
+</div></nav>
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <h1>The demo</h1>
+    <p class="lede">Private payments in Aztec's model — notes, nullifiers, proofs made on the
+      sender's device — running live on a six-validator JAM testnet. Nothing in the recording is
+      mocked.</p>
+  </header>
+
+  <img class="shot" src="../images/demo.gif" alt="Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the chain explorer read with no key, with Alice's keys, and with Bob's viewing key">
+
+  <section>
+    <h2>One payment, end to end</h2>
+    <ol class="steps">
+      <li><div><b>The sender proves, on their own machine.</b>
+        <p>A browser tab builds a zero-knowledge proof of the transfer with Aztec's proving stack
+        (Noir and Barretenberg): about one second.</p></div></li>
+      <li><div><b>JAM validators verify it.</b>
+        <p>The proof travels in a work-package; the service verifies it on-chain for 49M gas with
+        the <a href="../jip/">proposed curve calls</a>, 147M without — 1 to 3% of a package.</p></div></li>
+      <li><div><b>The chain writes only ciphertext.</b>
+        <p>New note commitments, spent-note nullifiers, and two sealed notes. No sender, no
+        receiver, no amount.</p></div></li>
+      <li><div><b>The receiver finds the money with their key.</b>
+        <p>Their browser scans the sealed notes; the one that opens is theirs. Nobody told them;
+        nobody else can tell.</p></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>What the chain shows</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Move</th><th>Anyone can read on chain</th><th>Not on chain</th></tr></thead>
+      <tbody>
+        <tr><td>Pay publicly</td><td>payer, payee, amount</td><td></td></tr>
+        <tr><td>Shield</td><td>the account, the amount, a note commitment</td><td>who will own the note</td></tr>
+        <tr><td>Send privately</td><td>two nullifiers, two commitments, two sealed notes</td><td>sender, recipient, amount</td></tr>
+        <tr><td>Unshield</td><td>the amount and the receiving account</td><td>which notes paid for it</td></tr>
+      </tbody>
+    </table></div>
+    <p>The recording's last minute reads the same chain three ways: with no key (private
+      transfers are ciphertext), with the sender's keys (her spends and change appear), and with
+      a <b>viewing key</b> (incoming notes open; spending stays invisible). Self-custody with
+      selective disclosure — Aztec's model, enforced by JAM.</p>
+  </section>
+
+  <section>
+    <h2>Real, and reduced</h2>
+    <div class="paths">
+      <div class="path"><h3>Real</h3>
+        <ul class="plain">
+          <li>The proofs: made by the sender, verified on-chain; any tampering is refused</li>
+          <li>The state: written only from the chain's own roots; replays change nothing</li>
+          <li>The keys: self-custodial, never leave the browser</li>
+          <li>The network: six validators, two independent JAM clients, GRANDPA finality</li>
+        </ul></div>
+      <div class="path"><h3>Reduced</h3>
+        <ul class="plain">
+          <li>The circuit is ours, written to Aztec's shapes — not Aztec's kernel circuits. Replacing it is the <a href="../aztec/">current work</a></li>
+          <li>Dev-chain money: a faucet, an unsigned public ledger, published dev keys</li>
+          <li>Notes found by trial decryption, not Aztec's tagging; one proof per package, no folding</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Numbers</h2>
+    <p>One Apple M-series Mac; gas is the protocol's, identical on every conforming client.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>What</th><th>Measured</th></tr></thead>
+      <tbody>
+        <tr><td>Prove a transfer in Chrome</td><td class="num">1.0 s</td></tr>
+        <tr><td>Verify it on-chain (with the proposed calls / without)</td><td class="num">49.1M / 147.0M gas</td></tr>
+        <tr><td>Apply it to state</td><td class="num">103k gas</td></tr>
+        <tr><td>Submission to settled state (median, 600 transfers in an hour, none lost)</td><td class="num">13.4 s</td></tr>
+        <tr><td>Verifications per JAM core per 6-second slot, full spec, with the calls</td><td class="num">101</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">The same service blob runs on PolkaJam (Parity's client, v0.8.0) and on lasair
+      (ours) with identical gas — the measurements, client comparisons and scripts are in
+      <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/DEMO.md">docs/DEMO.md</a>.</p>
+  </section>
+
+  <section>
+    <h2>Run it</h2>
+    <pre>scripts/bootstrap.sh     # pinned toolchain and builds
+nets/demo.sh up          # six validators, services deployed, wallet on :19710
+nets/demo.sh check       # a shield, a private send, an unshield: 37 assertions
+nets/demo.sh down</pre>
+    <p class="meta">Needs Rust, Python 3.11+, Node 20+ and Chrome.
+      <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/DEMO.md">Ten minutes, for a JAM implementer</a>.</p>
+  </section>
+
+  <footer class="site-foot">
+    <div><a href="https://github.com/abutlabs/jam-privacy-service">abutlabs/jam-privacy-service</a> · Apache-2.0 · every number's command is in the repo</div>
+    <div>An independent project. Not affiliated with Aztec Labs or the Polkadot Fellowship.</div>
+  </footer>
+</div>
+</body>
+</html>

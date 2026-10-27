@@ -1986,3 +1986,21 @@ Research (#63, closed), one Apple M-series Mac:
 - Committee: open (empty) today, as Aztec's local network.
 
 Plan: #64 to #70 under #71.
+
+## 2026-10-27 77 — The README rewritten; the docs site (Aodh's direction)
+
+Aodh: the README was verbose and assumed knowledge ("JAM experts & aztec experts won't know
+what we're talking about"); write it toward the end goal, CEO tone, let diagrams on GitHub
+Pages explain; the Pages docs should read like proper docs for the port and describe the JIP
+proposal without assuming the reader knows what a JIP is.
+
+- README: 280 → 76 lines. Pitch, docs links, the two films, quickstart, a status table, the
+  proposal in one paragraph, layout. Every cut section moved into docs/DEMO.md (public/private,
+  numbers, the two-client comparison, real-and-reduced, the nets table, the e2e scripts), so
+  nothing is lost; DEMO.md's README cross-references now point inward.
+- Pages is a four-page site on one stylesheet (docs/site.css): home (what Aztec and JAM are,
+  the flow, what stands today), architecture (the stack map, unchanged content), demo, and the
+  proposal (defines a JIP, the five calls with prices, the measured table). Footer on every
+  page: independent project, not affiliated with Aztec Labs or the Polkadot Fellowship.
+- No new public uses of the provisional JIP number; the draft file keeps its name.
+- Checked: no horizontal overflow at 400 px, light and dark, no AI mentions.

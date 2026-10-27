@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The proposal · Aztec on JAM</title>
+<meta name="description" content="A draft JAM Improvement Proposal: five elliptic-curve host calls that make zero-knowledge proof verification 3 to 16 times cheaper.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+<nav class="nav"><div class="nav-in">
+  <a class="brand" href="../">Aztec <span>on</span> JAM</a>
+  <div class="nav-links">
+    <a href="../aztec/">Architecture</a>
+    <a href="../demo/">Demo</a>
+    <a href="../jip/" aria-current="page">The proposal</a>
+    <a href="https://github.com/abutlabs/jam-privacy-service">GitHub</a>
+  </div>
+</div></nav>
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <p class="meta">Draft JAM Improvement Proposal · final draft 2026-10-23, not yet submitted ·
+      <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/jip/jip-final.md">full text</a></p>
+    <h1>Curve host calls for proof verification</h1>
+    <p class="lede">Five host calls give JAM services native-speed elliptic-curve arithmetic — the
+      operations Ethereum ships as precompiles. Measured on a live net: proof verification 3 to
+      16× cheaper, and Aztec's own transaction proofs go from unverifiable to practical.</p>
+  </header>
+
+  <section>
+    <h2>What a JIP is</h2>
+    <p>A JAM Improvement Proposal: the process for amending the JAM protocol, kept by the
+      Polkadot Fellowship at
+      <a href="https://github.com/polkadot-fellows/JIPs">polkadot-fellows/JIPs</a> — JAM's
+      analogue of Ethereum's EIPs. A proposal gets its number when it is submitted; ours is a
+      final draft, held back until the measurements in this repository are complete.</p>
+  </section>
+
+  <section>
+    <h2>The problem</h2>
+    <p>Verifying a zero-knowledge proof is mostly elliptic-curve arithmetic. JAM's VM has no
+      cryptographic host calls, so that arithmetic runs as ordinary metered code — and pays for
+      it. One verification of the proof Aztec uses for epochs costs 181M gas; a JAM core's
+      budget per work-package is 5,000M. Aztec's per-transaction client proof is worse: 11.4B
+      gas, more than two full packages, so no package can verify even one.</p>
+  </section>
+
+  <section>
+    <h2>The five calls</h2>
+    <p>Multi-scalar multiplication (MSM) and the pairing check, on the two curves deployed proof
+      systems actually use, plus the MSM on BN254's cycle partner. Inputs use Ethereum's
+      precompile encodings; prices come from end-to-end benchmarks on a reference machine.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Call</th><th>Name</th><th>Serves</th><th>Price at a working size</th></tr></thead>
+      <tbody>
+        <tr><td class="num">101</td><td><code>bn254_g1_msm</code></td><td>UltraHonk, PLONK, Groth16, KZG — Noir, Barretenberg, Aztec, Ethereum verifiers</td><td class="num">12.9M at 128 points</td></tr>
+        <tr><td class="num">102</td><td><code>bn254_pairing_check</code></td><td>the same systems' final check</td><td class="num">8.3M at 2 pairs</td></tr>
+        <tr><td class="num">103</td><td><code>bls12_381_g1_msm</code></td><td>Ethereum's KZG blobs, BLS signatures</td><td class="num">66.1M at 128 points</td></tr>
+        <tr><td class="num">104</td><td><code>bls12_381_pairing_check</code></td><td>the same</td><td class="num">5.3M at 2 pairs</td></tr>
+        <tr><td class="num">105</td><td><code>grumpkin_g1_msm</code></td><td>Aztec's client proofs (their inner-product argument ends on Grumpkin)</td><td class="num">1.93B at 2<sup>15</sup> points</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">Primitives, not verifiers: Barretenberg changed its proof format at every major
+      release, but the curves never changed. An MSM and a pairing check outlive any one proof
+      system.</p>
+  </section>
+
+  <section>
+    <h2>Measured</h2>
+    <p>Gas is the protocol's: identical on every conforming client. Measured on lasair, our JAM
+      client, which implements the calls behind an activation flag; the same service blobs fall
+      back to in-VM code on nets without them, losing at most 0.34M gas to the probe.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Verification in a JAM service</th><th>Without the calls</th><th>With</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>UltraHonk at Aztec's epoch size (2<sup>24</sup>)</td><td class="num">181.1M</td><td class="num">52.4M</td><td class="num">3.5×</td></tr>
+        <tr><td>This repository's private transfer</td><td class="num">147.0M</td><td class="num">49.1M</td><td class="num">3.0×</td></tr>
+        <tr><td>EIP-4844 KZG point evaluation</td><td class="num">199.5M</td><td class="num">12.1M</td><td class="num">16.5×</td></tr>
+        <tr><td>A checkpoint's 6 blobs against their commitments</td><td class="num">937.1M</td><td class="num">328.0M</td><td class="num">2.9×</td></tr>
+        <tr><td>One Aztec client proof, by Aztec's own verifier</td><td class="num">11.36B — over two packages</td><td class="num">3.46B — fits one</td><td class="num">3.3×</td></tr>
+      </tbody>
+    </table></div>
+    <p>The last row is the one that changes what JAM can do. Aztec's per-transaction proof ends
+      in one 2<sup>15</sup>-point Grumpkin MSM; as in-VM code that single operation exceeds a
+      package's whole budget. With call 105 we ran Barretenberg's own verifier, its C++
+      unchanged, as a JAM service on a live six-validator net: a real Aztec transaction proof
+      verified and finalized three times, and a tampered copy rejected.</p>
+    <p>A full package verifies 95 epoch-sized UltraHonk proofs instead of 27. Settling an Aztec
+      epoch — its proof, blob openings and signatures — falls from about 813M gas to about 498M.</p>
+  </section>
+
+  <section>
+    <h2>Status</h2>
+    <ul class="plain">
+      <li><b>Final draft</b>, after two internal reviews:
+        <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/jip/jip-final.md">the full text</a>,
+        with the specification, pricing rule and test vectors. Its number is assigned at submission.</li>
+      <li><b>Implemented</b> in lasair behind an activation flag; every measurement above has its
+        script in the repository.</li>
+      <li><b>Safe to adopt incrementally:</b> services detect the calls at run time and fall back
+        to in-VM code, so one blob serves nets with and without them.</li>
+    </ul>
+  </section>
+
+  <footer class="site-foot">
+    <div><a href="https://github.com/abutlabs/jam-privacy-service">abutlabs/jam-privacy-service</a> · Apache-2.0 · every number's command is in the repo</div>
+    <div>An independent project. Not affiliated with Aztec Labs or the Polkadot Fellowship.</div>
+  </footer>
+</div>
+</body>
+</html>
