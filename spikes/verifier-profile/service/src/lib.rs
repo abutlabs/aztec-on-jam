@@ -8,7 +8,8 @@
 //!          2 crates/curve-hooks' HostCallHooks (the curve host calls where the net has them, #59),
 //!          3 its FieldHooks (the services' fallback, without a gauge's gas reads)]
 //!          [vk_len u16 LE][vk][n_pubs u16 LE][n_pubs × 32][proof]
-//!       or [2][tag][call u8: 0 bn254_g1_msm, 1 bn254_pairing_check][n u16 LE]: JIP-8's call as
+//!       or [2][tag][call u8: 0 bn254_g1_msm, 1 bn254_pairing_check, 2 bls12_381_g1_msm,
+//!          3 bls12_381_pairing_check][n u16 LE]: JIP-8's call as
 //!          PVM code, end to end as `spikes/jip-bench`'s e2e runs it natively (#45). The input,
 //!          n random points of the group in the EIP-196/197 encoding, is made unmetered; then
 //!          decoding, every check and the result are metered. Refine outputs [tag][1][gas u64].
@@ -190,12 +191,86 @@ mod call {
     }
 }
 
+mod call_bls {
+    //! The BLS12-381 calls (103, 104) as PVM code, on arkworks with EIP-2537's encodings (the
+    //! host's blst is C, not built for the PVM): decoding, every check (canonical Fp, the
+    //! curve, the subgroup), the result.
+    use alloc::vec::Vec;
+    use ark_bls12_381::{Bls12_381, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+    use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, PrimeGroup, VariableBaseMSM};
+    use ark_ff::{BigInteger, One, PrimeField, Zero};
+    fn fq(b: &[u8]) -> Option<Fq> {
+        if b[..16].iter().any(|&x| x != 0) { return None; }
+        let v = Fq::from_be_bytes_mod_order(&b[16..64]);
+        (v.into_bigint().to_bytes_be() == b[16..64]).then_some(v)
+    }
+    fn g1(b: &[u8]) -> Option<G1Affine> {
+        let (x, y) = (fq(&b[..64])?, fq(&b[64..128])?);
+        if x.is_zero() && y.is_zero() { return Some(G1Affine::identity()); }
+        let p = G1Affine::new_unchecked(x, y);
+        (p.is_on_curve() && p.is_in_correct_subgroup_assuming_on_curve()).then_some(p)
+    }
+    fn g2(b: &[u8]) -> Option<G2Affine> {
+        let x = Fq2::new(fq(&b[..64])?, fq(&b[64..128])?);
+        let y = Fq2::new(fq(&b[128..192])?, fq(&b[192..256])?);
+        if x.is_zero() && y.is_zero() { return Some(G2Affine::identity()); }
+        let p = G2Affine::new_unchecked(x, y);
+        (p.is_on_curve() && p.is_in_correct_subgroup_assuming_on_curve()).then_some(p)
+    }
+    fn put(o: &mut Vec<u8>, f: Fq) { o.extend_from_slice(&[0u8; 16]); o.extend_from_slice(&f.into_bigint().to_bytes_be()); }
+    pub fn msm(input: &[u8]) -> Option<Vec<u8>> {
+        if input.is_empty() || input.len() % 160 != 0 { return None; }
+        let (mut bases, mut scalars) = (Vec::new(), Vec::new());
+        for item in input.chunks_exact(160) {
+            bases.push(g1(&item[..128])?);
+            scalars.push(Fr::from_be_bytes_mod_order(&item[128..]));
+        }
+        let r = G1Projective::msm(&bases, &scalars).ok()?.into_affine();
+        let mut o = Vec::new();
+        if let Some((x, y)) = r.xy() { put(&mut o, x); put(&mut o, y); }
+        Some(o)
+    }
+    pub fn pairing(input: &[u8]) -> Option<bool> {
+        if input.len() % 384 != 0 { return None; }
+        let (mut a, mut b) = (Vec::new(), Vec::new());
+        for item in input.chunks_exact(384) {
+            a.push(g1(&item[..128])?);
+            b.push(g2(&item[128..])?);
+        }
+        Some(Bls12_381::multi_pairing(a, b).0.is_one())
+    }
+    /// n items for 2 (MSM) or 3 (pairing), from fixed pseudo-random scalars: not metered.
+    pub fn input(which: u8, n: usize) -> Vec<u8> {
+        let mut st = 0x2545F4914F6CDD1Du64;
+        let mut fr = || { let mut v = [0u8; 32]; for c in v.chunks_mut(8) { st = st.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); c.copy_from_slice(&st.to_be_bytes()); } Fr::from_be_bytes_mod_order(&v) };
+        let mut o = Vec::new();
+        for _ in 0..n {
+            let p = (G1Projective::generator() * fr()).into_affine();
+            let (x, y) = p.xy().unwrap();
+            put(&mut o, x); put(&mut o, y);
+            if which == 2 {
+                o.extend_from_slice(&fr().into_bigint().to_bytes_be());
+            } else {
+                let q = (G2Projective::generator() * fr()).into_affine();
+                let (x, y) = q.xy().unwrap();
+                for f in [x.c0, x.c1, y.c0, y.c1] { put(&mut o, f); }
+            }
+        }
+        o
+    }
+}
+
 fn bench(p: &[u8]) -> Option<(bool, u64)> {
     let which = *p.get(2)?;
     let n = le16(p.get(3..)?)?;
-    let input = call::input(which, n);
+    let input = if which < 2 { call::input(which, n) } else { call_bls::input(which, n) };
     let before = gas();
-    let ok = match which { 0 => call::msm(&input).is_some(), _ => call::pairing(&input).is_some() };
+    let ok = match which {
+        0 => call::msm(&input).is_some(),
+        1 => call::pairing(&input).is_some(),
+        2 => call_bls::msm(&input).is_some(),
+        _ => call_bls::pairing(&input).is_some(),
+    };
     Some((ok, before - gas()))
 }
 

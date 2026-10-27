@@ -1,6 +1,7 @@
 //! #30: one refine verifies n plain UltraHonk proofs. Payload: [tag][n] then n items of
 //! [vk_len u16][vk][pubs_n u16][pubs][proof_len u32][proof]. Output [tag][1 all valid | 0];
-//! accumulate stores it at "v:" ++ tag.
+//! accumulate stores it at "v:" ++ tag. The curve work goes through the proposed host calls 101
+//! and 102 where the net has them, field-wise arkworks where not (crates/curve-hooks, #59).
 #![no_std]
 #![no_main]
 
@@ -30,7 +31,7 @@ fn all_valid(p: &[u8]) -> Option<bool> {
         let len = u32::from_le_bytes(p.get(at..at + 4)?.try_into().ok()?) as usize;
         let proof = p.get(at + 4..at + 4 + len)?;
         at += 4 + len;
-        if verify::<()>(vk, &ProofType::Plain(proof.into()), &pubs).is_err() {
+        if verify::<curve_hooks::HostCallHooks>(vk, &ProofType::Plain(proof.into()), &pubs).is_err() {
             return Some(false);
         }
     }

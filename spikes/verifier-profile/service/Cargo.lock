@@ -21,6 +21,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "ark-bls12-381"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3df4dcc01ff89867cd86b0da835f23c3f02738353aaee7dde7495af71363b8d5"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-bn254"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -277,6 +289,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "curve-calls"
+version = "0.0.1"
+dependencies = [
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff",
+ "polkavm-derive",
+]
+
+[[package]]
 name = "curve-hooks"
 version = "0.0.1"
 dependencies = [
@@ -284,7 +307,7 @@ dependencies = [
  "ark-bn254-ext",
  "ark-ec",
  "ark-ff",
- "polkavm-derive",
+ "curve-calls",
 ]
 
 [[package]]
@@ -891,6 +914,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 name = "verifier-profile-service"
 version = "0.0.1"
 dependencies = [
+ "ark-bls12-381",
  "ark-bn254",
  "ark-bn254-ext",
  "ark-ec",

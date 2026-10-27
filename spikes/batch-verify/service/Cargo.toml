@@ -9,6 +9,7 @@ description = "#30: one refine verifying n UltraHonk proofs, how many users' pro
 [dependencies]
 jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
+curve-hooks = { path = "../../../crates/curve-hooks" }
 ultrahonk-no-std = { git = "https://github.com/abutlabs/ultrahonk_verifier", rev = "2ae44db", default-features = false }
 
 [profile.release]

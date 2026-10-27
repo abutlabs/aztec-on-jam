@@ -10,9 +10,8 @@ ark-bn254-ext = { git = "https://github.com/zkVerify/accelerated-bn-cryptography
 ark-bn254 = { version = "0.5.0", default-features = false, features = ["curve"] }
 ark-ec = { version = "0.5.0", default-features = false }
 ark-ff = { version = "0.5.0", default-features = false }
+curve-calls = { path = "../curve-calls" }
 
-[target.'cfg(target_env = "polkavm")'.dependencies]
-polkavm-derive = "0.36"
 
 [dev-dependencies]
 ark-std = { version = "0.5", default-features = false, features = ["std"] }

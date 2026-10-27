@@ -9,6 +9,9 @@
 //!           (verify_blob_kzg_proof_batch: one pairing for the n)
 //!   kind 5: [n][C 48 || pi 48], the blob imported as the work-item's n segments (exported by
 //!           an earlier package, kept 28 days in the DA), its first 131,072 bytes checked
+//!   kind 6: [n][n × (blob 131,072 || C 48 || pi 48)], all checked at once
+//!           (verify_blob_kzg_proof_batch), the blobs inline: for a client's in-process refine,
+//!           which has no extrinsics (lasair's jip8_refine, #59)
 //! Refine outputs [tag][1 all valid | 0 otherwise]; accumulate stores it at "v:" ++ tag.
 #![no_std]
 #![no_main]
@@ -43,6 +46,22 @@ fn blobs(d: &[u8]) -> Option<bool> {
         }
     }
     Some(true)
+}
+
+fn inline_batch(d: &[u8]) -> Option<bool> {
+    let n = *d.first()? as usize;
+    let items = d.get(1..)?;
+    if n == 0 || items.len() != n * ITEM {
+        return None;
+    }
+    let (mut bs, mut cs, mut ps) = (alloc::vec::Vec::new(), alloc::vec::Vec::new(), alloc::vec::Vec::new());
+    for it in items.chunks_exact(ITEM) {
+        let (blob, rest) = it.split_at(kzg_verify::BYTES_PER_BLOB);
+        bs.push(blob);
+        cs.push(rest[..48].try_into().ok()?);
+        ps.push(rest[48..].try_into().ok()?);
+    }
+    Some(kzg_verify::verify_blob_kzg_proof_batch(&bs, &cs, &ps) == Ok(true))
 }
 
 fn extrinsic_blobs(d: &[u8]) -> Option<bool> {
@@ -99,6 +118,7 @@ impl Service for Spike {
             (Some(3), Some(d)) => extrinsic_blobs(d).unwrap_or(false),
             (Some(4), Some(d)) => extrinsic_batch(d).unwrap_or(false),
             (Some(5), Some(d)) => imported_blob(d).unwrap_or(false),
+            (Some(6), Some(d)) => inline_batch(d).unwrap_or(false),
             _ => false,
         };
         alloc::vec![tag, ok as u8].into()

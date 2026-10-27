@@ -9,3 +9,5 @@ description = "EIP-4844's KZG checks in no_std Rust on zkcrypto's bls12_381, for
 bls12_381 = { version = "0.8", default-features = false, features = ["groups", "pairings", "alloc"] }
 sha2 = { version = "0.10", default-features = false }
 ff = { version = "0.13", default-features = false }
+# the proposed curve host calls 103 and 104, where the net has them
+curve-calls = { path = "../curve-calls" }

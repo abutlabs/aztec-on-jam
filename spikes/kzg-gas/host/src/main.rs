@@ -1,5 +1,7 @@
 //! kzg-host <vectors dir>: every c-kzg-4844 verify_kzg_proof vector (ckzg/*.yaml: output true,
 //! false, or null for an input that must be refused) and geth's pointEvaluation.json vector.
+//! KZG_CALLS=absent plays a net without the curve host calls 103/104 (kzg-verify's PVM-code
+//! path); by default the calls answer, through curve-calls' native stand-in.
 use std::{env, fs};
 
 fn hex<const N: usize>(s: &str) -> Option<[u8; N]> {
@@ -16,6 +18,7 @@ fn field<'a>(y: &'a str, k: &str) -> &'a str {
 
 fn main() {
     let dir = env::args().nth(1).expect("usage: kzg-host <vectors dir>");
+    curve_calls::stand_in::set_absent(env::var("KZG_CALLS").as_deref() == Ok("absent"));
     let (mut pass, mut fail) = (0, 0);
     let mut names: Vec<_> = fs::read_dir(format!("{dir}/ckzg")).unwrap().map(|e| e.unwrap().path()).collect();
     names.sort();
@@ -89,4 +92,5 @@ fn main() {
     println!("c-kzg verify_kzg_proof vectors: {pass} agree, {fail} differ");
     println!("geth pointEvaluation1: {geth:?}; with y altered: {geth_bad:?}");
     if fail > 0 || bfail > 0 || tfail > 0 || geth != Ok(true) || geth_bad == Ok(true) { std::process::exit(1) }
+    println!("curve calls 101-104 used (Some(true) the call, Some(false) PVM code): {:?}", curve_calls::used());
 }

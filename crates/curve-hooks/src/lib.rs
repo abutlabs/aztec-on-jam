@@ -9,8 +9,16 @@ extern crate alloc;
 
 mod host_calls;
 pub use host_calls::{enc_g1, enc_g2, used as host_calls_used, HostCallHooks, FAILED};
+/// The calls' native stand-in, for tests (crates/curve-calls), with the two-call form the
+/// hooks' tests use.
 #[cfg(not(target_env = "polkavm"))]
-pub use host_calls::host as host_calls_stand_in;
+pub mod host_calls_stand_in {
+    pub use curve_calls::stand_in::{set_absent, set_modes, Mode};
+    /// Calls 101 and 102 answer as [msm] and [pairing] say; 103 and 104 are present.
+    pub fn set_calls(msm: Mode, pairing: Mode) {
+        set_modes([msm, pairing, Mode::Present, Mode::Present])
+    }
+}
 
 use alloc::vec::Vec;
 use ark_bn254_ext::{g1, g2, Bn254, CurveHooks};
