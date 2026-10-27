@@ -81,9 +81,12 @@ which only a host call reaches.
 2. **An instruction or gas-table change.** A widening multiply-accumulate, add-with-carry, or a
    re-costed `mul_upper_u_u` (`pvm.tex`) would help every field, including the ones this JIP
    leaves out, and would cheapen the 36M of an UltraHonk check that no call touches. It is
-   complementary to host calls, not a replacement. Its gains are unmeasured: profiling the
-   kernels by instruction class under the GP's cost model is open work
-   (jam-privacy-service#47).
+   complementary to host calls, not a replacement. Measured by instruction class under the
+   GP's cost model (jam-privacy-service#47), it recovers little on the curves:
+   - multiply instructions are 8 to 12% of the kernels' gas, and loads and stores of limbs are
+     38 to 46%;
+   - a widening multiply would save 3 to 6%, and an add-with-carry 7 to 10%: together about 11
+     to 16%, against the calls' 7 to 25 times.
 3. **A verifier call.** Rejected above: proof formats change faster than the protocol should.
 4. **Larger refine budgets.** A bigger budget leaves each check's share of a package unchanged.
    The cost is relative to all other work on a core.
@@ -288,8 +291,9 @@ functions. It is for the GP's maintainers, who decide the activation and the ver
 2. **Per-pair G2 cost.** Proof systems pair against fixed G2 points, so the per-pair price
    includes a subgroup check and line computation they don't need. A fixed-point variant would
    put a particular trusted setup into the protocol, so this JIP does not propose one.
-3. **The instruction-level route** (*Alternatives considered*, 2): measured, it could lower the
-   uncovered 36M and help curves this JIP leaves out.
+3. **The instruction-level route** (*Alternatives considered*, 2): measured on the curve
+   kernels, a widening multiply and an add-with-carry together save about 11 to 16% of their
+   gas. They would help the uncovered 36M and the curves this JIP leaves out by about as much.
 
 **Found implementing the calls in a client** (lasair, all four; tested against the JIP's
 vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second library over
