@@ -104,11 +104,12 @@ Sources: `spikes/jip8-lasair` (LEDGER 74), `spikes/chonk-pvm/RESULTS.md`, `spike
 
 ## The wallet
 
-**Ours, on Aztec's libraries.** Aztec's demo-wallet (AztecProtocol/demo-wallet v6.0.0) is a thin
-interface over Aztec's Apache-2.0 libraries: `@aztec-labs/wallet-sdk`, the PXE and aztec.js, all
-in Aztec's aztec-node repository. The demo-wallet's own code has no licence, so we do not copy it.
-We write our own interface on the same libraries, with the demo-wallet as a reference for how
-they fit together, and an Aztec release is a re-pin of the libraries.
+**Ours, on Aztec's libraries — built (`wallet/`, #65).** Our interface over Aztec's Apache-2.0
+libraries: `@aztec-labs/wallets`' browser build (the PXE in the tab, SQLite on OPFS), Aztec's
+prover and Token contract, Aztec's note tagging, fees through the SponsoredFPC. Aztec's
+demo-wallet (which has no licence) was the reference only; none of its code is copied. An Aztec
+release is a re-pin. Measured in the e2e (two browser contexts, real client proofs in the tab):
+token deploy 23 s, private mint 10 s, private send 23 s; the receiver finds the note by tagging.
 
 ## What we checked (2026-10-27, one Apple M-series Mac)
 

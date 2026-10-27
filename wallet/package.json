@@ -1,0 +1,22 @@
+{
+  "name": "jam-rebel-wallet",
+  "private": true,
+  "type": "module",
+  "description": "Our wallet on Aztec's libraries: the PXE and Aztec's prover in the browser tab, settling on JAM (#65)",
+  "scripts": {
+    "build": "vite build",
+    "serve": "node serve.mjs",
+    "e2e": "node e2e.mjs"
+  },
+  "dependencies": {
+    "@aztec-labs/aztec.js": "6.0.0",
+    "@aztec-labs/constants": "6.0.0",
+    "@aztec-labs/noir-contracts.js": "6.0.0",
+    "@aztec-labs/wallets": "6.0.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.16.0",
+    "vite": "8.0.10",
+    "vite-plugin-node-polyfills": "0.26.0"
+  }
+}

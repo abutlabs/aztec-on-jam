@@ -60,6 +60,7 @@ text](docs/jip/jip-final.md).
 | --- | --- |
 | `circuits/`, `services/`, `crates/` | the Noir circuit and the JAM services (privacy, public-balance, aztec-settlement) |
 | `client/`, `indexer/` | the provers, the e2e tests, the films; the JIP-2 indexer behind the wallet and explorer |
+| `wallet/` | our wallet on Aztec's libraries: the PXE and Aztec's prover in the browser tab |
 | `tools/aztec-local/` | Aztec v6's released node on JAM: the Ethereum-RPC facade |
 | `nets/` | the testnets: PolkaJam's, lasair's, Docker and mixed |
 | `spikes/` | the measurement behind every number, each with its script |

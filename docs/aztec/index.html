@@ -41,10 +41,10 @@
       <div class="band">
         <div class="where"><b>User's device</b><small>keys, notes, proving</small></div>
         <div class="tiles">
-          <div class="tile ours"><div class="name">Our wallet</div>
-            <div class="what">Our own interface, written on Aztec's libraries. Aztec's demo-wallet shows how they fit together; its code carries no licence, so none of it is copied.</div>
+          <div class="tile ours"><div class="name">Our wallet (built)</div>
+            <div class="what">Our interface on Aztec's libraries: the PXE in the tab, Aztec's prover and token, tagging, sponsored fees. Aztec's demo-wallet (unlicensed) was reference only.</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
-            <div class="status">To build: <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a>.</div></div>
+            <div class="status">e2e: deploy 23 s, mint 10 s, private send 23 s, real proofs in the tab.</div></div>
           <div class="tile aztec"><div class="name">wallet-sdk, PXE, aztec.js, accounts</div>
             <div class="what">Sync notes, simulate private functions, build transactions, find notes by Aztec's tagging. A full PXE runs in a browser tab (SQLite on OPFS). Apache-2.0.</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
@@ -198,8 +198,8 @@
     <p>Tracked in <a href="https://github.com/abutlabs/jam-privacy-service/issues/71">#71</a>. In order:</p>
     <ol class="steps">
       <li><div><span class="state done">DONE</span><b>The devnet ready for a wallet</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/64">#64</a><p>Done 2026-10-27: a never-deployed, unfunded account transacted with a sponsored fee; six checkpoints accepted on JAM.</p></div></li>
-      <li><div><span class="state next">NEXT</span><b>Our wallet on Aztec's libraries</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a><p>The PXE and real client proofs in the tab; Aztec's token; a private transfer from Alice to Bob.</p></div></li>
-      <li><div><span class="state todo">TO DO</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Six lasair validators with the curve calls on.</p></div></li>
+      <li><div><span class="state done">DONE</span><b>Our wallet on Aztec's libraries</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a><p>Done 2026-10-27: Alice and Bob in two browser tabs, real client proofs proved in the tab, a private transfer found by Aztec's tagging.</p></div></li>
+      <li><div><span class="state next">NEXT</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Six lasair validators with the curve calls on.</p></div></li>
       <li><div><span class="state todo">TO DO</span><b>The node checks real client proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a></div></li>
       <li><div><span class="state todo">TO DO</span><b>A committee and P2P</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a></div></li>
       <li><div><span class="state block">HARDWARE</span><b>Real epoch proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a><p>A prover node; needs a decision on hardware.</p></div></li>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAM Rebel Wallet</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>JAM <span>REBEL</span> WALLET</h1>
+    <p class="sub">Aztec's wallet stack — PXE, prover, token — settling on JAM</p>
+  </div>
+  <div id="net" class="mono">connecting…</div>
+</header>
+<main>
+  <section id="s-account">
+    <h2>Account</h2>
+    <div id="address" class="mono addr">no account yet</div>
+    <div class="row"><button id="create">Create account</button></div>
+    <p class="note">Initializerless: usable at once, no deployment. Fees are paid by the
+      network's sponsor contract, so a new account needs no funds.</p>
+  </section>
+  <section id="s-token">
+    <h2>Token</h2>
+    <div class="row">
+      <input id="token-address" class="mono" placeholder="token address (0x…)" spellcheck="false">
+      <button id="attach">Attach</button>
+      <button id="deploy">Deploy new</button>
+    </div>
+    <div class="balance"><span id="balance">—</span><button id="refresh">Sync</button></div>
+    <div class="row">
+      <input id="mint-amount" inputmode="numeric" placeholder="amount" value="1000">
+      <button id="mint">Mint to me, privately</button>
+    </div>
+  </section>
+  <section id="s-send">
+    <h2>Send privately</h2>
+    <div class="row"><input id="send-to" class="mono" placeholder="recipient address (0x…)" spellcheck="false"></div>
+    <div class="row">
+      <input id="send-amount" inputmode="numeric" placeholder="amount" value="40">
+      <button id="send">Send</button>
+    </div>
+    <p class="note">Proved in this tab by Aztec's prover. The chain sees no sender, recipient
+      or amount.</p>
+  </section>
+  <section id="s-contacts">
+    <h2>Senders</h2>
+    <div class="row">
+      <input id="sender-address" class="mono" placeholder="sender address (0x…)" spellcheck="false">
+      <button id="add-sender">Register</button>
+    </div>
+    <ul id="senders" class="mono"></ul>
+    <p class="note">Your wallet finds incoming notes by the tags registered senders write —
+      Aztec's note discovery, no scanning of everything.</p>
+  </section>
+  <section id="s-activity">
+    <h2>Activity</h2>
+    <ol id="log" reversed></ol>
+  </section>
+</main>
+<footer><span id="status">starting</span></footer>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

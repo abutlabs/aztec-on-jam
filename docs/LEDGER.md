@@ -2028,3 +2028,28 @@ PASS: a never-deployed, unfunded account transacted with a sponsored fee, settle
 The facade relayed 6 checkpoints, all `accepted:true` by the settlement service, none refused.
 The node printed the new genesis root at start (it refuses on a mismatch). API shapes learned:
 interaction `.send({from, wait})` → `{receipt}`, `.simulate()` → `{result}`.
+
+## 2026-10-27 79 — Our wallet on Aztec's libraries: real client proofs in the browser tab (#65)
+
+`wallet/`: our UI (index.html, src/main.js, 120 lines) on Aztec's released libraries —
+`@aztec-labs/wallets`' browser build (BrowserEmbeddedWallet: the PXE in the tab, SQLite on
+OPFS), aztec.js, the Token contract, `SponsoredFeePaymentMethod`. Built with vite 8 (two knobs:
+node polyfills and sqlite's runtime files emitted under their own names); served cross-origin
+isolated (serve.mjs) for bb.js threads; `proverEnabled: true`, so every transaction's client
+proof is made in the tab.
+
+`node wallet/e2e.mjs` on the devnet (PolkaJam, test mode), PASS, 7 assertions:
+
+```
+alice, bob: accounts created in their tabs (initializerless, never deployed, no funds)
+alice deploys Aztec's Token, fee sponsored: 23.2 s   mint 1000 privately: 10.2 s
+bob registers alice as a sender and attaches the token
+alice sends 40 privately: 23.3 s → alice 960
+bob syncs: 40, found by Aztec's tagging (0.6 s)
+alice reloads: account and notes persist (OPFS)
+```
+
+Times are one Apple M-series Mac, headless Chrome, 10 threads; they include proving in the tab,
+the node's block and the PXE's sync. The CRS comes from Aztec's CDN on first proof (documented
+in wallet/README.md). Fixed on the way: v6 renamed `AztecAddress.fromString` →
+`fromStringUnsafe`; interaction results are `{receipt}`; `simulate` returns `{result}`.
