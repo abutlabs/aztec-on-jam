@@ -82,3 +82,45 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
 - **Both benefit from JIP-8** (`docs/jip/jip-final.md`): an UltraHonk check at 52.4M gas
   instead of 181M, measured on lasair with the calls (#59), so 3 verifies 95 Aztec-sized proofs
   a full package instead of 27 (measured at 2^16: 104 fit, the 105th runs out of gas).
+
+## Checking Aztec's own client proofs directly (#61)
+
+Can JAM check Aztec's client proofs (CHONK), with Aztec's circuits unchanged? Native timings
+are measured: Barretenberg 6.0.0 on one thread, `spikes/chonk-ipa`. The gas is estimated from
+them by `spikes/chonk`'s ratio, 70 to 77M gas a native millisecond (our UltraHonk verifier,
+measured both ways).
+- **Per proof:** about 19 ms of reduction, plus 1.27 ms to fold the proof's deferred IPA into
+  a batch.
+- **Once a batch:** one 2^15-point Grumpkin MSM, about 98 ms.
+
+A Grumpkin MSM host call (the proposed index 105) is priced here at its floor under the
+proposal's rule: at least the native time × 10/3 gas a nanosecond × 2, about 0.65B gas for the
+2^15 MSM.
+
+| Proofs in the batch | Gas a proof, no calls | With a Grumpkin MSM call |
+| --- | --- | --- |
+| 1 | 8.3 to 9.1B | 2.1 to 2.2B |
+| 8 | 2.3 to 2.5B | 1.5 to 1.6B |
+| 64 | 1.5 to 1.7B | 1.4 to 1.6B |
+| 512 | 1.4 to 1.6B | 1.4 to 1.6B |
+
+**A direct check fits.** Batched, about three of Aztec's client proofs fit a full package
+(5e9), with no folding and no prover network. Aztec's folding (candidate 1) still costs far
+less a transaction at scale. A direct check is the way to accept Aztec's proofs with Aztec's
+software unchanged.
+
+**The Grumpkin call matters for small batches.** It cuts a lone proof about fourfold, and a
+batch of 8 by a third. From 64 proofs up the shared MSM is already amortised, and the call
+changes almost nothing.
+
+**What is left is the reduction**, 19 ms a proof:
+- Poseidon2 transcript hashing, 8.1 ms;
+- BN254 work, 4.5 ms (calls 101 and 102 take it);
+- sumcheck and field arithmetic, 6.4 ms.
+
+With every proposed call, about 15 ms a proof stays in the PVM, about 1.1 to 1.2B gas. Half of
+it is Poseidon2, the measured case for a Poseidon2 call, which #62 decides.
+
+**What would change this:** a PVM port of bb's verifier (#62 step 2), to replace the ratio with
+measured gas. Poseidon2 and sumcheck may cost the PVM more or less than the UltraHonk verifier
+the ratio comes from.
