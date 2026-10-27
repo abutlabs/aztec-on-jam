@@ -142,8 +142,9 @@ encryption key and a spend key) on chain; its secret never leaves the browser.
 
 | What | Value | Measured by |
 | --- | --- | --- |
-| One verification in refine (14 public inputs, zk, Keccak, bb 5.0.0) | **169,112,761 gas**, under a second | `services/privacy/check.sh` |
-| How many fit a package | 5 on tiny (1e9), 29 on full (5e9) | |
+| One verification in refine (14 public inputs, zk, Keccak, bb 5.0.0) | **146,996,585 gas** on PolkaJam with field-wise curve hooks, under a second; 169,112,761 with the verifier's default hooks | `services/privacy/check.sh`, `spikes/jip8-lasair/pj-fallback.sh` ([#55](https://github.com/abutlabs/jam-privacy-service/issues/55)) |
+| How many fit a package | 6 on tiny (1e9), 34 on full (5e9), by their gas | |
+| The same verification with the proposed curve host calls ([docs/jip](docs/jip/jip-final.md)), measured on lasair, the only client that implements them | **49,132,410 gas**: 20 on tiny, 101 on full. The same blob falls back to the hooks above where a net lacks the calls | `spikes/jip8-lasair/measure.sh` ([#59](https://github.com/abutlabs/jam-privacy-service/issues/59)) |
 | Accumulate, one transfer (two nullifiers into the indexed tree, two leaves, two sealed notes, both roots) | 103,089 gas, 1% of a report's 10 million | lasair's in-process rig |
 | A proof in the browser (Chrome, Apple M-series, 10 threads) | 1.0 s; loading the provers first takes 2.3 s, once | the wallet's own log; `client/e2e/e2e.mjs` |
 | A proof with bb natively | 0.74 s (median of 600) | `client/soak.py` |

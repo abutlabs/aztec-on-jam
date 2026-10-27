@@ -11,9 +11,10 @@ privacy system on JAM about 50 times what Ethereum charges, in share of the budg
 for checks Ethereum prices as precompiles (about 3 times for a whole proof verifier, #40), and it can be eased without touching JAM's model.
 The final JIP (`docs/jip/jip-final.md`, after the reviews of #33) makes BN254 and BLS12-381 MSM
 and pairing checks host calls. Priced in the GP's own sizing from end-to-end benchmarks, each
-call is 7–13× cheaper than the same computation as PVM code. An Aztec-sized UltraHonk check
-would fall from 181M to about 52M gas, 3.5×, because 36M of it is field work no call touches
-(#44, #45). That leaves much of the 50× share gap, since Ethereum prices its precompiles low
+call is 7–25× cheaper than the same computation as PVM code. An Aztec-sized UltraHonk check
+falls from 181M to 52.4M gas, 3.5×, measured on lasair with the calls (#59,
+`spikes/jip8-lasair/measure.sh`), because 36M of it is field work no call touches (#44, #45);
+a KZG point evaluation falls from 199.5M to 12.1M. That leaves much of the 50× share gap, since Ethereum prices its precompiles low
 against its slow EVM. The other limits found are either workable with service design, not
 spec-level, or belong to clients (below).
 

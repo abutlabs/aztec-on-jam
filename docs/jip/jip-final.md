@@ -20,18 +20,28 @@ metered PVM code: the PVM has no cryptographic host calls (GP 0.8.0, Appendix B,
 Measured on a six-validator PolkaJam v0.8.0 testnet, refine gas from PolkaJam's telemetry, each
 row with its script in [jam-privacy-service](https://github.com/abutlabs/jam-privacy-service):
 
-| Check | As PVM code today | With JIP-8 | How the second column is obtained |
-|---|---|---|---|
-| UltraHonk, Aztec's epoch-proof shape (plain, Keccak transcript, 2^24, every gate type) | 181,129,375 | about 52.1M (3.5×) | Measured split: MSM (62 points) 71.1M, pairing 48.7M, other work 36.0M. Curve work re-priced at this JIP's constants (`spikes/verifier-profile`) |
-| UltraHonk at 2^16 | 170,681,509 | about 47.9M (3.6×) | The same |
-| One BN254 2-pair pairing check, end to end | 64,337,004 | 8,258,199 (7.8×) | The same function run as PVM code, and as the call |
-| One BN254 128-point G1 MSM, end to end | 110,727,638 | 12,852,234 (8.6×) | The same |
-| EIP-4844 KZG point evaluation | 199,453,527 | about 8.9M plus a SHA-256 (about 22×) | Composed from calls 103 and 104 (*Suggestions & examples*); estimate |
+| Check | As PVM code today | With JIP-8, projected | With JIP-8, measured on lasair | How the projection is obtained |
+|---|---|---|---|---|
+| UltraHonk, Aztec's epoch-proof shape (plain, Keccak transcript, 2^24, every gate type) | 181,129,375 | about 52.1M (3.5×) | 52,377,458 (3.5×) | Measured split: MSM (62 points) 71.1M, pairing 48.7M, other work 36.0M. Curve work re-priced at this JIP's constants (`spikes/verifier-profile`) |
+| UltraHonk at 2^16 | 170,681,509 | about 47.9M (3.6×) | 48,129,253 (3.5×) | The same |
+| One BN254 2-pair pairing check, end to end | 64,337,004 | 8,258,199 (7.8×) | 8,258,199, the price | The same function run as PVM code, and as the call |
+| One BN254 128-point G1 MSM, end to end | 110,727,638 | 12,852,234 (8.6×) | 12,852,234, the price | The same |
+| EIP-4844 KZG point evaluation | 199,453,527 | about 8.9M plus a SHA-256 (about 22×) | 12,111,139 (16.5×) | Composed from calls 103 and 104 (*Suggestions & examples*): the calls 8,879,921, the rest decompressing C and π and the SHA-256 |
+
+**Measured on a client.** lasair implements calls 101–104 behind an activation flag:
+- The services verify through them where the net has them, and fall back to PVM code where not:
+  - `crates/curve-hooks`' `HostCallHooks` for UltraHonk;
+  - `crates/kzg-verify` for EIP-4844.
+- The measured column is refine gas from lasair's in-process refine (`spikes/jip8-lasair/measure.sh`). Gas is the protocol's: without the calls it equals PolkaJam v0.8.0's to the unit on the same payloads.
+- Without the calls, the same blobs cost at most 0.34M more, which is the probe.
+
+On a full package (5e9 gas), measured with 2^16 proofs: 104 proofs fit and the 105th runs out; on a tiny one (1e9), 20 fit. That is 95 and 19 at Aztec's 2^24. The measured 3.0–3.5× is the gas; lasair's own wall time fell further (a 2^24 check 548 ms → 127 ms on one Apple M-series Mac), but wall time depends on the client's PVM, so the gas carries the argument.
 
 A full refine package (5e9 gas) would check about 95 Aztec-sized UltraHonk proofs instead of
 27, and a tiny one (1e9) about 19 instead of 5. Settling Aztec on JAM (one epoch proof, its blob
-opening and 33 attestation signatures) would fall from about 813M gas to about 494M. The 433M of
-secp256k1 signature recovery that remains is outside this JIP (*Rationale*).
+opening and 33 attestation signatures) would fall from about 813M gas to about 494M; measured,
+the epoch proof and its blob opening take 52.4M and 12.1M, so about 497.5M with the signatures.
+The 433M of secp256k1 signature recovery that remains is outside this JIP (*Rationale*).
 
 One saving needs no JIP. The reference verifier's default curve hooks encode and decode every
 point. Hooks that convert field by field verify the same 2^24 proof for 156.0M gas instead of
@@ -280,6 +290,31 @@ functions. It is for the GP's maintainers, who decide the activation and the ver
    put a particular trusted setup into the protocol, so this JIP does not propose one.
 3. **The instruction-level route** (*Alternatives considered*, 2): measured, it could lower the
    uncovered 36M and help curves this JIP leaves out.
+
+**Found implementing the calls in a client** (lasair, all four; tested against the JIP's
+vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second library over
+10,000 random and adversarial inputs a call):
+
+4. **The price against a second machine** (1, measured). On one Apple M-series Mac (arm64),
+   through lasair, the price ÷ (p99 × 10/3) against the margin of 2:
+   - `bn254_pairing_check`: 1.93–2.43;
+   - `bn254_g1_msm`: 1.4–2.1 up to 512 points, and about 1.0 from 2,048 to the largest n 5e9
+     gas pays. Past 512 the table's slope (33,836 a point) is the 256→512 segment's, while
+     this machine's per-point time stays about twice the x86 runner's;
+   - `bls12_381_g1_msm`: mostly ≥ 2;
+   - `bls12_381_pairing_check`: 1.3–1.7.
+   The prices are the x86 runner's p99 × 2 with no further headroom, so a machine slower than
+   the runner on any one operation falls under the margin there.
+5. **An empty BLS12-381 pairing input.** EIP-2537 refuses it ("invalid input length"); this
+   JIP defines k = 0 as holding, as EIP-197 does for BN254. That contradicts *Semantics are
+   those of the named EIP*, so the text should name the exception. lasair follows the JIP.
+6. **A partial pairing input.** `bn254_pairing_check`'s gas reads k = ⌊φ8 / 192⌋, which for
+   0 < φ8 < 192 is 0, while the common rule charges "at least the 1-item price". lasair follows
+   the common rule. One of the two should change.
+7. **Gas between listed MSM sizes.** "Linear in n" does not say how a fraction rounds. lasair
+   rounds up (never below the line).
+8. **An output over the input.** For the MSMs, φ9…φ9+out may overlap φ7…φ7+φ8. lasair reads the
+   input before writing, so the result is defined; the text should say so.
 
 ## Change log from the first draft
 

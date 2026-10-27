@@ -74,5 +74,6 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
 - **For a JAM-native privacy service,** use 3: no prover network, users' proofs checked
   directly and in parallel by re-execution, and one tree's insertions done in refine once a
   slot.
-- **Both benefit from JIP-8** (`docs/jip/jip-final.md`): an UltraHonk check at about 52M gas
-  instead of 181M (#44, #45), so 3 verifies about 95 proofs a full package instead of 27.
+- **Both benefit from JIP-8** (`docs/jip/jip-final.md`): an UltraHonk check at 52.4M gas
+  instead of 181M, measured on lasair with the calls (#59), so 3 verifies 95 Aztec-sized proofs
+  a full package instead of 27 (measured at 2^16: 104 fit, the 105th runs out of gas).
