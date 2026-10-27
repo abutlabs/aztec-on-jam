@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run it · Aztec on JAM</title>
+<meta name="description" content="Operator guide: Aztec's released sequencer and prover, as their docs describe them, running against a six-validator JAM testnet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+<nav class="nav"><div class="nav-in">
+  <a class="brand" href="../">Aztec <span>on</span> JAM</a>
+  <div class="nav-links">
+    <a href="../aztec/">Architecture</a>
+    <a href="../demo/">Demo</a>
+    <a href="../operators/" aria-current="page">Run it</a>
+    <a href="../jip/">JIP Proposal</a>
+    <a href="https://github.com/abutlabs/jam-privacy-service">GitHub</a>
+  </div>
+</div></nav>
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <p class="meta">Operator guide · follows the shape of
+      <a href="https://docs.aztec.network/operate/operators/setup/running_a_prover">Aztec's own operator docs</a> ·
+      updated 2026-10-28</p>
+    <h1>Running Aztec's operators on JAM</h1>
+    <p class="lede">The same released software Aztec's operator docs describe — the sequencer
+      node, the prover broker, the prover node and agents — pointed at a six-validator JAM
+      testnet instead of Ethereum. One script starts everything; this page says what runs, how
+      the mainnet settings map, and how to see it working.</p>
+  </header>
+
+  <section>
+    <h2>One command</h2>
+    <pre>DEVNET_NET=jb-lasair6 PROOF_SUBMISSION_EPOCHS=10000 PROVER=1 \
+  tools/aztec-local/on-jam.sh --node --sequencer</pre>
+    <p>That brings up, in order: six lasair validators with the settlement service deployed;
+      the jam-l1 facade (the node's "Ethereum"); Aztec's node with the sequencer; the prover
+      broker; the prover node with one agent. Needs Node 22+, the pinned toolchain
+      (<code>scripts/bootstrap.sh</code>) and lasair built. Logs land in
+      <code>out/aztec-devnet/</code>: <code>node.log</code>, <code>broker.log</code>,
+      <code>prover.log</code>, <code>jam-l1.log</code>, <code>devnet.log</code>.</p>
+  </section>
+
+  <section>
+    <h2>The processes, as Aztec's docs lay them out</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Process</th><th>Aztec's role flags</th><th>Port here</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Sequencer node</td><td class="num">--node --sequencer</td><td class="num">8080 (admin 8880)</td><td>verifies every client proof (real-proof mode is our default), builds L2 blocks, proposes checkpoints to "L1"</td></tr>
+        <tr><td>Prover broker</td><td class="num">--prover-broker</td><td class="num">8084</td><td>queues proving jobs; must be a process of its own (<code>aztec start</code> refuses it beside <code>--node</code>)</td></tr>
+        <tr><td>Prover node + agent</td><td class="num">--prover-node --prover-agent</td><td class="num">8083 (admin 8885)</td><td>watches the chain for unproven epochs, cuts jobs; the agent proves them with native bb and noir-execute</td></tr>
+        <tr><td>jam-l1 facade</td><td class="num">(ours)</td><td class="num">8545</td><td>answers all of the above as Ethereum would; relays checkpoints and proofs as JAM work packages</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">Startup order, as Aztec's docs say: broker before agents; every role checks
+      the rollup's genesis and stands by until it matches, so each gets the genesis settings.</p>
+  </section>
+
+  <section>
+    <h2>Where their mainnet settings map to this devnet</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Aztec's docs say</th><th>On this devnet</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><code>--network mainnet</code></td><td><code>REGISTRY_CONTRACT_ADDRESS</code> + <code>TEST_ACCOUNTS=true SPONSORED_FPC=true</code> on <b>every</b> role</td><td>the network flag bundles the registry address and genesis; each process recomputes the genesis root and refuses a mismatch</td></tr>
+        <tr><td><code>ETHEREUM_HOSTS</code> = your L1 RPC</td><td><code>http://127.0.0.1:8545</code> — the facade</td><td>the facade is the L1</td></tr>
+        <tr><td><code>L1_CONSENSUS_HOST_URLS</code> (beacon, for blobs)</td><td><code>BLOB_FILE_STORE_URLS=file://…/blobs</code></td><td>blobs travel through the sequencer's file store; no beacon chain exists</td></tr>
+        <tr><td>P2P for collecting a checkpoint's transactions</td><td><code>TX_COLLECTION_NODE_RPC_URLS=http://127.0.0.1:8080</code></td><td>P2P is off on the single-sequencer devnet; the prover pulls transaction bodies from the node</td></tr>
+        <tr><td><code>PROVER_PUBLISHER_PRIVATE_KEY</code></td><td>a dev-mnemonic key</td><td>same meaning; the facade accepts its submissions</td></tr>
+        <tr><td>agent hardware: 32 cores, 128 GB each</td><td>one agent on this Mac (10 cores, 16 GB), <code>PROVER_AGENT_COUNT=1</code></td><td>see the measurements below; slow is fine — proving is off the time-critical path</td></tr>
+        <tr><td>proof submission window</td><td><code>PROOF_SUBMISSION_EPOCHS=10000</code> (ours: a chain-spec parameter)</td><td>a slow prover needs a wide window. Above ~14,600 epochs the prover's own deadline timer overflows Node's 32-bit <code>setTimeout</code> and fires at once — keep it under that</td></tr>
+        <tr><td>bb and ACVM binaries (in the image)</td><td><code>BB_BINARY_PATH</code>, <code>NOIR_EXECUTE_BINARY_PATH</code> + working directories</td><td>running from the npm package, the agent needs the paths spelled out</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Measured on this Mac so far</h2>
+    <p>Apple M1 Pro, 10 cores, 16 GB, one agent. Real proofs (<code>PROVER_REAL_PROOFS=true</code>),
+      each verified after generation.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Circuit</th><th>Size</th><th>Proved in</th></tr></thead>
+      <tbody>
+        <tr><td>inbox-parity</td><td class="num">2<sup>16</sup></td><td class="num">0.3–0.5 s</td></tr>
+        <tr><td>rollup-block-root-no-txs (an empty block)</td><td class="num">2<sup>17</sup></td><td class="num">0.6–1.2 s</td></tr>
+        <tr><td>rollup-block-root-single-tx</td><td class="num">2<sup>20</sup></td><td class="num">4.3 s</td></tr>
+        <tr><td>chonk-verifier-public (verifies a client proof in-circuit)</td><td class="num">2<sup>21</sup></td><td class="num">8.5–9.3 s</td></tr>
+        <tr><td>rollup-tx-base-private (one transaction)</td><td class="num">2<sup>22</sup></td><td class="num">18.3 s</td></tr>
+      </tbody>
+    </table></div>
+    <p>Peak proving memory observed: <b>2.4 GB</b> — far under the machine's 16 GB. The epoch's
+      top-tree and root proof, and the proof's submission back through the facade into JAM's
+      refine, are the pieces still being wired; this table grows as they land. Status lives in
+      <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>.</p>
+  </section>
+
+  <section>
+    <h2>Seeing it work</h2>
+    <ul class="plain">
+      <li><b>The chain:</b> <code>node_getNodeInfo</code> on :8080 answers with chain 31337; the facade's <code>jam-l1.log</code> shows every checkpoint <code>accepted</code> by the settlement service.</li>
+      <li><b>The sequencer verifies proofs:</b> <code>grep "verify Chonk proof" out/aztec-devnet/node.log</code> — one per transaction; a tampered proof is refused in ~141 ms.</li>
+      <li><b>The broker has work:</b> <code>grep "Proving job complete" out/aztec-devnet/broker.log</code>.</li>
+      <li><b>The agent proves:</b> <code>grep "Generated proof" out/aztec-devnet/prover.log</code> — circuit, size, duration.</li>
+      <li><b>A transfer end to end:</b> <code>node tools/aztec-local/send-tx.mjs</code> (proves client-side, sponsored fee, asserts balances) or the wallet e2e, <code>node wallet/e2e.mjs</code>.</li>
+    </ul>
+  </section>
+
+  <footer class="site-foot">
+    <div><a href="https://github.com/abutlabs/jam-privacy-service">abutlabs/jam-privacy-service</a> · Apache-2.0 · every number's command is in the repo</div>
+    <div>An independent project. Not affiliated with Aztec Labs or the Polkadot Fellowship.</div>
+  </footer>
+</div>
+</body>
+</html>
