@@ -1,4 +1,4 @@
-//! e2e (#45): JIP-8's core calls end to end, as a client would run them. Each takes its encoded
+//! e2e (#45; call 105, lasair#130): the curve calls end to end, as a client would run them. Each takes its encoded
 //! input (EIP-196/197 for BN254, EIP-2537 for BLS12-381), decodes and checks every element
 //! (canonical field elements, on the curve, in the subgroup where the EIP requires it), and
 //! computes the result. Scalars are any 32 bytes, as in the EIPs. Two implementations of each
@@ -248,6 +248,91 @@ mod bls_ark {
     }
 }
 
+mod gk {
+    //! Grumpkin (call 105, lasair#130) on arkworks: y^2 = x^3 - 17 over BN254's scalar field r,
+    //! prime order p (BN254's base modulus), cofactor 1. A point is x ‖ y, 32 bytes each,
+    //! big-endian, below r; (0, 0) is infinity (never on the curve: -17 is not a square mod r).
+    //! Scalars are any 32 bytes, reduced mod p.
+    use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
+    use ark_ff::{BigInteger, PrimeField, Zero};
+    use ark_grumpkin::{Affine, Fq, Fr, Projective};
+    pub fn fq(b: &[u8]) -> Option<Fq> {
+        let v = Fq::from_be_bytes_mod_order(b);
+        (v.into_bigint().to_bytes_be() == b).then_some(v)
+    }
+    pub fn point(b: &[u8]) -> Option<Affine> {
+        let (x, y) = (fq(&b[..32])?, fq(&b[32..64])?);
+        if x.is_zero() && y.is_zero() { return Some(Affine::identity()); }
+        let p = Affine::new_unchecked(x, y);
+        p.is_on_curve().then_some(p)
+    }
+    pub fn enc(p: &Affine) -> [u8; 64] {
+        let mut o = [0u8; 64];
+        if let Some((x, y)) = p.xy() {
+            o[..32].copy_from_slice(&x.into_bigint().to_bytes_be());
+            o[32..].copy_from_slice(&y.into_bigint().to_bytes_be());
+        }
+        o
+    }
+    /// 105: n items of (point 64, scalar 32).
+    pub fn msm(input: &[u8]) -> Option<[u8; 64]> {
+        if input.is_empty() || input.len() % 96 != 0 { return None; }
+        let mut bases = Vec::new();
+        let mut scalars = Vec::new();
+        for item in input.chunks_exact(96) {
+            bases.push(point(&item[..64])?);
+            scalars.push(Fr::from_be_bytes_mod_order(&item[64..]));
+        }
+        Some(enc(&Projective::msm(&bases, &scalars).ok()?.into_affine()))
+    }
+}
+
+mod gk_h2c {
+    //! Grumpkin on halo2curves, written apart from arkworks: its own field and curve code, its
+    //! own canonical-encoding check (from_repr) and on-curve check (from_xy), and its serial
+    //! Pippenger. The same encoding as `gk`.
+    use halo2curves::ff::{FromUniformBytes, PrimeField};
+    use halo2curves::group::{prime::PrimeCurveAffine, Curve, Group};
+    use halo2curves::grumpkin::{Fq, Fr, G1Affine, G1};
+    use halo2curves::CurveAffine;
+    fn fq(b: &[u8]) -> Option<Fq> {
+        let mut le = [0u8; 32];
+        le.copy_from_slice(b);
+        le.reverse();
+        Option::from(Fq::from_repr(le.into()))
+    }
+    fn point(b: &[u8]) -> Option<G1Affine> {
+        if b[..64].iter().all(|&x| x == 0) { return Some(G1Affine::identity()); }
+        Option::from(G1Affine::from_xy(fq(&b[..32])?, fq(&b[32..64])?))
+    }
+    fn scalar(b: &[u8]) -> Fr {
+        let mut wide = [0u8; 64];
+        for i in 0..32 { wide[i] = b[31 - i]; }
+        Fr::from_uniform_bytes(&wide)
+    }
+    pub fn msm(input: &[u8]) -> Option<[u8; 64]> {
+        if input.is_empty() || input.len() % 96 != 0 { return None; }
+        let mut bases = Vec::new();
+        let mut scalars = Vec::new();
+        for item in input.chunks_exact(96) {
+            bases.push(point(&item[..64])?);
+            scalars.push(scalar(&item[64..]));
+        }
+        let mut acc = G1::identity();
+        halo2curves::msm::msm_serial(&scalars, &bases, &mut acc);
+        let a = acc.to_affine();
+        let mut o = [0u8; 64];
+        if !bool::from(a.is_identity()) {
+            let (mut x, mut y) = (a.x.to_repr(), a.y.to_repr());
+            x.as_mut().reverse();
+            y.as_mut().reverse();
+            o[..32].copy_from_slice(x.as_ref());
+            o[32..].copy_from_slice(y.as_ref());
+        }
+        Some(o)
+    }
+}
+
 // --- inputs -------------------------------------------------------------------------------
 
 use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
@@ -284,6 +369,18 @@ fn cases(call: &str, n: usize, rng: &mut StdRng) -> Vec<(&'static str, Vec<u8>)>
             out.push(("P and −P", (0..n).flat_map(|i| { let p = if i % 2 == 0 { pts[i / 2 * 2] } else { -pts[i / 2 * 2] }; [bn::enc1(&p).to_vec(), be32(sc[0])].concat() }).collect()));
             out.push(("half infinity", (0..n).flat_map(|i| [if i % 2 == 0 { [0u8; 64].to_vec() } else { bn::enc1(&pts[i]).to_vec() }, be32(sc[i])].concat()).collect()));
             out.push(("scalars 2^256 − 1", (0..n).flat_map(|i| [bn::enc1(&pts[i]).to_vec(), vec![0xff; 32]].concat()).collect()));
+        }
+        "grumpkin_g1_msm" => {
+            use ark_grumpkin::{Fr as GkFr, Projective as Gk};
+            let p1 = -GkFr::from(1u64); // p − 1
+            let pts: Vec<_> = (0..n).map(|_| (Gk::generator() * GkFr::rand(rng)).into_affine()).collect();
+            let sc: Vec<_> = (0..n).map(|_| GkFr::rand(rng)).collect();
+            out.push(("random", (0..n).flat_map(|i| [gk::enc(&pts[i]).to_vec(), be32(sc[i])].concat()).collect()));
+            out.push(("one base repeated", (0..n).flat_map(|i| [gk::enc(&pts[0]).to_vec(), be32(sc[i])].concat()).collect()));
+            out.push(("scalars p − 1", (0..n).flat_map(|i| [gk::enc(&pts[i]).to_vec(), be32(p1)].concat()).collect()));
+            out.push(("P and −P", (0..n).flat_map(|i| { let p = if i % 2 == 0 { pts[i / 2 * 2] } else { -pts[i / 2 * 2] }; [gk::enc(&p).to_vec(), be32(sc[0])].concat() }).collect()));
+            out.push(("half infinity", (0..n).flat_map(|i| [if i % 2 == 0 { [0u8; 64].to_vec() } else { gk::enc(&pts[i]).to_vec() }, be32(sc[i])].concat()).collect()));
+            out.push(("scalars 2^256 − 1", (0..n).flat_map(|i| [gk::enc(&pts[i]).to_vec(), vec![0xff; 32]].concat()).collect()));
         }
         "bn254_pairing_check" => {
             // k pairs whose product is 1: e(a_i G1, b_i G2) for random a, b, with the last pair cancelling
@@ -354,6 +451,7 @@ fn vectors() {
             "bn254_g1_msm" => [bn::msm(i).map(|o| o.to_vec()), bn_sub::msm(i).map(|o| o.to_vec())],
             "bn254_pairing_check" => [bn::pairing(i).map(|o| vec![o as u8]), bn_sub::pairing(i).map(|o| vec![o as u8])],
             "bls12_381_g1_msm" => [bls::msm(i).map(|o| o.to_vec()), bls_ark::msm(i).map(|o| o.to_vec())],
+            "grumpkin_g1_msm" => [gk::msm(i).map(|o| o.to_vec()), gk_h2c::msm(i).map(|o| o.to_vec())],
             _ => [bls::pairing(i).map(|o| vec![o as u8]), bls_ark::pairing(i).map(|o| vec![o as u8])],
         }
     };
@@ -368,19 +466,26 @@ fn vectors() {
         let field = if call.contains("pairing") { "phi8" } else { "output" };
         println!("{{\"call\": \"{call}\", \"case\": \"{case}\", \"input\": \"{}\", \"result\": \"{result}\", \"{field}\": \"{output}\"}}", hex(input));
     };
-    for call in ["bn254_g1_msm", "bn254_pairing_check", "bls12_381_g1_msm", "bls12_381_pairing_check"] {
+    for call in ["bn254_g1_msm", "bn254_pairing_check", "bls12_381_g1_msm", "bls12_381_pairing_check", "grumpkin_g1_msm"] {
         for n in [1usize, 2, 4] {
             for (case, input) in cases(call, n, &mut rng) {
                 emit(call, &format!("{case}, n = {n}"), &input);
             }
         }
-        let (item, fe) = match call { "bn254_g1_msm" => (96, 32), "bn254_pairing_check" => (192, 32), "bls12_381_g1_msm" => (160, 64), _ => (384, 64) };
+        let (item, fe) = match call { "bn254_g1_msm" | "grumpkin_g1_msm" => (96, 32), "bn254_pairing_check" => (192, 32), "bls12_381_g1_msm" => (160, 64), _ => (384, 64) };
         let good = cases(call, 1, &mut rng).remove(0).1;
         emit(call, "length not a multiple of the item", &good[..item - 1]);
         if call.contains("pairing") { emit(call, "no pairs (holds)", &[]); } else { emit(call, "no items", &[]); }
         // x = p: not a canonical field element
         let mut bad = good.clone();
-        if fe == 32 {
+        if call == "grumpkin_g1_msm" {
+            // Grumpkin's coordinates are below r, BN254's scalar modulus; y as well as x
+            let m = <ark_grumpkin::Fq as PrimeField>::MODULUS.to_bytes_be();
+            bad[..32].copy_from_slice(&m);
+            let mut bad_y = good.clone();
+            bad_y[32..64].copy_from_slice(&m);
+            emit(call, "y equal to the field modulus", &bad_y);
+        } else if fe == 32 {
             let m = <ark_bn254::Fq as PrimeField>::MODULUS.to_bytes_be();
             bad[..32].copy_from_slice(&m);
         } else {
@@ -391,7 +496,7 @@ fn vectors() {
         let mut off = good.clone();
         let last = if fe == 32 { 63 } else { 127 };
         off[last] ^= 1;
-        emit(call, "G1 point off the curve", &off);
+        emit(call, if call == "grumpkin_g1_msm" { "point off the curve" } else { "G1 point off the curve" }, &off);
         if fe == 64 {
             let mut top = good.clone();
             top[0] = 1;
@@ -411,6 +516,8 @@ fn vectors() {
 
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("--vectors") { return vectors(); }
+    // `e2e CALL` times only that call (call 105 was added after 101-104 were priced)
+    let only = std::env::args().nth(1);
     let mut rng = StdRng::seed_from_u64(45);
     let (mut agree, mut differ) = (0, 0);
     println!("| call | implementation | case | n | result | median | p99 | max |");
@@ -421,7 +528,10 @@ fn main() {
         ("bn254_pairing_check", vec![1, 2, 4, 8]),
         ("bls12_381_g1_msm", vec![1, 2, 4, 8, 16, 32, 64, 128, 256, 512]),
         ("bls12_381_pairing_check", vec![1, 2, 4, 8]),
+        // 101's sizes, then to 2^15, the size of Aztec's IPA (lasair#130)
+        ("grumpkin_g1_msm", vec![1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]),
     ] {
+        if only.as_deref().is_some_and(|c| c != call) { continue; }
         for n in sizes {
             for (case, input) in cases(call, n, &mut rng) {
                 type Run = Box<dyn Fn(&[u8]) -> Option<Vec<u8>>>;
@@ -429,6 +539,7 @@ fn main() {
                     "bn254_g1_msm" => [("arkworks", Box::new(|i| bn::msm(i).map(|o| o.to_vec()))), ("substrate-bn, sum of muls", Box::new(|i| bn_sub::msm(i).map(|o| o.to_vec())))],
                     "bn254_pairing_check" => [("arkworks", Box::new(|i| bn::pairing(i).map(|o| vec![o as u8]))), ("substrate-bn", Box::new(|i| bn_sub::pairing(i).map(|o| vec![o as u8])))],
                     "bls12_381_g1_msm" => [("blst", Box::new(|i| bls::msm(i).map(|o| o.to_vec()))), ("arkworks", Box::new(|i| bls_ark::msm(i).map(|o| o.to_vec())))],
+                    "grumpkin_g1_msm" => [("arkworks", Box::new(|i| gk::msm(i).map(|o| o.to_vec()))), ("halo2curves", Box::new(|i| gk_h2c::msm(i).map(|o| o.to_vec())))],
                     _ => [("blst", Box::new(|i| bls::pairing(i).map(|o| vec![o as u8]))), ("arkworks", Box::new(|i| bls_ark::pairing(i).map(|o| vec![o as u8])))],
                 };
                 let outs: Vec<_> = impls.iter().map(|(_, f)| f(&input)).collect();

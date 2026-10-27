@@ -2,12 +2,20 @@ name: jip-e2e
 # #45: JIP-8's core calls (BN254 and BLS12-381 G1 MSM and pairing check) timed end to end on
 # x86-64, from encoded input with every validity check, two implementations each, and the
 # gas they would cost under the final JIP's invariant (spikes/jip-bench/e2e-pricing.py).
-on: workflow_dispatch
+# A `call` input times only that call (call 105, grumpkin_g1_msm, was added after 101-104 were
+# priced, lasair#130).
+on:
+  workflow_dispatch:
+    inputs:
+      call:
+        description: "time only this call (empty: every call)"
+        required: false
+        default: ""
 
 jobs:
   e2e:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
@@ -16,7 +24,7 @@ jobs:
           set -o pipefail
           cd spikes/jip-bench
           echo "### $(nproc) vCPU, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" | tee -a "$GITHUB_STEP_SUMMARY"
-          cargo run -q --release --bin e2e 2> e2e.txt | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+          cargo run -q --release --bin e2e -- ${{ inputs.call }} 2> e2e.txt | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
           ./e2e-pricing.py < e2e.txt | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with: { name: e2e, path: spikes/jip-bench/e2e.txt }

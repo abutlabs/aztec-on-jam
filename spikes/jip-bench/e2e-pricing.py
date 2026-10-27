@@ -13,7 +13,8 @@ import collections, math, sys
 
 R_GP, M = 10 / 3, 2
 REF = {"bn254_g1_msm": "arkworks", "bn254_pairing_check": "arkworks",
-       "bls12_381_g1_msm": "blst", "bls12_381_pairing_check": "blst"}
+       "bls12_381_g1_msm": "blst", "bls12_381_pairing_check": "blst",
+       "grumpkin_g1_msm": "arkworks"}  # call 105 (lasair#130)
 worst = collections.defaultdict(lambda: (0.0, ""))
 other = collections.defaultdict(float)
 for line in sys.stdin:
