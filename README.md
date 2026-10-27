@@ -157,15 +157,15 @@ The same service blob and the same proofs on two independent GP 0.8.0 clients. l
 ours (Linux images at `ghcr.io/abutlabs/lasair`; its source and tracker are not public yet),
 PolkaJam is Parity's.
 
-| Measure | lasair | PolkaJam |
-| --- | --- | --- |
-| Refine one privacy proof (169M gas), interpreted, Linux aarch64 container | 0.94 s (2.1.3 image) | 0.207 s (v0.8.0) |
-| The same, interpreted, macOS native | 0.65 s (main, a dev build) | 0.172 s (v0.8.0) |
-| The same, PolkaJam's recompiler (x86-64 only; a 4-vCPU GitHub runner, 30 refines) | no recompiler | 8 to 24 ms in 15; 0.41 to 0.56 s in 12, on the same nodes, cause not yet known |
-| An auditor re-executing a privacy report | 1.0 to 1.9 s | not in its telemetry |
-| One tree at one package a slot (Docker nets, 20 min / 1 h) | 0.375 to 0.385 of a slot, median 21.2 s, 5 of 77 and 7 of 75 expired and resent | 1.0 of a slot, median 13.4 s, 0 of 600 |
-| A shield, then a private send, in the wallet (Docker nets) | 81.3 s, 17.5 s | 25.8 s, 11.2 s |
-| `nets/demo.sh check` (37 assertions), and resends in it and the three stages | 3 min 09 s, 2 resent | 1 min 51 s, none |
+| Measure | lasair, Docker (2.1.3 image) | lasair main, native (`jb-lasair6`) | PolkaJam |
+| --- | --- | --- | --- |
+| Refine one privacy proof (169M gas), interpreted, Linux aarch64 container | 0.94 s | | 0.207 s (v0.8.0) |
+| The same, interpreted, macOS native | | 0.65 s | 0.172 s (v0.8.0) |
+| The same, PolkaJam's recompiler (x86-64 only; a 4-vCPU GitHub runner, 30 refines) | no recompiler | no recompiler | 8 to 24 ms in 15; 0.41 to 0.56 s in 12, on the same nodes, cause not yet known |
+| An auditor re-executing a privacy report | 1.0 to 1.9 s | | not in its telemetry |
+| One tree, packages kept waiting on one core | 0.375 to 0.385 of a slot (20 min / 1 h), 5 of 77 and 7 of 75 expired and resent | a report in every block (a block every 6.7 s), 46 of 46 in 5 minutes, none expired or resent | 1.0 of a slot, 0 of 600 expired (1 h) |
+| A shield, then a private send, in the wallet | 81.3 s, 17.5 s | 27.7 s, 15.2 s | 25.8 s, 11.2 s |
+| `nets/demo.sh check` (37 assertions), and resends in it and the three stages | 3 min 09 s, 2 resent | 1 min 52 s to 2 min 00 s, none | 1 min 51 s, none |
 
 On the default net, one run on an Apple M-series Mac: `check` passed with nothing resent,
 and in the wallet a shield took 23.6 s and a private send 11.1 s.
@@ -176,11 +176,15 @@ and three lasair validators on GRANDPA, runs the whole demo (`check` in 1 min 36
 13.1 s) with both clients finalizing.
 
 Three things about lasair this work found and measured. A guarantor took packages for a core it
-was about to leave and let them expire: fixed in lasair main. Over two pairs of 20-minute runs,
-expiries fell from 14 and 9 to 5 and 7. The rest wait for a free core across a rotation turn, and
-the same wait holds one tree to about 0.38 of a slot: open. And the cmov gas rule lasair took with the v0.8.0 test vectors differs from
-PolkaJam's 2026-09-22 nightly by 2 gas on one accumulate, which forks a mixed net; PolkaJam v0.8.0
-agrees with it.
+was about to leave and let them expire, and a package waited while its core held a report,
+which held one tree to about 0.38 of a slot. Both are fixed in lasair main: guarantees go out
+while the core is engaged and across an epoch turn, JIP-2 is served from the node's own state,
+and the guarantee pool takes the package whose anchor expires first. And the cmov gas rule lasair
+took with the v0.8.0 test vectors differs from PolkaJam's 2026-09-22 nightly by 2 gas on one
+accumulate, which forks a mixed net; PolkaJam v0.8.0 agrees with it.
+
+The lasair main column is one Apple M-series Mac, the six validators native, blocks paced at
+JAM's 6 s (`lasair --block-time 6`); `scripts/verify-all.sh jb-lasair6` passes on it.
 
 ## What is real and what is reduced
 
