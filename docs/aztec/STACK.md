@@ -140,6 +140,10 @@ random), so it pays through Aztec's sponsored-fee contract (SponsoredFPC, salt 0
 `0x2d8fff82…69d3`), which genesis funds. With the account type that needs no deployment
 ("Schnorr, initializerless"), nothing else is needed.
 
+**The node verifies real client proofs (#67, done).** Real-proof mode is the devnet's default:
+Aztec's node checks each transaction's CHONK proof with native bb before pooling it; a proof
+with one field changed is refused in 141 ms, and the wallet's in-tab proofs pass unchanged.
+
 **The devnet runs on lasair (#66, done).** `DEVNET_NET=jb-lasair6` puts the settlement service
 on six lasair validators with the curve calls on; the wallet's whole story passes on it, and a
 checkpoint's refine costs 64.06M gas with the calls against 251.46M without (3.9×; the same blob
