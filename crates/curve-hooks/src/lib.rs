@@ -8,7 +8,7 @@
 extern crate alloc;
 
 mod host_calls;
-pub use host_calls::{used as host_calls_used, HostCallHooks};
+pub use host_calls::{enc_g1, enc_g2, used as host_calls_used, HostCallHooks, FAILED};
 #[cfg(not(target_env = "polkavm"))]
 pub use host_calls::host as host_calls_stand_in;
 

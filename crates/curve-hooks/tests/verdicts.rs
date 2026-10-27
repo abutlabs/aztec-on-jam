@@ -7,6 +7,7 @@
 //! One test: the hooks' detection state is global, as in a refine.
 
 use curve_hooks::{host_calls_stand_in, host_calls_used, FieldHooks, HostCallHooks};
+use curve_hooks::host_calls_stand_in::Mode;
 use std::path::{Path, PathBuf};
 
 fn read(p: &Path) -> Vec<u8> {
@@ -84,6 +85,43 @@ fn cases(uh: Uh, name: &str, dir: &Path, wrong_vk: &[u8], bad_pubs: Option<&Path
     }
 }
 
+/// The review of #58: a net with one call and not the other; a host whose call answers once
+/// and then WHAT (availability may not change mid-invocation: fail closed); a call that
+/// answers HUH (reject, never trap). Valid proofs and a proof that fails only at the pairing.
+fn odd_hosts(uh: Uh, name: &str, dir: &Path) {
+    let (vk, proof, p) = (read(&dir.join("vk")), read(&dir.join("proof")), pubs(&read(&dir.join("public_inputs"))));
+    let mut bad = proof.clone();
+    let n = bad.len();
+    bad[n - 64..].copy_from_slice(&g1_bytes(1, 2));
+    for (msm, pairing) in [(Mode::Present, Mode::Absent), (Mode::Absent, Mode::Present)] {
+        host_calls_stand_in::set_calls(msm, pairing);
+        assert!(run_with_calls(uh, &vk, &proof, &p), "{name}: valid, MSM {msm:?}, pairing {pairing:?}");
+        assert_eq!(host_calls_used(), (Some(msm == Mode::Present), Some(pairing == Mode::Present)), "{name}: paths");
+        host_calls_stand_in::set_calls(msm, pairing);
+        assert!(!run_with_calls(uh, &vk, &bad, &p), "{name}: KZG quotient = G, MSM {msm:?}, pairing {pairing:?}");
+    }
+    // one answer, then WHAT: the second verification in the same invocation fails closed
+    host_calls_stand_in::set_calls(Mode::WhatAfterFirst, Mode::WhatAfterFirst);
+    assert!(run_with_calls(uh, &vk, &proof, &p), "{name}: the first verification, the calls answering");
+    assert!(!run_with_calls(uh, &vk, &proof, &p), "{name}: then WHAT: rejected, not a silent fallback");
+    // each call on its own: the other keeps answering, so only this call's guard can refuse
+    for (msm, pairing) in [(Mode::WhatAfterFirst, Mode::Present), (Mode::Present, Mode::WhatAfterFirst)] {
+        host_calls_stand_in::set_calls(msm, pairing);
+        assert!(run_with_calls(uh, &vk, &proof, &p), "{name}: first, MSM {msm:?}, pairing {pairing:?}");
+        assert!(!run_with_calls(uh, &vk, &proof, &p), "{name}: then WHAT from one call: rejected, MSM {msm:?}, pairing {pairing:?}");
+    }
+    host_calls_stand_in::set_calls(Mode::Present, Mode::WhatAfterFirst);
+    assert!(!run_with_calls(uh, &vk, &bad, &p), "{name}: a failing pairing, then WHAT");
+    assert!(!run_with_calls(uh, &vk, &bad, &p), "{name}: a failing pairing stays failing after WHAT");
+    // HUH: rejected without a trap
+    for (msm, pairing) in [(Mode::Huh, Mode::Present), (Mode::Present, Mode::Huh)] {
+        host_calls_stand_in::set_calls(msm, pairing);
+        let r = std::panic::catch_unwind(|| run_with_calls(uh, &vk, &proof, &p));
+        assert_eq!(r.ok(), Some(false), "{name}: MSM {msm:?}, pairing {pairing:?}: rejected, no panic");
+    }
+    host_calls_stand_in::set_absent(false);
+}
+
 fn g1_bytes(x: u8, y: u8) -> [u8; 64] {
     let mut b = [0u8; 64];
     b[31] = x;
@@ -105,6 +143,8 @@ fn verdicts_agree_with_and_without_the_calls() {
     let r16_vk = read(&fx.join("r16/vk"));
     cases(Uh::V6Plain, "2^16", &fx.join("r16"), &transfer_vk, None);
     cases(Uh::V5Zk, "transfer (bb 5, ZK)", &fx.join("transfer"), &r16_vk, Some(&fx.join("transfer/public_inputs.bad")));
+    odd_hosts(Uh::V6Plain, "2^16", &fx.join("r16"));
+    odd_hosts(Uh::V5Zk, "transfer (bb 5, ZK)", &fx.join("transfer"));
     // the larger circuits, where a checkout has made them (spikes/epoch-proof/measure.sh)
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spikes/epoch-proof/out");
     for (k, name) in [("r20", "2^20"), ("r24", "2^24")] {
