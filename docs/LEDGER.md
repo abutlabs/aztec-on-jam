@@ -1878,7 +1878,7 @@ Also new: `client/queue_soak.py` (packages kept waiting on one core, for lasair#
 nodes take `JB_TELEMETRY` on the native nets.
 Next: lasair#94's last part (the previous rotation across an epoch turn), then #83.
 
-### 2026-10-27: the verifier through the curve host calls (#58, #55)
+## 2026-10-27 73 — The verifier through the curve host calls (#58, #55)
 
 `crates/curve-hooks` gains `HostCallHooks` (5cd1c9a, review fixes 6326a8f): the MSM by host call
 101, the pairing check by 102, each call's first use its probe, `FieldHooks` where the net does
