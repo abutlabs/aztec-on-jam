@@ -8,12 +8,16 @@ leaves by JAM deferred transfers. It runs on PolkaJam's own tiny testnet by defa
 six-validator nets of lasair validators or of both clients, with the same service blob on all
 of them.
 
-![An opening crawl, a card of what is running and what is not, then Alice's and Bob's wallets side by side: Alice pays Bob in public, shields with a Noir proof made in her browser and sends Bob 40 privately; Bob finds the note and unshields; then the explorer, read with no key, with Alice's keys and with Bob's viewing key](docs/images/demo.gif)
+![An opening crawl in yellow over the stars: JAM PRIVACY, Episode ZK, A NEW PROOF](docs/images/intro.gif)
 
-**What the recording is.** After a short opening crawl, everything in it runs live; no step is
+![A card of what is running and what is not, then Alice's and Bob's wallets side by side: Alice pays Bob in public, shields with a Noir proof made in her browser and sends Bob 40 privately; Bob finds the note and unshields; then the explorer, read with no key, with Alice's keys and with Bob's viewing key](docs/images/demo.gif)
+
+**What the recordings are.** The first is the opening crawl; its words are
+[client/e2e/crawl.md](client/e2e/crawl.md). In the second, everything runs live; no step is
 mocked. Aztec's proving stack, Noir 1.0.0-rc.5 and Barretenberg (bb.js 5.0.0, UltraHonk),
 proves each private transfer in the sender's browser in about a second. The privacy service
-verifies the proof in `refine` on PolkaJam v0.8.0's six-validator testnet (169M gas), and
+verifies the proof in `refine` on six lasair validators with the proposed curve host calls (49M
+gas; the same blob takes 147M without them, as on PolkaJam v0.8.0's testnet), and
 `accumulate` writes Aztec-shaped state: notes, nullifiers, a depth-40 note tree and an indexed
 nullifier tree. Notes are sealed to their receiver (X25519, AES-256-GCM) and found with the
 receiver's own key; no key leaves the browser. The wallet is the JAM Rebel Wallet and the
@@ -26,7 +30,9 @@ found by trying every one, not by Aztec's tagging, and each proof takes a work p
 own, with no folding. [What is real and what is
 reduced](#what-is-real-and-what-is-reduced) has the details. Separately, this repository runs
 Aztec v6's own unchanged node and PXE settling on JAM, so far with Aztec's test-mode proofs and
-a stand-in epoch circuit ([docs/LEDGER.md](docs/LEDGER.md), entries 62 to 69).
+a stand-in epoch circuit ([docs/LEDGER.md](docs/LEDGER.md), entries 62 to 69), and checks
+Aztec's own client proofs in refine with Aztec's own verifier, finalized on a lasair net
+([below](#aztecs-own-client-proofs-checked-on-lasair)).
 
 Ten minutes, for a JAM implementer: [docs/DEMO.md](docs/DEMO.md). Why this exists: [JAM
 beside Aztec](https://abutlabs.github.io/the-gray-tutor/jam-beside-aztec). How it got here:
@@ -114,9 +120,11 @@ Screenshots: [no key](docs/images/12-explorer-public.png), [with Alice's
 keys](docs/images/13-explorer-alice-keys.png), [with Bob's viewing
 key](docs/images/14-explorer-bob-viewing-key.png), and [Alice's
 wallet](docs/images/11-wallet-alice.png). `node client/e2e/explorer.mjs` runs this story in
-browsers and asserts what each view shows; `RECORD=1` films it into the GIF at the top of this
-page, with the opening crawl and cards of `client/e2e/film.html` and a caption over each move
-(`client/e2e/film.mjs`; on a fresh net: `nets/demo.sh down`, then `up`).
+browsers and asserts what each view shows; `RECORD=1` films it into the second GIF at the top of
+this page, with the cards of `client/e2e/film.html` and a caption over each move (on a fresh
+net: `nets/demo.sh down`, then `up`; `FILM_NET=lasair-calls` names lasair with the curve calls
+on the card). `node client/e2e/film.mjs` makes the first, the opening crawl, from
+[client/e2e/crawl.md](client/e2e/crawl.md), with no net, in under a minute.
 
 The public-balance service keeps an ordered log of every public change with its slot. The
 indexer serves it at `/history`, beside each private transfer's nullifiers, commitments,
@@ -200,11 +208,12 @@ service).
 Reduced:
 
 - **The circuit is ours, written to Aztec's shapes, not Aztec's kernel circuits.** Aztec v6's
-  kernels compile with our toolchain and prove in 2 to 8 s, but verifying their 80 to 128 KB proof
-  would cost about 12 billion gas in refine, more than a full package
-  ([spikes/chonk](spikes/chonk/RESULTS.md)). Running them means a builder that wraps each proof
-  (Aztec's prover) and Aztec's trees in accumulate: roadmap
-  [#21](https://github.com/abutlabs/jam-privacy-service/issues/21).
+  kernels compile with our toolchain and prove in 2 to 8 s ([spikes/chonk](spikes/chonk/RESULTS.md)),
+  and their proofs now check in refine ([below](#aztecs-own-client-proofs-checked-on-lasair)),
+  but at 3.46B gas a proof with the proposed call 105 and 11.4B without, against 49M to 169M for
+  ours. Running Aztec's transactions also means Aztec's trees in accumulate: roadmap
+  [#21](https://github.com/abutlabs/jam-privacy-service/issues/21) and
+  [#62](https://github.com/abutlabs/jam-privacy-service/issues/62).
 - **One proof per package, no folding.** A tree takes one package a slot, in order; more
   throughput means more trees (cores) or folding many transfers into one proof.
 - **Dev-chain money, unsigned.** The public-balance service has a faucet anyone may call, and
@@ -214,6 +223,39 @@ Reduced:
 - **The keys live in the page.** JAM has no native user accounts: each service defines its
   own, and no browser wallet signs for these services.
 - **Notes are found by trial decryption of every sealed note**, not Aztec's tagging.
+
+## Aztec's own client proofs, checked on lasair
+
+The demo's circuit is ours. Separately, refine checks Aztec's own client proofs: the proof an
+Aztec wallet makes for a transaction, with Aztec's circuits and Aztec's verifier unchanged.
+Nothing on JAM proves; JAM checks.
+
+- **The proof is Aztec's.** An Aztec v6.0.0 token transfer with a sponsored fee: its app
+  circuits and private kernels, six circuits, folded by Barretenberg 6.0.0 into one client
+  proof (CHONK) of 80,096 bytes, proved natively in 2.2 s. The inputs are Aztec CI's pinned
+  benchmark stacks ([spikes/chonk](spikes/chonk/RESULTS.md)).
+- **The verifier is Aztec's.** Barretenberg 6.0.0's own CHONK verifier, its C++ sources
+  unchanged, compiled for the PVM into a JAM service. One thing is redirected, at link time:
+  bb's Grumpkin multi-scalar multiplication goes to the proposed host call 105
+  ([docs/jip](docs/jip/jip-final.md)), which only lasair implements. Where the call is absent,
+  bb's own MSM runs in the PVM ([spikes/chonk-pvm](spikes/chonk-pvm/RESULTS.md)).
+- **On a live net.** Six lasair validators, with the curve calls 101 to 105 on and the full
+  spec's refine gas (5e9) in the chain spec of an otherwise tiny chain, since tiny's 1e9 is less
+  than one check. Each proof is one work-item; its 2.2 MB input (proof, verification key and
+  the 2^15 Grumpkin points) travels as the item's extrinsic. Refine gives bb's verdict,
+  accumulate stores it, and GRANDPA finalizes it.
+
+| Work-item | Verdict, accumulated | Refine gas | Submission to finality |
+| --- | --- | --- | --- |
+| The proof, three times | VALID | 3,456,104,321 | 21, 26 and 24 s |
+| The same proof, one octet flipped | INVALID | 625,503,052 | 18 s |
+
+Without call 105 the same check costs 11.36B gas, more than two full packages.
+
+What this is not, yet: it is one proof, submitted three times and once tampered; the verdict is
+stored, and no Aztec state changes with it; call 105 is a proposal, on lasair only; and the
+times are one Mac's. `spikes/chonk-pvm/on-lasair.sh` runs it
+([#62](https://github.com/abutlabs/jam-privacy-service/issues/62)).
 
 ## Layout
 

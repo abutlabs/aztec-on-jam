@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>JAM privacy: the film's title scenes</title>
-<!-- The README film's title scenes, drawn by film.mjs one frame at a time: ?scene=crawl (the
-     opening crawl), card (what is running and what is not), end (the closing card). Each scene
-     exposes window.film = { length: seconds, still: true for one frame, at(t): draw time t }. -->
+<!-- The README films' title scenes, drawn by film.mjs one frame at a time: ?scene=crawl (the
+     intro's opening crawl, its words from crawl.md), card (what is running and what is not), end
+     (the closing card). Each scene exposes window.film = { length: seconds, still: true for one
+     frame, at(t): draw time t }; the crawl's also crawl(words), which sets its words and length. -->
 <style>
   :root { --yellow: #ffe81f; --blue: #4bd5ee; --space: #05040b; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--space); color: #fff;
@@ -55,20 +56,10 @@
 <canvas id="stars"></canvas>
 
 <section class="scene" id="crawl">
-  <div id="prelude">A short time ago, on a chain not so far away....</div>
-  <div id="title">JAM<small>PRIVACY</small></div>
-  <div id="far"><div id="stage"><div id="text">
-    <p class="ep">Episode ZK</p>
-    <h1>A NEW PROOF</h1>
-    <p>It is a period of open ledgers. The KYC EMPIRE makes every citizen show their papers,
-    and writes every payment where any IMPERIAL analyst can read it.</p>
-    <p>In the distant workshops of AZTEC, rebel engineers have forged a new weapon: the
-    ZERO-KNOWLEDGE PROOF, which shows a payment keeps every law while revealing nothing of who
-    paid whom, or how much.</p>
-    <p>Now JAM, a world built for any work at all, carries those proofs in its WORK PACKAGES and
-    checks each one in REFINE, bringing the rebellion the hope of a brighter, freer
-    galaxy....</p>
-  </div></div></div>
+  <!-- the words are crawl.md's, set by film.mjs (window.film.crawl) -->
+  <div id="prelude"></div>
+  <div id="title"><span></span><small></small></div>
+  <div id="far"><div id="stage"><div id="text"></div></div></div>
 </section>
 
 <section class="scene" id="card"><div class="card">
@@ -89,7 +80,7 @@
       <li><b>Not Aztec's note tagging</b> (wallets try every note), and <b>no folding</b> (one proof per work package).</li>
     </ul></div>
   </div>
-  <p class="foot">Separately, in the same repository: Aztec v6's own unchanged node and PXE settling on JAM, so far with Aztec's test-mode proofs. Not shown here.</p>
+  <p class="foot">Separately, in the same repository, not shown here: Aztec's own client proofs checked in refine by Barretenberg's own verifier and finalized on lasair, and Aztec v6's unchanged node and PXE settling on JAM, so far with test-mode proofs.</p>
 </div></section>
 
 <section class="scene" id="end"><div class="card">
@@ -117,17 +108,27 @@
 
   const $ = (id) => document.getElementById(id);
   const ramp = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));   // 0 before a, 1 after b
-  const CRAWL_FROM = 7.5, CRAWL_FOR = 30;                                   // seconds
+  const CRAWL_FROM = 7.5, SPEED = 62;     // the crawl starts at 7.5 s and climbs 62 px a second
+  const travel = () => $("text").offsetHeight + $("stage").offsetHeight * 0.4;  // until the last line is far off
   window.film = scene === "crawl" ? {
-    length: CRAWL_FROM + CRAWL_FOR,
+    length: CRAWL_FROM,
+    /** crawl.md's words: { prelude, title, subtitle, episode, heading, paragraphs: [...] } */
+    crawl(w) {
+      $("prelude").textContent = w.prelude;
+      $("title").firstChild.textContent = w.title;
+      $("title").lastChild.textContent = w.subtitle;
+      const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
+      $("text").replaceChildren(el("p", "ep", w.episode), el("h1", "", w.heading), ...w.paragraphs.map((p) => el("p", "", p)));
+      this.length = CRAWL_FROM + travel() / SPEED;
+      this.at(0);
+    },
     at(t) {
       $("prelude").style.opacity = String(ramp(t, 0.8, 1.8) * (1 - ramp(t, 5, 6)));
       // the title recedes into the stars, as the crawl begins beneath it
       const k = ramp(t, 5.8, 14);
       $("title").style.opacity = String(ramp(t, 5.8, 6) * (1 - ramp(t, 12, 14)));
       $("title").style.transform = `translate(-50%, -50%) scale(${2.6 * Math.pow(0.02, k)})`;
-      const travel = $("text").offsetHeight + $("stage").offsetHeight * 0.4;  // until the last line is far off
-      $("text").style.transform = `translateY(${-travel * ramp(t, CRAWL_FROM, CRAWL_FROM + CRAWL_FOR)}px)`;
+      $("text").style.transform = `translateY(${-Math.max(0, t - CRAWL_FROM) * SPEED}px)`;
     },
   } : { length: scene === "card" ? 15 : 5, still: true, at() {} };
   window.film.at(0);

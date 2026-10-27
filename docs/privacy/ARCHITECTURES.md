@@ -34,7 +34,8 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   with bb's own verifier compiled for the PVM (`spikes/chonk-pvm`, #62), one proof's whole check
   is 11.0B gas, two full packages. Batched, the proofs share one IPA discharge, but that is a
   2^15 Grumpkin MSM of 9 to 10B gas, itself two packages. Each proof's reduction is 0.98B. With
-  a Grumpkin MSM call (the proposed index 105, 1.93B at 2^15), two proofs fit a package that
+  a Grumpkin MSM call (the proposed index 105, 1.93B at 2^15), one proof's whole check is 3.47B
+  (**measured**, and finalized on a six-validator lasair net), and two proofs fit a package that
   discharges its own batch. That is a direct
   check of Aztec's own client proofs at small scale, without folding. At scale, Aztec's folding
   (candidate 1) still costs far less a transaction.
@@ -116,6 +117,13 @@ A batch can be larger if packages that only reduce (four proofs each, 4.3B) hand
 claims to one package that folds them and calls 105: (5.0 − 1.93) / 0.1 ≈ 30 claims. That is
 about four proofs a package overall (*reasoning*; not built). The call matters at every batch
 size, because without it no single package can finish a batch.
+
+**Measured with the call, on a live net.** bb's Grumpkin MSM, linked to call 105, makes one
+proof's whole check 3.47B gas (from 11.36B in the same build): the reduction 0.81B, the CRS
+points' parsing and the IPA's MSM through the call. On six lasair validators with the full
+spec's refine gas, the proof was checked VALID three times and once tampered INVALID, each
+verdict accumulated and finalized (`spikes/chonk-pvm/on-lasair.sh`). That is one proof, not yet
+a batch.
 
 **What is left is the reduction**, 0.98B a proof. Natively (#62 step 1) it splits into:
 - Poseidon2 transcript hashing, 43%;

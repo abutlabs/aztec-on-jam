@@ -1,15 +1,34 @@
-// The README's film, made by explorer.mjs with RECORD=1: film.html's opening crawl and its card
-// of what is running and what is not, then Alice's and Bob's wallets side by side, then the
-// explorer, then the closing card; into demo.mp4 and demo.gif. Needs ffmpeg on PATH.
+// The README's two films. The intro, made by running this file: the opening crawl, its words
+// from crawl.md, into intro.mp4 and intro.gif. The demo, made by explorer.mjs with RECORD=1:
+// film.html's card of what is running and what is not, then Alice's and Bob's wallets side by
+// side, then the explorer, then the closing card; into demo.mp4 and demo.gif. Needs ffmpeg on PATH.
 // Title scenes are drawn a frame at a time on the page's own clock, so they play the same in
 // every run; the live parts are screencasts, sped up where the chain makes them wait.
+//   node client/e2e/film.mjs        the intro (IMAGES=docs/images, CHROME=system Chrome); no net
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const W = 1100, H = 688, FPS = 8;             // the GIF's size and rate
-const TITLES = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "film.html")).href;
+const TITLES = pathToFileURL(path.join(HERE, "film.html")).href;
+const CRAWL = path.join(HERE, "crawl.md");
+
+/** crawl.md's words: its front matter's five lines, then paragraphs split at blank lines. */
+export function crawlWords(file = CRAWL) {
+  const m = readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!m) throw new Error(`${file}: no front matter between --- lines`);
+  const words = Object.fromEntries(m[1].split("\n").filter((l) => l.trim()).map((l) => {
+    const i = l.indexOf(":");
+    if (i < 0) throw new Error(`${file}: not "key: value": ${l}`);
+    return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+  }));
+  for (const k of ["prelude", "title", "subtitle", "episode", "heading"]) if (!words[k]) throw new Error(`${file}: no ${k}`);
+  words.paragraphs = m[2].split(/\n\s*\n/).map((p) => p.split("\n").map((l) => l.trim()).join(" ").trim()).filter(Boolean);
+  if (!words.paragraphs.length) throw new Error(`${file}: no paragraphs`);
+  return words;
+}
 
 export class Film {
   constructor(browser, dir) {
@@ -25,6 +44,7 @@ export class Film {
     await page.setViewport({ width: W, height: H });
     // the card's net: lasair with the curve host calls on, or PolkaJam (FILM_NET, explorer.mjs)
     await page.goto(`${TITLES}?scene=${scene}&net=${process.env.FILM_NET || "polkajam"}`);
+    if (scene === "crawl") await page.evaluate((w) => window.film.crawl(w), crawlWords());
     const { length, still } = await page.evaluate(() => ({ length: window.film.length, still: Boolean(window.film.still) }));
     const frames = path.join(this.dir, scene); mkdirSync(frames);
     const n = still ? 1 : Math.round(length * FPS);
@@ -94,3 +114,15 @@ export async function caption(page, text) {
   }, text, CAPTION);
 }
 export const uncaption = (page) => page.evaluate(() => document.getElementById("film-caption")?.remove());
+
+// the intro, when this file is run
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { default: puppeteer } = await import("puppeteer-core");
+  const IMAGES = process.env.IMAGES ? path.resolve(process.env.IMAGES) : path.resolve(HERE, "../../docs/images");
+  const browser = await puppeteer.launch({ executablePath: process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true });
+  const film = new Film(browser, path.join(IMAGES, "intro-parts"));
+  await film.titles("crawl");
+  film.render(path.join(IMAGES, "intro.mp4"), path.join(IMAGES, "intro.gif"));
+  await browser.close();
+  console.log(`intro ${path.relative(process.cwd(), IMAGES)}/intro.mp4 and intro.gif`);
+}

@@ -23,9 +23,10 @@ lasair validators, six PolkaJam validators, or three of each, with the same serv
   runs at about 0.38 of a slot; we fixed one expiry bug on the way. A mixed net needs both clients to
   agree on PVM gas to the unit: PolkaJam's 2026-09-22 nightly and the v0.8.0 vectors' cmov rule
   differ by 2 gas on one accumulate, which forks the net. PolkaJam v0.8.0 agrees.
-- **Aztec's own kernels, measured.** They compile with Noir rc.3 and prove in 2 to 8 s, but
-  verifying their proof costs about 70 times ours: around 12 billion gas, more than a full
-  package. Running them on JAM means a builder that wraps each proof, which is Aztec's prover.
+- **Aztec's own client proofs, checked.** Aztec v6's kernels compile with Noir rc.3 and prove
+  in 2 to 8 s. Barretenberg's own verifier, compiled unchanged for the PVM, checks their proof
+  in refine for 11.4B gas, more than two full packages; with a proposed Grumpkin MSM host call,
+  3.46B. On a six-validator lasair net such proofs were checked and finalized.
 - **Testnet tooling.** `jamboree rpc`, in a fork of jamixir's jamboree: deploy a service through
   the Bootstrap service, build and submit work-packages, read state, all over JIP-2 from the
   chain spec alone. Offered upstream (jamixir/jamboree#49).

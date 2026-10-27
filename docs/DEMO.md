@@ -78,9 +78,11 @@ the details.
   (a core holds one pending report), which sustains one a slot on PolkaJam: 600 of 600 in an
   hour, 13.4 s median from submission to state. More throughput means more trees (more cores)
   or folding many transfers into one proof.
-- **Aztec's own kernels would not fit refine.** Their proofs verify at about 70 times the cost
-  of ours: about 12 billion gas, more than a full package. Running them means a builder that
-  wraps each proof, which is Aztec's prover ([spikes/chonk](../spikes/chonk/RESULTS.md)).
+- **Aztec's own client proofs fit refine only with a curve call.** Checked by Barretenberg's
+  own verifier, compiled unchanged for the PVM, one costs 11.4B gas, more than two full packages.
+  With the proposed Grumpkin MSM call (105, implemented only by lasair) it costs 3.46B, and on a
+  six-validator lasair net such proofs were checked and finalized, VALID, and INVALID when
+  tampered ([spikes/chonk-pvm](../spikes/chonk-pvm/RESULTS.md)). Ours costs 49M to 169M.
 - **Clients matter.** Both interpreting, PolkaJam refines a privacy proof about 4.5 times faster
   than lasair. lasair's guarantors also wait for the core to be free before guaranteeing the next
   package, and one tree runs at about 0.38 of a slot on lasair against 1.0 on PolkaJam. The README's

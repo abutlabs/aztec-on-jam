@@ -8,10 +8,10 @@
 //   Alice's keys      the send appears in Alice's activity: it spends her 100 and leaves her 60
 //   Bob's viewing key Bob received 40 and 25 (65); it cannot see that he spent the 40
 // Screenshots go to IMAGES (docs/images by default). Exit 0 only if every assertion holds.
-// RECORD=1 also films it for the README (film.mjs): the opening crawl and the card of what is
-// running, Alice's and Bob's wallets side by side with captions, the explorer, the closing card;
-// into IMAGES/demo.mp4 and demo.gif. Needs ffmpeg on PATH. Record on a fresh net
-// (nets/demo.sh down; up), so the explorer shows only this story.
+// RECORD=1 also films it for the README (film.mjs): the card of what is running, Alice's and
+// Bob's wallets side by side with captions, the explorer, the closing card; into IMAGES/demo.mp4
+// and demo.gif. Needs ffmpeg on PATH. Record on a fresh net (nets/demo.sh down; up), so the
+// explorer shows only this story. The opening crawl is a film of its own (film.mjs).
 //   node client/e2e/explorer.mjs        (WALLET=http://localhost:19710, CHROME=system Chrome)
 import puppeteer from "puppeteer-core";
 import { mkdirSync } from "node:fs";
@@ -68,7 +68,7 @@ async function settle(page, want) {
 }
 const same = (a, b) => a.public === b.public && a.private === b.private;
 
-if (film) { console.log("== the film's opening: the crawl and the card"); await film.titles("crawl"); await film.titles("card"); }
+if (film) { console.log("== the film's opening: the card"); await film.titles("card"); }
 const alice = await wallet("alice"), bob = await wallet("bob");
 const a0 = await balances(alice), b0 = await balances(bob);
 console.log(`start: Alice ${JSON.stringify(a0)}, Bob ${JSON.stringify(b0)}`);

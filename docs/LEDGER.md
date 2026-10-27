@@ -1943,3 +1943,28 @@ wall time is lasair's interpreter on one Apple M-series Mac, and only that.
 - **The privacy demo on a JIP-8 net** (jb-lasair6, all four calls on 6 of 6 nodes): check and
   e2e pass (a shield and a send in the wallet). Queue soak 49/49 at pace 0.98; privacy soak
   48/48 at pace 0.96 (5 minutes each); nothing expired.
+
+## 2026-10-27 75 — Aztec's client proofs on lasair, in the docs; the README's two films, recorded on lasair
+
+**Aztec's client proofs.** `spikes/chonk-pvm/on-lasair.sh` (e3391a4, #62) checked one Aztec v6
+client proof in refine with Barretenberg 6.0.0's own verifier, its Grumpkin MSM linked to call
+105, on jb-lasair6 with G_R = 5e9: VALID three times at 3,456,104,321 gas, finalized at slots 14,
+18 and 22; one octet flipped, INVALID at 625,503,052, slot 25. The README (a section of its own,
+and the reduced list), DEMO, ANNOUNCE, ARCHITECTURES and LIMITS said such a check "would not
+fit refine" at about 12B gas; they now give the measured 11.36B without the call, 3.46B with it,
+and the live result, with its limits: one proof, the verdict stored with no Aztec state
+changed, call 105 on lasair only.
+
+**Two films.** The opening crawl is its own film now, its words in `client/e2e/crawl.md` (front
+matter, then paragraphs), drawn by film.html at 62 px a second so its length follows its words:
+`node client/e2e/film.mjs` → docs/images/intro.gif, 37.5 s, no net needed. The demo film starts
+at the card; the card's footnote names the client-proof check.
+
+```
+NET=jb-lasair6 LASAIR_JIP8_FROM_SLOT=0 JB_TELEMETRY=127.0.0.1:9910 nets/demo.sh up   # exit 0, seeded
+RECORD=1 FILM_NET=lasair-calls node client/e2e/explorer.mjs                         # PASS: 19 assertions
+```
+
+lasair main aa67aa9, six validators, calls on every node; privacy refines 49,114,159 and
+49,141,408 gas (node logs). docs/images/demo.gif 59.4 s, 1.7 MB (the PolkaJam film with the crawl
+was 6.8 MB); screenshots 11 to 14 retaken on the same run.
