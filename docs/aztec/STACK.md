@@ -140,6 +140,12 @@ random), so it pays through Aztec's sponsored-fee contract (SponsoredFPC, salt 0
 `0x2d8fff82…69d3`), which genesis funds. With the account type that needs no deployment
 ("Schnorr, initializerless"), nothing else is needed.
 
+**The devnet runs on lasair (#66, done).** `DEVNET_NET=jb-lasair6` puts the settlement service
+on six lasair validators with the curve calls on; the wallet's whole story passes on it, and a
+checkpoint's refine costs 64.06M gas with the calls against 251.46M without (3.9×; the same blob
+falls back to PVM code). One timebase ties it together: cfg's `jamEra` (unix time of JAM slot 0)
+drives both the service's clock and the facade's L1-block timestamps.
+
 **The devnet funds the sponsor at genesis (#64, done).** `aztec start --node` funds the
 SponsoredFPC only with `SPONSORED_FPC=true`; `on-jam.sh` now sets it, configures the settlement
 service with the matching genesis archive root

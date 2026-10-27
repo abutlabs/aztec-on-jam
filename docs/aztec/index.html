@@ -66,7 +66,7 @@
           <div class="tile aztec"><div class="name">Aztec node: sequencer, archiver, world state, AVM, P2P</div>
             <div class="what">Checks each client proof on receipt (bb, native), executes public calls, builds checkpoints with their blobs and proposes them to "L1".</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
-            <div class="status">Built on a PolkaJam devnet: 7 checkpoints settled. Test mode (<a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a>), one sequencer (<a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a>).</div></div>
+            <div class="status">Settling on PolkaJam and on six lasair validators. Test mode (<a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a>), one sequencer (<a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a>).</div></div>
           <div class="tile aztec"><div class="name">Prover node and rollup circuits</div>
             <div class="what">Proves each epoch: one root rollup proof (UltraHonk, Keccak, 113 public inputs) that covers every transaction's client proof.</div>
             <div class="chips"><span class="chip none">no curve call</span></div>
@@ -108,7 +108,7 @@
           <div class="tile ours"><div class="name">lasair (our client)</div>
             <div class="what">Implements the proposed calls 101–105 behind activation flags. Blob data stays as exported segments for 28 days, longer than Ethereum's 18.2-day blob window.</div>
             <div class="chips"><span class="chip fast">101–105</span></div>
-            <div class="status">The Aztec devnet moves here: <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a>.</div></div>
+            <div class="status">The Aztec devnet runs here: a checkpoint refines in 64M gas with the calls, 251M without.</div></div>
           <div class="tile other"><div class="name">PolkaJam (Parity's client)</div>
             <div class="what">No curve calls. Every service above falls back to PVM code and still fits, except the client-proof checker.</div>
             <div class="chips"><span class="chip none">no calls</span></div>
@@ -199,8 +199,8 @@
     <ol class="steps">
       <li><div><span class="state done">DONE</span><b>The devnet ready for a wallet</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/64">#64</a><p>Done 2026-10-27: a never-deployed, unfunded account transacted with a sponsored fee; six checkpoints accepted on JAM.</p></div></li>
       <li><div><span class="state done">DONE</span><b>Our wallet on Aztec's libraries</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/65">#65</a><p>Done 2026-10-27: Alice and Bob in two browser tabs, real client proofs proved in the tab, a private transfer found by Aztec's tagging.</p></div></li>
-      <li><div><span class="state next">NEXT</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Six lasair validators with the curve calls on.</p></div></li>
-      <li><div><span class="state todo">TO DO</span><b>The node checks real client proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a></div></li>
+      <li><div><span class="state done">DONE</span><b>The devnet on lasair</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/66">#66</a><p>Done 2026-10-27: the wallet's whole story on six lasair validators; a checkpoint refines in 64M gas with the calls, 251M without.</p></div></li>
+      <li><div><span class="state next">NEXT</span><b>The node checks real client proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/67">#67</a></div></li>
       <li><div><span class="state todo">TO DO</span><b>A committee and P2P</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a></div></li>
       <li><div><span class="state block">HARDWARE</span><b>Real epoch proofs</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a><p>A prover node; needs a decision on hardware.</p></div></li>
       <li><div><span class="state todo">TO DO</span><b>The demo on Aztec's stack</b> <a href="https://github.com/abutlabs/jam-privacy-service/issues/70">#70</a><p>Re-recorded; today's circuit, services and wallet retired.</p></div></li>
