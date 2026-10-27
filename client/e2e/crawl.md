@@ -1,7 +1,7 @@
 ---
 prelude: A short time ago, on a chain not so far away....
-title: JAM
-subtitle: PRIVACY
+title: AZTEC
+subtitle: ON JAM
 episode: Episode ZK
 heading: A NEW PROOF
 ---

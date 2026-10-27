@@ -13,8 +13,6 @@ released, our code only at the seam.
 [demo](https://abutlabs.github.io/jam-privacy-service/demo/), and
 [our proposed JAM host calls](https://abutlabs.github.io/jam-privacy-service/jip/).
 
-![An opening crawl: JAM PRIVACY, Episode ZK, A NEW PROOF](docs/images/intro.gif)
-
 ![Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the explorer read with no key, with Alice's keys and with Bob's viewing key](docs/images/demo.gif)
 
 Recorded live on a six-validator JAM testnet. Nothing is mocked.
