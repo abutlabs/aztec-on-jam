@@ -30,14 +30,13 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   341 cores re-executing in parallel. At 170.3M gas a proof (**measured**), the chain can
   check 341 × 29 ≈ 9,900 users' proofs every 6 s. Folding there would be a cost with nothing
   to buy (*reasoning* from measured inputs). This holds for proofs the size of this demo's
-  (UltraHonk, verified in about 170M gas). Aztec's client proofs (CHONK) would cost about 12B
-  gas each in the PVM, 2.4 full packages (estimated from native verify times, `spikes/chonk`).
-  Batched, one discharge serves every proof's deferred IPA, and each proof's reduction is about
-  19 ms natively: about 1.4 to 1.7B gas a proof at batches of 64 to 512, about three a full
-  package (`spikes/chonk-ipa`, #46, by the same ratio). That is a direct check of Aztec's own
-  client proofs at small scale, without folding; at scale Aztec's folding (candidate 1) still
-  costs far less a transaction. With the proposed curve calls about 15 ms a proof would stay in
-  the PVM, half of it Poseidon2 (#62).
+  (UltraHonk, verified in about 170M gas). Aztec's client proofs (CHONK) cost more. Measured
+  with bb's own verifier compiled for the PVM (`spikes/chonk-pvm`, #62), one proof's whole check
+  is 11.0B gas, two full packages. Batched, the proofs share one IPA discharge, but that is a
+  2^15 Grumpkin MSM of 9 to 10B gas, itself two packages. Each proof's reduction is 0.98B. With
+  a Grumpkin MSM call (the proposed index 105), about four proofs fit a package. That is a direct
+  check of Aztec's own client proofs at small scale, without folding. At scale, Aztec's folding
+  (candidate 1) still costs far less a transaction.
 - **The ordering problem moves out of the proofs.** In 2, each proof names the exact current
   root, so proofs on one tree serialize at one a slot. In 3, a proof names any recent root
   (Zcash's anchors), and double spends are stopped by the nullifier set in accumulate, which
@@ -83,44 +82,44 @@ repository (PolkaJam unless stated); *reasoning* marks the rest.
   instead of 181M, measured on lasair with the calls (#59), so 3 verifies 95 Aztec-sized proofs
   a full package instead of 27 (measured at 2^16: 104 fit, the 105th runs out of gas).
 
-## Checking Aztec's own client proofs directly (#61)
+## Checking Aztec's own client proofs directly (#61, #62)
 
-Can JAM check Aztec's client proofs (CHONK), with Aztec's circuits unchanged? Native timings
-are measured: Barretenberg 6.0.0 on one thread, `spikes/chonk-ipa`. The gas is estimated from
-them by `spikes/chonk`'s ratio, 70 to 77M gas a native millisecond (our UltraHonk verifier,
-measured both ways).
-- **Per proof:** about 19 ms of reduction, plus 1.27 ms to fold the proof's deferred IPA into
-  a batch.
-- **Once a batch:** one 2^15-point Grumpkin MSM, about 98 ms.
+Can JAM check Aztec's client proofs (CHONK), with Aztec's circuits unchanged? This is measured
+with Barretenberg 6.0.0's own verifier, unchanged, compiled for the PVM and run in refine
+(`spikes/chonk-pvm`, #62). The native times come from `spikes/chonk-ipa`.
+- **Per proof:** the reduction (everything but the IPA) is 0.98B gas, 18.4 ms natively. Folding
+  the proof's deferred IPA into a batch adds about 0.1B (1.27 ms natively, at the MSM's measured
+  rate).
+- **Once a batch:** the IPA discharge, one 2^15-point Grumpkin MSM, is 9.0 to 9.8B gas, about
+  100 ms natively.
 
 A Grumpkin MSM host call (the proposed index 105) is priced here at its floor under the
-proposal's rule: at least the native time × 10/3 gas a nanosecond × 2, about 0.65B gas for the
-2^15 MSM.
+proposal's rule: at least the native time × 10/3 gas a nanosecond × 2. That is about 0.65B gas for
+the 2^15 MSM.
 
 | Proofs in the batch | Gas a proof, no calls | With a Grumpkin MSM call |
 | --- | --- | --- |
-| 1 | 8.3 to 9.1B | 2.1 to 2.2B |
-| 8 | 2.3 to 2.5B | 1.5 to 1.6B |
-| 64 | 1.5 to 1.7B | 1.4 to 1.6B |
-| 512 | 1.4 to 1.6B | 1.4 to 1.6B |
+| 1 | 10.0 to 10.8B | 1.6B |
+| 8 | 2.2 to 2.3B | 1.2B |
+| 64 | 1.2B | 1.1B |
+| 512 | 1.1B | 1.1B |
 
-**A direct check fits.** Batched, about three of Aztec's client proofs fit a full package
-(5e9), with no folding and no prover network. Aztec's folding (candidate 1) still costs far
-less a transaction at scale. A direct check is the way to accept Aztec's proofs with Aztec's
-software unchanged.
+**Without call 105, a direct check does not fit one package.** The discharge alone is 9 to 10B.
+It can be split, since an MSM's parts add up. Two or three packages each take a share, and
+accumulate adds the results and compares them with the batch's claim. That works, but every batch
+then spans several packages.
 
-**The Grumpkin call matters for small batches.** It cuts a lone proof about fourfold, and a
-batch of 8 by a third. From 64 proofs up the shared MSM is already amortised, and the call
-changes almost nothing.
+**With call 105, about four proofs fit a package:** (5.0 − 0.65) / 1.1 ≈ 4. The call matters at
+every batch size, because without it no single package can finish a batch.
 
-**What is left is the reduction**, 19 ms a proof:
-- Poseidon2 transcript hashing, 8.1 ms;
-- BN254 work, 4.5 ms (calls 101 and 102 take it);
-- sumcheck and field arithmetic, 6.4 ms.
+**What is left is the reduction**, 0.98B a proof. Natively (#62 step 1) it splits into:
+- Poseidon2 transcript hashing, 43%;
+- BN254 work, 25% (calls 101 and 102 take it);
+- sumcheck and field arithmetic, 32%.
 
-With every proposed call, about 15 ms a proof stays in the PVM, about 1.1 to 1.2B gas. Half of
-it is Poseidon2, the measured case for a Poseidon2 call, which #62 decides.
+By that split, the proposed curve calls with a Poseidon2 call would leave about a third of the
+reduction in the PVM. That is an estimate: the split is native time, and the PVM's cost differs by
+kind of work. The reduction costs 53M gas a native millisecond and the MSM 87 to 94M.
 
-**What would change this:** a PVM port of bb's verifier (#62 step 2), to replace the ratio with
-measured gas. Poseidon2 and sumcheck may cost the PVM more or less than the UltraHonk verifier
-the ratio comes from.
+**What would change this:** routing bb's BN254 work to calls 101 and 102 in the PVM build, and
+measuring the batch discharge itself rather than one proof's IPA.

@@ -1,0 +1,19 @@
+[package]
+name = "chonk-pvm-service"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["abutlabs <abutlabs@gmx.com>"]
+description = "Spike (#62 step 2): Barretenberg 6.0.0's CHONK verifier, unchanged C++, compiled for the PVM and run in refine"
+
+[dependencies]
+jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
+polkavm-derive = "0.36"
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[workspace]

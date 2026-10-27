@@ -71,6 +71,11 @@ service's preimages.
 
 ## In refine gas: an estimate, not a measurement
 
+**Measured since** (`spikes/chonk-pvm`, #62 step 2, bb's verifier compiled for the PVM): the
+reduction costs 0.98B gas, 35% below the estimate here, and one 2^15 IPA 9.0 to 9.8B, 25% above
+it. So the discharge alone is more than a package, and a batch fits one only with a Grumpkin MSM
+call. The estimate below is kept as it was made.
+
 No PVM CHONK verifier exists. The estimate scales by `spikes/chonk`'s ratio: our UltraHonk proof
 verifies in 2.2 to 2.4 ms natively and in 169,112,761 gas in refine, without host calls. That is
 70 to 77M gas a native millisecond.

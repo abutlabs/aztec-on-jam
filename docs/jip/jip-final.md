@@ -67,7 +67,8 @@ which only a host call reaches.
   - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
   - Poseidon2 over BN254: a refine-side note tree already appends 11,350 notes a package
     without it;
-  - Grumpkin: needed only to check Aztec's client proofs directly;
+  - Grumpkin: needed only to check Aztec's client proofs directly. Measured, such a check does
+    not fit one package without it: its IPA's 2^15 MSM is 9 to 10B gas (jam-privacy-service#62);
   - a dedicated KZG point evaluation: it composes from 103 and 104 for less than a dedicated
     call would cost.
 - **Separate indices,** one per operation, as JIP-1 uses. A selector argument adds a failure
