@@ -512,6 +512,32 @@ fn vectors() {
             emit(call, "G1 point outside the subgroup", &sub);
         }
     }
+    // The review of lasair#130: x = modulus reduces to (0, y), which is off every one of these
+    // curves, so it cannot tell a client that rejects a non-canonical coordinate from one that
+    // reduces it. A valid point with a modulus added to one coordinate can: canonical, it is
+    // HUH; reduced, it is the point. One for each coordinate, for each MSM.
+    for call in ["bn254_g1_msm", "bls12_381_g1_msm", "grumpkin_g1_msm"] {
+        let good = cases(call, 1, &mut rng).remove(0).1;
+        let (fe, m) = match call {
+            "bn254_g1_msm" => (32, <ark_bn254::Fq as PrimeField>::MODULUS.to_bytes_be()),
+            "grumpkin_g1_msm" => (32, <ark_grumpkin::Fq as PrimeField>::MODULUS.to_bytes_be()),
+            _ => (64, <ark_bls12_381::Fq as PrimeField>::MODULUS.to_bytes_be()),
+        };
+        for (c, name) in [(0, "x plus the field modulus"), (1, "y plus the field modulus")] {
+            let mut v = good.clone();
+            // the coordinate's value octets: all 32, or the low 48 of an EIP-2537 field
+            let lo = fe * c + if fe == 64 { 16 } else { 0 };
+            let w = m.len();
+            let mut carry = 0u16;
+            for i in (0..w).rev() {
+                let t = v[lo + i] as u16 + m[m.len() - w + i] as u16 + carry;
+                v[lo + i] = t as u8;
+                carry = t >> 8;
+            }
+            assert_eq!(carry, 0, "{call} {name}: the sum overflows its field");
+            emit(call, name, &v);
+        }
+    }
 }
 
 fn main() {

@@ -112,7 +112,7 @@ Every call takes φ7 = input offset and φ8 = input length, and evaluates in thi
 1. **Gas.** The call's gas is computed from φ8 alone, in unbounded integers, using the schedules
    in *Gas pricing*. If it exceeds the gas remaining, the invocation runs out of gas (∞). If φ8
    is not a multiple of the call's item size, the gas is that of ⌊φ8 / item⌋ items, at least the
-   1-item price, and step 3 returns `HUH`.
+   1-item price, and step 3 returns `HUH`. An MSM with φ8 = 0 is also priced as one item.
 2. **Memory.** If μ_{φ7…φ7+φ8} is not readable, or the output range is not writable, the
    invocation panics (☇), as other host calls do on inaccessible memory. Since φ8 ≥ 2^32 can
    never be readable, this bounds φ8.
@@ -215,8 +215,11 @@ the submission note.
     G_BN_PAIR(k)  = 4,196,895 + 2,030,652 · k
     G_BLS_PAIR(k) = 1,827,334 + 1,727,240 · k
 
-**MSMs**, a table. Between listed sizes, gas is linear in n. Past 512 it grows by the last
-segment's slope. Each entry is the largest at its size or any smaller size:
+**MSMs**, a table. Between listed sizes, gas is linear in n, rounded up: for listed sizes
+a < n < b, G(n) = G(a) + ⌈(G(b) − G(a)) · (n − a) / (b − a)⌉. Past the last listed size, each
+point adds the listed per-point constant (the last segment's slope, rounded up). Each entry is
+the largest at its size or any smaller size. `vectors/jip8-gas.jsonl` pins these rules: the gas
+of each call at listed, interpolated, partial, zero and past-the-table lengths.
 
 | n | G_BN_MSM(n) | G_BLS_MSM(n) |
 |---|---|---|
@@ -292,12 +295,16 @@ and switch on the probe's result.
 
 ## Test vectors
 
-- **JAM-native:** `vectors/jip8-core.jsonl`, 97 vectors. Each gives the call, the case, the
+- **JAM-native:** `vectors/jip8-core.jsonl`, 103 vectors. Each gives the call, the case, the
   input, the result code, and the output or φ'8, and both implementations of each curve
   produce them. They cover the benchmark's cases at n ≤ 4 and k ≤ 4, k = 0, and the malformed
   inputs above: a wrong length, x equal to the modulus (and for 105, y), a point off the
-  curve, nonzero top bytes in an EIP-2537 field, and a G1 point outside the subgroup. 105's 23
-  are also produced by Barretenberg's own Grumpkin, a third implementation.
+  curve, nonzero top bytes in an EIP-2537 field, and a G1 point outside the subgroup. For each
+  MSM, a valid point with the field modulus added to x, and to y: a client that reduces a
+  coordinate instead of rejecting it answers `OK` there. 105's 25 are also produced by
+  Barretenberg's own Grumpkin, a third implementation.
+- **Gas:** `vectors/jip8-gas.jsonl`, each call's gas at the lengths above, computed from this
+  text's schedules alone (`spikes/jip-bench/gas-vectors.py`).
 - **Ethereum's,** where the semantics coincide (none exist for Grumpkin):
   - EIP-197's pairing vectors, for 102;
   - EIP-196's MUL vectors, for 101 with n = 1;
@@ -360,8 +367,9 @@ vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second l
 6. **A partial pairing input.** `bn254_pairing_check`'s gas reads k = ⌊φ8 / 192⌋, which for
    0 < φ8 < 192 is 0, while the common rule charges "at least the 1-item price". lasair follows
    the common rule. One of the two should change.
-7. **Gas between listed MSM sizes.** "Linear in n" does not say how a fraction rounds. lasair
-   rounds up (never below the line).
+7. **Gas between listed MSM sizes** (settled). The text now says it: rounded up, the listed
+   per-point constant past the table, and φ8 = 0 priced as one item. A review of call 105
+   showed that a client rounding down would differ by one gas at most interpolated sizes.
 8. **An output over the input.** For the MSMs, φ9…φ9+out may overlap φ7…φ7+φ8. lasair reads the
    input before writing, so the result is defined; the text should say so.
 
