@@ -38,25 +38,22 @@
       <span><i class="sw ours"></i>Ours, new</span>
       <span><i class="sw demo"></i>Ours, today's demo only</span>
     </div>
+    <p class="meta">Chips mark where the proposed curve host calls matter — every tile without one runs with no call at all.</p>
     <div class="stack">
       <div class="band">
         <div class="where"><b>User's device</b><small>keys, notes, proving</small></div>
         <div class="tiles">
           <div class="tile ours"><div class="name">Our wallet (built)</div>
             <div class="what">Our interface on Aztec's libraries: the PXE in the tab, Aztec's prover and token, tagging, sponsored fees. Aztec's demo-wallet (unlicensed) was reference only.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">e2e: deploy 23 s, mint 10 s, private send 23 s, real proofs in the tab.</div></div>
           <div class="tile aztec"><div class="name">wallet-sdk, PXE, aztec.js, accounts</div>
             <div class="what">Sync notes, simulate private functions, build transactions, find notes by Aztec's tagging. A full PXE runs in a browser tab (SQLite on OPFS). Apache-2.0.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">The PXE ran unchanged on JAM, 2026-10-24 (<code>send-tx.mjs</code>).</div></div>
           <div class="tile aztec"><div class="name">Barretenberg prover (bb, bb.js)</div>
             <div class="what">Folds the app circuits and private kernels into one client proof (CHONK): 80 to 128 KB, 2.2 to 8.2 s natively.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Real proofs in Chrome: 3.6 to 3.9 s for a token transfer, 2.2 s natively.</div></div>
           <div class="tile aztec"><div class="name">Aztec.nr contracts, kernel circuits</div>
             <div class="what">Token, account and fee contracts; private kernels; rollup circuits. They take chain id, slots and roots as values.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Compiled with Aztec's pinned toolchain.</div></div>
         </div>
       </div>
@@ -66,11 +63,9 @@
         <div class="tiles">
           <div class="tile aztec"><div class="name">Aztec node: sequencer, archiver, world state, AVM, P2P</div>
             <div class="what">Checks each client proof on receipt (bb, native), executes public calls, builds checkpoints with their blobs and proposes them to "L1".</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Settling on PolkaJam and on six lasair validators; verifies every client proof (a tampered one is refused in 141 ms). One sequencer (<a href="https://github.com/abutlabs/jam-privacy-service/issues/68">#68</a>).</div></div>
           <div class="tile aztec"><div class="name">Prover cluster: node · broker · agents</div>
             <div class="what">Aztec's three proving processes, unchanged. The prover node watches the chain for unproven epochs and cuts them into jobs; the broker queues them; stateless agents prove them (Aztec's guidance: 32 cores, 128 GB per agent). The output is one root rollup proof (UltraHonk, Keccak, 113 public inputs) covering every transaction.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Not run here: real epoch proving needs hardware (<a href="https://github.com/abutlabs/jam-privacy-service/issues/69">#69</a>).</div></div>
         </div>
       </div>
@@ -80,7 +75,6 @@
         <div class="tiles">
           <div class="tile ours"><div class="name">jam-l1 facade</div>
             <div class="what">Answers the node exactly as its L1 would: about 40 contract reads, blocks, logs, receipts and traces, from the settlement service's storage. Relays each <code>propose</code> as a work package. Aztec's code is not patched.</div>
-            <div class="chips"><span class="chip none">no curve call</span></div>
             <div class="status">Built (#53). Follows each release's L1 interface changes; v5→v6 moved 459 lines on Aztec's side.</div></div>
         </div>
       </div>
@@ -112,7 +106,7 @@
             <div class="status">The Aztec devnet runs here: a checkpoint refines in 64M gas with the calls, 251M without.</div></div>
           <div class="tile other"><div class="name">PolkaJam (Parity's client)</div>
             <div class="what">No curve calls. Every service above falls back to PVM code and still fits, except the client-proof checker.</div>
-            <div class="chips"><span class="chip none">no calls</span></div>
+            <div class="chips"><span class="chip none">implements no curve calls</span></div>
             <div class="status">The Aztec devnet's net today.</div></div>
         </div>
       </div>
