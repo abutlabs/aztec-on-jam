@@ -24,7 +24,7 @@ GENESIS_ARCHIVE=0x0ad1dcc0e08d2b1c82a79af5685598e631e881187c3c9734ad28df5dbcf5db
 VK_TREE_ROOT=0x22fff5de6ce590153df4468f7f0b152188a803d91b3c9c648b91d93d5913f219
 PROTOCOL_CONTRACTS_HASH=0x0f54271c52865841a77aaa66036eed901aff22fdce9f08e123ec8b205c9854d7
 REGISTRY=0x00000000000000000000000000000000a11ce001
-rm -rf "$D"; mkdir -p "$D/blobs" "$D/node-data"
+rm -rf "$D"; mkdir -p "$D/blobs" "$D/node-data" "$D/bb-work"
 pids=()
 trap 'kill "${pids[@]}" 2>/dev/null || true; wait 2>/dev/null || true' EXIT INT TERM
 "$ROOT/services/aztec-settlement/devnet.sh" "$D" "$GENESIS_ARCHIVE" "$VK_TREE_ROOT" "$PROTOCOL_CONTRACTS_HASH" > "$D/devnet.log" 2>&1 & pids+=($!)
@@ -43,12 +43,14 @@ json.dump(dict(port=8545, jip2=d.get("jip2", "ws://127.0.0.1:19800"), chainSpec=
 PY
 node "$HERE/jam-l1.mjs" "$D/jam-l1.json" > "$D/jam-l1.out" 2>&1 & pids+=($!)
 sleep 2
-# test mode, as `aztec start --local-network` runs: transactions' client proofs aren't verified
-# the sequencer's keys: the first account of Foundry's and Aztec's test mnemonic, as the local network uses
+# real proofs by default (#67): the node verifies each transaction's client proof (CHONK, by
+# native bb) before it enters the pool. PROVER_REAL_PROOFS=false gives Aztec's test mode, as
+# `aztec start --local-network` runs, where client proofs aren't verified.
+# The sequencer's keys: the first account of Foundry's and Aztec's test mnemonic, as the local network uses
 KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcaee95b6caee5d1b5
 SEQ_PUBLISHER_PRIVATE_KEYS=$KEY VALIDATOR_PRIVATE_KEYS=$KEY COINBASE=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \
 SEQ_BUILD_CHECKPOINT_IF_EMPTY=${SEQ_BUILD_CHECKPOINT_IF_EMPTY:-true} \
-PROVER_REAL_PROOFS=false \
+PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-work \
 ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true SPONSORED_FPC=true P2P_ENABLED=false \
 DATA_DIRECTORY=$D/node-data BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
 ARCHIVER_POLLING_INTERVAL_MS=1000 ARCHIVER_VIEM_POLLING_INTERVAL_MS=1000 LOG_LEVEL=${LOG_LEVEL:-info} \

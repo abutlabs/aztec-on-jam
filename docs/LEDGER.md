@@ -2079,3 +2079,24 @@ Three timing fixes, each found by a refused checkpoint or a rejected transaction
   a minute through finality.
 
 One Apple M-series Mac; gas is the protocol's.
+
+## 2026-10-27 81 — The node verifies real client proofs (#67)
+
+`on-jam.sh` now defaults `PROVER_REAL_PROOFS=true` (with `BB_WORKING_DIRECTORY` set, which real
+mode needs): Aztec's node verifies each transaction's client proof with native bb before it
+enters the pool, as Aztec's network does. Test mode stays one env away.
+
+`tools/aztec-local/real-proofs-check.mjs`, on the lasair devnet:
+
+```
+token deployed with a real client proof, verified by the node: 8.6 s
+mint with a real client proof: status proposed, block 6, 8.7 s
+tampered proof refused by the node in 141 ms: Invalid tx: Invalid proof
+PASS: real client proofs verified by the node; a tampered proof refused; the mint settled
+```
+
+The tamper flips one field of the CHONK proof after proving, through a sendTx interceptor; the
+refused transfer's original is never sent, and the earlier mint's balance proves settlement.
+`wallet/e2e.mjs` passes unchanged in this mode (7 of 7; deploy 16.5 s, mint 20.5 s, send 11.6 s,
+proofs made in the tab, verified by the node — "verify Chonk proof" per transaction in its log).
+The 141 ms includes the RPC round trip. One Apple M-series Mac.
