@@ -14,6 +14,8 @@
 #   - the C/C++ runtime: rt.cpp (new/delete, std::string, shared_ptr's count, guards, ...),
 #     the service (malloc and friends, abort), and stubs.cpp, generated from the symbols the
 #     link still lacks, each logging its name and stopping (logging, exceptions, files).
+# gk105.cpp routes bb's Grumpkin MSM to the proposed call 105 where the net has it (--wrap, in
+# service/build.rs); without the call, bb's own MSM runs.
 # OPT (default -O3) is the optimisation level for clang and llc. PLAIN_INLINE (default 1;
 # empty for bb's own) adds plain-inline.h: bb's forced inlining off, which the 4 MB code limit
 # needs. bb's sources are the checkout's commit, exported (git archive), not its working tree. Needs: Xcode's clang, rustup
@@ -72,7 +74,7 @@ lower() {  # lower FILE.ll: constructors exported (ids to $O/ctors.list), then a
 }
 export -f cc lower; export SRC DEPS O R T OPT LLC_OPT HERE PLAIN_INLINE
 : > "$O/ctors.list"
-{ grep -v backing_memory "$HERE/bb-sources.txt" | sed "s|^|$SRC/|"; echo "$HERE/shim.cpp"; echo "$HERE/rt.cpp"; } \
+{ grep -v backing_memory "$HERE/bb-sources.txt" | sed "s|^|$SRC/|"; echo "$HERE/shim.cpp"; echo "$HERE/gk105.cpp"; echo "$HERE/rt.cpp"; } \
   | xargs -P 8 -I{} bash -c 'cc {} -fno-exceptions >/dev/null'
 cc "$SRC/src/barretenberg/polynomials/backing_memory.cpp" -fexceptions >/dev/null  # has a try block
 ls "$O"/ll/*.ll | xargs -P 8 -I{} bash -c 'lower {}'

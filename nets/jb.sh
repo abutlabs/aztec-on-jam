@@ -17,8 +17,10 @@
 #      the net up, headless; default 240), JB_TELEMETRY (the nodes' JIP-3 telemetry to host:port,
 #      e.g. 127.0.0.1:9910 for the observability stack's receiver), JB_RPC (on an all-lasair
 #      net: node, the default, for JIP-2 from validator 0's own state; reader for lasair-reader),
-#      LASAIR_JIP8_FROM_SLOT (lasair's JIP-8 curve host calls from that slot, on every node: an
-#      experiment, not GP 0.8.0; unset, off)
+#      LASAIR_JIP8_FROM_SLOT (lasair's JIP-8 curve host calls 101-104 from that slot, on every
+#      node: an experiment, not GP 0.8.0; unset, off; LASAIR_JIP8_105_FROM_SLOT the same for 105),
+#      JB_REFINE_GAS (G_R, the refine gas a package may use, in the chain spec's protocol
+#      parameters: e.g. 5000000000, the full spec's, on an otherwise tiny chain; unset, tiny's 1e9)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
 NET=${NET:-polkajam}
@@ -127,6 +129,13 @@ case "${1:-}" in
     [ "$LZN" = 0 ] || [ -x "$LZ" ] || { echo "no lasair binary at $LZ (dune build in ../lasair)" >&2; exit 1; }
     rm -rf "$RUN"; mkdir -p "$RUN"
     "$PJ" --chain "$CHAIN" dump-spec "$SPEC" >/dev/null
+    # G_R is octets 50..57 of the protocol parameters (GP 0.8.0's order: B_I B_L B_S C D E G_A G_I G_R)
+    [ -n "${JB_REFINE_GAS:-}" ] && python3 - "$SPEC" "$JB_REFINE_GAS" <<'PY2'
+import json, sys
+s = json.load(open(sys.argv[1])); p = bytearray.fromhex(s["protocol_parameters"])
+p[50:58] = int(sys.argv[2]).to_bytes(8, "little"); s["protocol_parameters"] = p.hex()
+json.dump(s, open(sys.argv[1], "w"), indent=2)
+PY2
     if [ "$NET" = polkajam ]; then testnet_up; else
     cmds=()
     # the interpreter: PolkaJam's recompiler is Linux-only. JB_TELEMETRY=host:port sends its JIP-3

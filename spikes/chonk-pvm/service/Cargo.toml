@@ -9,6 +9,7 @@ description = "Spike (#62 step 2): Barretenberg 6.0.0's CHONK verifier, unchange
 [dependencies]
 jam-pvm-common = { path = "../../../../jamswap/tools/jam080/jam-pvm-common", default-features = false, features = ["service"] }
 polkavm-derive = "0.36"
+curve-calls = { path = "../../../crates/curve-calls" }
 
 [profile.release]
 panic = "abort"

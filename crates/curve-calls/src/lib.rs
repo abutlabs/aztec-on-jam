@@ -1,5 +1,6 @@
-//! The proposed curve host calls (indices 101-104) for JAM services, with EIP-196/197 and
-//! EIP-2537 encodings: the MSM writes its sum, the pairing check answers in φ'8.
+//! The proposed curve host calls (indices 101-105) for JAM services, with EIP-196/197 and
+//! EIP-2537 encodings (105: EIP-196's over Grumpkin): the MSM writes its sum, the pairing check
+//! answers in φ'8.
 //!
 //! - **Detection:** each call's first use is its probe. `WHAT` (an unknown host call: a net
 //!   without the calls, or before their activation slot) marks it absent for the rest of the
@@ -37,12 +38,14 @@ pub enum Answer<T> {
 const UNKNOWN: u8 = 0;
 const AVAILABLE: u8 = 1;
 const ABSENT: u8 = 2;
-// per call, 101..104: unknown until its first use, then available or absent
-static STATE: [AtomicU8; 4] = [AtomicU8::new(UNKNOWN), AtomicU8::new(UNKNOWN), AtomicU8::new(UNKNOWN), AtomicU8::new(UNKNOWN)];
+/// How many calls: 101..105.
+pub const CALLS: usize = 5;
+// per call, 101..105: unknown until its first use, then available or absent
+static STATE: [AtomicU8; CALLS] = [const { AtomicU8::new(UNKNOWN) }; CALLS];
 
-/// Which calls this invocation used: for 101..104, Some(true) the host call, Some(false) PVM
+/// Which calls this invocation used: for 101..105, Some(true) the host call, Some(false) PVM
 /// code, None not used yet.
-pub fn used() -> [Option<bool>; 4] {
+pub fn used() -> [Option<bool>; CALLS] {
     core::array::from_fn(|i| match STATE[i].load(Ordering::Relaxed) { AVAILABLE => Some(true), ABSENT => Some(false), _ => None })
 }
 
@@ -76,6 +79,11 @@ pub fn bls12_381_g1_msm(input: &[u8]) -> Answer<[u8; 128]> {
 pub fn bls12_381_pairing_check(input: &[u8]) -> Answer<bool> {
     through(3, || { let (r, h) = host::bls12_381_pairing_check(input); (r, Some(h == 1)) })
 }
+/// 105: n >= 1 items of (Grumpkin point 64, scalar 32), EIP-196's encoding over Grumpkin's
+/// field: the sum.
+pub fn grumpkin_g1_msm(input: &[u8]) -> Answer<[u8; 64]> {
+    through(4, || { let mut o = [0u8; 64]; let r = host::grumpkin_g1_msm(input, &mut o); (r, Some(o)) })
+}
 
 #[cfg(target_env = "polkavm")]
 mod host {
@@ -89,6 +97,8 @@ mod host {
         fn curve_bls12_381_g1_msm(input: *const u8, len: u64, out: *mut u8) -> u64;
         #[polkavm_import(index = 104)]
         fn curve_bls12_381_pairing_check(input: *const u8, len: u64) -> (u64, u64);
+        #[polkavm_import(index = 105)]
+        fn curve_grumpkin_g1_msm(input: *const u8, len: u64, out: *mut u8) -> u64;
     }
     pub fn bn254_g1_msm(input: &[u8], out: &mut [u8; 64]) -> u64 {
         unsafe { curve_bn254_g1_msm(input.as_ptr(), input.len() as u64, out.as_mut_ptr()) }
@@ -102,18 +112,21 @@ mod host {
     pub fn bls12_381_pairing_check(input: &[u8]) -> (u64, u64) {
         unsafe { curve_bls12_381_pairing_check(input.as_ptr(), input.len() as u64) }
     }
+    pub fn grumpkin_g1_msm(input: &[u8], out: &mut [u8; 64]) -> u64 {
+        unsafe { curve_grumpkin_g1_msm(input.as_ptr(), input.len() as u64, out.as_mut_ptr()) }
+    }
 }
 
 #[cfg(not(target_env = "polkavm"))]
 mod host {
-    pub use crate::stand_in::{bls12_381_g1_msm, bls12_381_pairing_check, bn254_g1_msm, bn254_pairing_check};
+    pub use crate::stand_in::{bls12_381_g1_msm, bls12_381_pairing_check, bn254_g1_msm, bn254_pairing_check, grumpkin_g1_msm};
 }
 
 /// The calls natively, for tests: arkworks over the same bytes, as a host with the calls
 /// computes them, each call answering as its [Mode] says.
 #[cfg(not(target_env = "polkavm"))]
 pub mod stand_in {
-    use super::{HUH, OK, WHAT};
+    use super::{CALLS, HUH, OK, WHAT};
     use alloc::vec::Vec;
     use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, VariableBaseMSM};
     use ark_ff::{BigInteger, One, PrimeField, Zero};
@@ -124,20 +137,22 @@ pub mod stand_in {
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub enum Mode { Present, Absent, WhatAfterFirst, Huh }
     const MODES: [Mode; 4] = [Mode::Present, Mode::Absent, Mode::WhatAfterFirst, Mode::Huh];
-    static MODE: [AtomicU8; 4] = [AtomicU8::new(0), AtomicU8::new(0), AtomicU8::new(0), AtomicU8::new(0)];
-    static ANSWERED: [AtomicU8; 4] = [AtomicU8::new(0), AtomicU8::new(0), AtomicU8::new(0), AtomicU8::new(0)];
+    static MODE: [AtomicU8; CALLS] = [const { AtomicU8::new(0) }; CALLS];
+    static ANSWERED: [AtomicU8; CALLS] = [const { AtomicU8::new(0) }; CALLS];
 
-    /// Play a net where calls 101..104 answer as [modes] says, and forget what was detected.
-    pub fn set_modes(modes: [Mode; 4]) {
-        for i in 0..4 {
-            MODE[i].store(MODES.iter().position(|m| *m == modes[i]).unwrap() as u8, Ordering::Relaxed);
+    /// Play a net where calls 101, 102, .. answer as [modes] says (calls past its length are
+    /// present), and forget what was detected.
+    pub fn set_modes<const N: usize>(modes: [Mode; N]) {
+        for i in 0..CALLS {
+            let m = modes.get(i).copied().unwrap_or(Mode::Present);
+            MODE[i].store(MODES.iter().position(|x| *x == m).unwrap() as u8, Ordering::Relaxed);
             ANSWERED[i].store(0, Ordering::Relaxed);
             super::STATE[i].store(super::UNKNOWN, Ordering::Relaxed);
         }
     }
     /// Every call absent (true) or present (false).
     pub fn set_absent(absent: bool) {
-        set_modes([if absent { Mode::Absent } else { Mode::Present }; 4])
+        set_modes([if absent { Mode::Absent } else { Mode::Present }; CALLS])
     }
     // WHAT or HUH by the mode, else None: answer
     fn by_mode(i: usize) -> Option<u64> {
@@ -250,5 +265,26 @@ pub mod stand_in {
             }
         }
         (OK, ark_bls12_381::Bls12_381::multi_pairing(a, b).0.is_one() as u64)
+    }
+    pub fn grumpkin_g1_msm(input: &[u8], out: &mut [u8; 64]) -> u64 {
+        use ark_grumpkin::{Affine, Fq};
+        if let Some(r) = by_mode(4) { return r; }
+        if input.is_empty() || input.len() % 96 != 0 { return HUH; }
+        let fq = |b: &[u8]| { let v = Fq::from_be_bytes_mod_order(b); (v.into_bigint().to_bytes_be() == b).then_some(v) };
+        let (mut b, mut s) = (Vec::new(), Vec::new());
+        for item in input.chunks_exact(96) {
+            let (Some(x), Some(y)) = (fq(&item[..32]), fq(&item[32..64])) else { return HUH };
+            let p = if x.is_zero() && y.is_zero() { Affine::identity() } else { Affine::new_unchecked(x, y) };
+            if !p.is_on_curve() { return HUH; }
+            b.push(p);
+            s.push(ark_grumpkin::Fr::from_be_bytes_mod_order(&item[64..]));
+        }
+        let r = ark_grumpkin::Projective::msm_unchecked(&b, &s).into_affine();
+        *out = [0; 64];
+        if let Some((x, y)) = r.xy() {
+            out[..32].copy_from_slice(&x.into_bigint().to_bytes_be());
+            out[32..].copy_from_slice(&y.into_bigint().to_bytes_be());
+        }
+        OK
     }
 }

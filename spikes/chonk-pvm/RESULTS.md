@@ -84,6 +84,42 @@ Grumpkin's base field costs the PVM more per native millisecond than the sumchec
 - **What remains is the reduction.** Step 1 (`spikes/chonk-ipa`) splits its native time: Poseidon2
   transcript hashing 43%, BN254 work 25% (calls 101 and 102), field arithmetic 32%.
 
+## With call 105, on a live lasair net (2026-10-27)
+
+`gk105.cpp` routes bb's Grumpkin MSM to the proposed host call 105. The service links with
+`--wrap` for bb's two Grumpkin MSM entry points, so bb is not changed; without the call, bb's own
+MSM runs. The same proof, in lasair's refine:
+
+| Payload | Refine gas, without 105 | With 105 | bb's MSMs done by 105 |
+|---|---|---|---|
+| The whole verification (2^15 CRS points parsed) | 11.36B | **3.47B** | 7 |
+| The per-proof reduction | 982M | 814M | 4 |
+| One proof octet flipped (rejected) | 379M | 379M | 0 |
+
+**One client proof's whole check fits a full-spec package (5e9).** A tiny-spec package (1e9)
+holds only the reduction.
+
+`on-lasair.sh` runs it on `nets/jb.sh`'s jb-lasair6: six lasair validators (lasair main), calls
+101–105 active on every node, and G_R = 5e9 in the chain spec's protocol parameters, the full
+spec's refine gas on an otherwise tiny chain (tiny's 1e9 is less than one check). Each proof is
+one work-item. Its payload is [mode][tag], and the verifier's 2.18 MB input travels as the item's
+extrinsic, because a package itself is held to 200 KiB.
+
+| Work-item | Verdict, accumulated | Verifier gas | Finalized | Submit to final |
+|---|---|---|---|---|
+| Proof 1 | VALID | 3,456,104,321 | slot 14 | 21 s |
+| Proof 2 | VALID | 3,456,104,321 | slot 18 | 26 s |
+| Proof 3 | VALID | 3,456,104,321 | slot 22 | 24 s |
+| Proof 4, one octet flipped | INVALID | 625,503,052 | slot 25 | 18 s |
+
+- Every report was guaranteed with three signatures and audited by more than two-thirds of the
+  six validators. The audits re-executed the refine from the bundle fetched over CE-147.
+- lasair's refine took 7.8 to 13.3 s on this Mac, with six nodes sharing it.
+- On the tiny chain (G_R = 1e9), the reduction alone also finalized: VALID, and INVALID for the
+  flipped proof. The whole check ran out of gas there.
+- The four proofs are one proof, submitted three times as it is and once tampered. No other
+  Aztec client proof has been run yet.
+
 ## Not measured here
 
 - The reduction with its BN254 work (KZG batch-mul, pairings) routed to calls 101 and 102. bb

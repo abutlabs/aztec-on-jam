@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# #62: Aztec client proofs (CHONK) checked in refine on a live six-validator lasair net, their
+# verdicts accumulated and finalized. The service is build.sh's: bb 6.0.0's own verifier, its
+# C++ unchanged, with its Grumpkin MSM through the proposed host call 105 (gk105.cpp). The net is
+# nets/jb.sh's jb-lasair6 (lasair main, native) with the curve calls 101-105 active from slot 0
+# on every node (lasair's activation flags: an experiment, not GP 0.8.0), and the full spec's
+# refine gas, G_R = 5e9, in the chain spec's protocol parameters: tiny's 1e9 is less than one
+# proof's check (3.47B with call 105).
+#
+# Each proof is one work-item: the payload is [mode 1: the whole verification][tag], and the
+# verifier's input (proof, vk and the CRS points, 2.2 MB with the 2^15 Grumpkin points) is the
+# item's extrinsic, which travels beside the package (a package is held to 200 KiB). Refine
+# outputs [tag][verdict][the verifier's gas][MSMs done by call 105]; accumulate stores it at
+# "v:" ++ tag. The script waits for each verdict to be in a finalized block.
+#
+#   spikes/chonk-pvm/on-lasair.sh [N]    N valid proofs (default 2), then one tampered
+#   UP=0 ...                             use the net already up (nets/jb.sh up)
+# Needs: build.sh and measure.sh run (out/chonk-pvm-service.jam, out/verify-1.bin), lasair
+# built (dune build in ../lasair), and jamboree built (../jamboree).
+set -euo pipefail
+HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); SUB=$(cd "$ROOT/.." && pwd)
+export NET=jb-lasair6 LASAIR_JIP8_FROM_SLOT=0 LASAIR_JIP8_105_FROM_SLOT=0 JB_REFINE_GAS=${JB_REFINE_GAS:-5000000000}
+JB=${JAMBOREE:-$SUB/jamboree/target/release/jamboree}; SPEC=$ROOT/out/$NET/spec.json
+O=$HERE/out; N=${1:-2}
+rpc() { "$JB" rpc --url ws://127.0.0.1:42950 --chain-spec "$SPEC" "$@"; }
+finalized() { rpc head | awk '/finalized/{for (i = 1; i < NF; i++) if ($i == "finalized") print $(i + 1)}' | tr -dc 0-9; }
+
+# the verifier's input as an extrinsic, and the same with one proof octet flipped (measure.sh's)
+python3 - "$O/verify-1.bin" "$O/ext-valid.bin" "$O/ext-bad.bin" <<'PY'
+import sys
+b = open(sys.argv[1], "rb").read()
+assert b[0] == 1, "verify-1.bin is mode 1"
+open(sys.argv[2], "wb").write(b[2:])
+bad = bytearray(b[2:]); bad[4 + 40000] ^= 1
+open(sys.argv[3], "wb").write(bad)
+PY
+
+[ "${UP:-1}" = 1 ] && "$ROOT/nets/jb.sh" up
+SID=$(rpc deploy "$O/chonk-pvm-service.jam" --fresh | sed -n 's/^SERVICE_ID=//p')
+echo "chonk-pvm service: $SID"
+
+submit() {  # submit TAG EXTRINSIC: one proof in its own package; then its verdict, once final
+  local tag=$1 ext=$2 t0 key value slot
+  t0=$(date +%s)
+  rpc submit "$SID" "0x01$(printf %02x "$tag")" --extrinsic "@$ext" --wait --timeout 300 | tail -2
+  key=0x763a$(printf %02x "$tag")
+  for _ in $(seq 1 150); do value=$(rpc read "$SID" "$key"); [ "$value" != "(none)" ] && break; sleep 2; done
+  slot=$(rpc head | awk '{for (i = 1; i < NF; i++) if ($i == "best") print $(i + 1)}' | tr -dc 0-9)
+  for _ in $(seq 1 150); do [ "$(finalized)" -ge "$slot" ] 2>/dev/null && break; sleep 2; done
+  python3 - "$tag" "$value" "$slot" "$(finalized)" "$(( $(date +%s) - t0 ))" <<'PY'
+import sys
+tag, v, slot, fin, secs = sys.argv[1:]
+b = bytes.fromhex(v.removeprefix("0x")) if v != "(none)" else b""
+if len(b) < 17:
+    print(f"proof {tag}: no verdict ({v})"); sys.exit()
+verdict = {1: "VALID", 0: "INVALID", 2: "MALFORMED"}.get(b[0], b[0])
+print(f"proof {tag}: {verdict}, verifier gas {int.from_bytes(b[1:9], 'little'):,}, "
+      f"{int.from_bytes(b[9:17], 'little')} MSMs by call 105; stored by slot {slot}, "
+      f"finalized {fin} ({'FINAL' if int(fin or 0) >= int(slot) else 'not final yet'}), {secs} s")
+PY
+}
+for t in $(seq 1 "$N"); do submit "$t" "$O/ext-valid.bin"; done
+submit $((N + 1)) "$O/ext-bad.bin"
+rpc head

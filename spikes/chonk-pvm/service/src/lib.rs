@@ -2,9 +2,14 @@
 //! PVM (../build.sh) and called from refine through ../shim.cpp's `chonk_pvm_verify`.
 //!
 //! Payload: [mode u8: 0 the per-proof reduction, 1 the whole verification][tag u8][the shim's
-//! input: proof, vk and CRS points, as ../payload.py writes it].
-//! Refine outputs [tag][verdict: 1 valid, 0 invalid, 2 malformed][gas the verifier used, u64 LE];
-//! accumulate stores it at "v:" ++ tag.
+//! input: proof, vk and CRS points, as ../payload.py writes it]. On a net, where a package is held
+//! to 200 KiB and the 2^15 Grumpkin CRS points alone are 2 MiB, the payload is [mode][tag] and
+//! the shim's input is the work-item's first extrinsic, which travels beside the package.
+//! Refine outputs [tag][verdict: 1 valid, 0 invalid, 2 malformed][gas the verifier used, u64 LE]
+//! [bb's Grumpkin MSMs done by call 105, u64 LE]; accumulate stores it at "v:" ++ tag.
+//!
+//! bb's Grumpkin MSM goes to the proposed host call 105 where the net has it (../gk105.cpp,
+//! through `curve_calls`' probe), and runs as PVM code where not: the same blob runs on both.
 //!
 //! The C and C++ runtime the verifier needs comes from here (allocation, `abort`, `chonk_trap`),
 //! ../rt.cpp and the generated stubs. The heap is jam-pvm-common's bump allocator, so `free`
@@ -19,7 +24,7 @@ extern crate alloc;
 use alloc::alloc::{alloc as raw_alloc, Layout};
 use jam_pvm_common::accumulate::{accumulate_items, set_storage};
 use jam_pvm_common::jam_types::*;
-use jam_pvm_common::refine::gas;
+use jam_pvm_common::refine::{extrinsic, gas};
 use jam_pvm_common::{declare_service, Service};
 
 polkavm_derive::min_stack_size!(8 * 1024 * 1024);
@@ -28,6 +33,22 @@ extern "C" {
     fn chonk_pvm_verify(input: *const u8, len: usize, mode: i32) -> i32;
     // bb's static constructors, called once (../build.sh: the PVM never runs .init_array).
     fn chonk_pvm_init();
+    // how many of bb's Grumpkin MSMs call 105 did (../gk105.cpp)
+    fn chonk_gk_calls() -> u64;
+}
+
+/// Call 105 for ../gk105.cpp: 0 the sum written to `out` (64 octets), 1 the call is absent (bb's
+/// own MSM runs), 2 a malformed input or a broken host.
+#[no_mangle]
+pub unsafe extern "C" fn chonk_gk_msm(input: *const u8, len: usize, out: *mut u8) -> i32 {
+    match curve_calls::grumpkin_g1_msm(core::slice::from_raw_parts(input, len)) {
+        curve_calls::Answer::Value(o) => {
+            core::ptr::copy_nonoverlapping(o.as_ptr(), out, 64);
+            0
+        }
+        curve_calls::Answer::Absent => 1,
+        _ => 2,
+    }
 }
 
 #[polkavm_derive::polkavm_import]
@@ -116,13 +137,18 @@ impl Service for Spike {
     fn refine(_core: CoreIndex, _item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
         let (mode, tag) = (p.first().copied().unwrap_or(0), p.get(1).copied().unwrap_or(0));
-        let input = p.get(2..).unwrap_or(&[]);
+        let ext;
+        let input = match p.get(2..) {
+            Some(rest) if !rest.is_empty() => rest,
+            _ => { ext = extrinsic(0).unwrap_or_default(); &ext[..] }
+        };
         let before = gas();
         unsafe { chonk_pvm_init() };
         let v = unsafe { chonk_pvm_verify(input.as_ptr(), input.len(), mode as i32) };
         let used = before - gas();
         let mut out = alloc::vec![tag, match v { 1 => 1, 0 => 0, _ => 2 }];
         out.extend_from_slice(&used.to_le_bytes());
+        out.extend_from_slice(&unsafe { chonk_gk_calls() }.to_le_bytes());
         out.into()
     }
 
