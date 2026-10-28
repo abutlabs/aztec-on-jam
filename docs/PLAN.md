@@ -1,5 +1,8 @@
 # Implementation plan: Aztec's privacy runtime on a JAM tiny testnet
 
+> History: the plan of the first proof of concept, retired when Aztec's own stack replaced it.
+> It is kept whole on the branch `archive/first-demo`; what runs today is in [DEMO.md](DEMO.md).
+
 Goal: a shielded account (`zk.money`'s shield, send, unshield) running end to end on a
 local six-validator JAM net, with Aztec's own Noir circuits, prover and wallet, and a
 JAM service in place of Aztec's L1 contracts, sequencer and rollup proofs.

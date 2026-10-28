@@ -17,6 +17,8 @@ reference for how the libraries fit; none of its code is copied (it carries no l
 npm install && npm run build     # Node 22+
 node serve.mjs                   # http://localhost:19720/?node=http://localhost:8080
 node e2e.mjs                     # Alice and Bob in two browser contexts; needs the devnet up
+node film/demo.mjs               # the demo film (docs/images/demo.gif), recorded from a live run
+node film/film.mjs               # the intro film: the opening crawl, its words in film/crawl.md
 ```
 
 The devnet: `tools/aztec-local/on-jam.sh`, which also serves the wallet. The live view reads

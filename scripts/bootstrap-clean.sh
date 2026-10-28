@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/bootstrap.sh from nothing: a fresh node:22-bookworm container, this repo cloned from
-# GitHub (Docker cannot run inside it, so the lasair image and the Linux jamboree are not covered)
+# GitHub (Docker cannot run inside it, so the AVM prover's image is not covered)
 set -euo pipefail
 docker run --rm node:22-bookworm bash -lc '
   set -e

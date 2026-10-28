@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Encrypted notes: how a sender tells a receiver about a note through the chain alone.
-Built only from primitives WebCrypto also has, so the browser wallet (demo-wallet `jam/`)
-seals and opens the same bytes (client/e2e/notecrypt-webcrypto.mjs checks it):
+Built only from primitives WebCrypto also has, so a browser wallet seals and opens the same
+bytes (the first demo's did; branch archive/first-demo):
 
   X25519 (RFC 7748)          the sender's fresh ephemeral key against the receiver's key
   HKDF-SHA256 (RFC 5869)     a 32-byte AES key, salted with the ephemeral public key

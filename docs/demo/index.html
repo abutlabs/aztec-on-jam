@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Demo · Aztec on JAM</title>
-<meta name="description" content="Two proofs of concept on a six-validator JAM testnet: private payments in Aztec's model, and Aztec's own released stack settling on JAM.">
+<meta name="description" content="Aztec's own released stack — wallet, node and prover — settling on a six-validator JAM testnet, with a live view of who does what.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../site.css">
@@ -23,34 +23,18 @@
 <div class="wrap">
   <header style="display:grid;gap:12px">
     <h1>The demo</h1>
-    <p class="lede">Two proofs of concept, each running on a six-validator JAM testnet on one laptop.
-      The first shows private payments in Aztec's model. The second runs Aztec's own software,
-      as released, with JAM in Ethereum's place.</p>
+    <p class="lede">Aztec's own software, as released — wallet, node and prover — with JAM in
+      Ethereum's place, on six JAM validators on one laptop. A private token transfer, proved in
+      the browser, verified by Aztec's node, settled and finalized by JAM; then Aztec's proof of the
+      whole epoch, verified by JAM too.</p>
   </header>
 
   <section>
-    <h2>1 · Private payments in Aztec's model</h2>
-    <img class="shot" src="../images/demo.gif?v=2" alt="Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the chain explorer read with no key, with Alice's keys, and with Bob's viewing key">
-    <p>Alice proves a private payment in her browser; JAM's validators verify it and record only
-      ciphertext; Bob finds the money with his key. Our circuit, written to Aztec's design, proved
-      with Aztec's tools.</p>
-    <div class="tbl"><table>
-      <thead><tr><th>A private send</th><th>Measured</th></tr></thead>
-      <tbody>
-        <tr><td>Prove it in the browser</td><td class="num">1.0 s</td></tr>
-        <tr><td>Verify it on JAM, with our JIP / without</td><td class="num">49M / 147M gas</td></tr>
-        <tr><td>Submission to settled (600 in an hour, none lost)</td><td class="num">13.4 s median</td></tr>
-      </tbody>
-    </table></div>
-    <pre>nets/demo.sh up                      # PolkaJam's testnet, wallet on :19710
-NET=jb-lasair6 nets/demo.sh up       # the same, on six lasair validators</pre>
-  </section>
-
-  <section>
-    <h2>2 · Aztec's own stack, settling on JAM</h2>
-    <p>The real thing: Aztec's wallet libraries, circuits, sequencer and prover, unchanged. JAM
-      replaces Ethereum underneath. A private token transfer, proved in the browser, verified by
-      Aztec's node, settled and finalized by six JAM validators.</p>
+    <img class="shot" src="../images/demo.gif?v=3" alt="Alice makes a token and mints privately; Bob opens his wallet; Alice sends Bob 40, proved in her browser; JAM's validators verify and finalize it; Bob finds his 40; Aztec's prover proves the epoch and JAM verifies that proof — each step shown live beside the wallet">
+    <p>Beside the wallet, who is doing what, live: the browser proving, Aztec's node checking the
+      proof and building a block, the sidecar handing the checkpoint to JAM, JAM's validators
+      verifying and finalizing it, Aztec's prover proving the epoch. Waits are sped up, never
+      cut.</p>
     <h3 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px">Aztec's code, as released (v6.0.0)</h3>
     <div class="tbl"><table>
       <thead><tr><th>Package</th><th>What it does here</th></tr></thead>
@@ -83,11 +67,13 @@ NET=jb-lasair6 nets/demo.sh up       # the same, on six lasair validators</pre>
     <div class="tbl"><table>
       <thead><tr><th>A private token transfer</th><th>Measured</th></tr></thead>
       <tbody>
-        <tr><td>Deploy a token, proved in the browser</td><td class="num">19 s</td></tr>
-        <tr><td>Mint privately</td><td class="num">11 s</td></tr>
-        <tr><td>Send privately, end to end</td><td class="num">20 s</td></tr>
+        <tr><td>Deploy a token, proved in the browser</td><td class="num">19–34 s</td></tr>
+        <tr><td>Mint privately</td><td class="num">11–18 s</td></tr>
+        <tr><td>Send privately, until it is in a block</td><td class="num">16–34 s</td></tr>
         <tr><td>A tampered proof, refused by Aztec's node</td><td class="num">0.14 s</td></tr>
-        <tr><td>JAM verifies a block of it, with our JIP / without</td><td class="num">64M / 251M gas</td></tr>
+        <tr><td>Then settled on JAM: checkpoint verified and finalized</td><td class="num">about 45 s</td></tr>
+        <tr><td>JAM verifies a checkpoint, with our JIP / without</td><td class="num">64M / 251M gas</td></tr>
+        <tr><td>JAM verifies Aztec's epoch proof</td><td class="num">70.7M gas</td></tr>
       </tbody>
     </table></div>
     <p class="meta">Still a dev chain: test accounts, fees paid by a sponsor contract, one sequencer.

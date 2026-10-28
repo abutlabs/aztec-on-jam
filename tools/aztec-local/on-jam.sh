@@ -67,10 +67,10 @@ done
 if [ -f "$RUN_PID" ] && kill -0 "$(cat "$RUN_PID")" 2>/dev/null; then busy="$busy\n  another on-jam.sh is running (pid $(cat "$RUN_PID"))"; fi
 # a JAM testnet's validators hold UDP 40000 and up (the first validator's port)
 who=$(lsof -nP -iUDP:40000 2>/dev/null | awk 'NR==2{print $1" (pid "$2")"}' || true)
-if [ -n "$who" ]; then busy="$busy\n  a JAM testnet's validators (UDP 40000): $who — nets/demo.sh or another on-jam.sh?"; fi
+if [ -n "$who" ]; then busy="$busy\n  a JAM testnet's validators (UDP 40000): $who — another on-jam.sh, or a net from nets/jb.sh?"; fi
 if [ -n "$(docker ps -q --filter "name=^$AVM_NAME\$" 2>/dev/null || true)" ]; then busy="$busy\n  Docker container $AVM_NAME"; fi
 if [ -n "$busy" ]; then
-  printf 'on-jam.sh: something is already running:%b\n\nStop it first:\n  tools/aztec-local/on-jam.sh down     (a previous on-jam.sh)\n  nets/demo.sh down                    (the first demo)\n' "$busy" >&2
+  printf 'on-jam.sh: something is already running:%b\n\nStop it first:\n  tools/aztec-local/on-jam.sh down     (a previous on-jam.sh)\n  NET=<net> nets/jb.sh down            (a net started by itself)\n' "$busy" >&2
   exit 1
 fi
 

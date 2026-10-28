@@ -2193,3 +2193,25 @@ through its admin API with a per-run key). Cryptography is untouched: all Aztec'
 `wallet/e2e.mjs`: 10 assertions in two browsers, now including unshield 100 / shield 100 and the
 send's own timeline reaching "Settled on JAM" — PASS twice on the wall-clock net (deploy 19 s,
 mint 18 s, unshield 14 s, shield 23 s, send 34 s; proofs made in the tab).
+
+## 2026-10-28 87 — The film on Aztec's stack; the first demo retired (#70)
+
+`wallet/film/demo.mjs` records the wallet with its live view on a fresh `on-jam.sh` stack (jb-lasair6):
+Alice makes a token and mints privately, Bob opens his wallet, Alice sends Bob 40, JAM's
+validators verify and finalize it, Bob finds his 40, Aztec's prover proves the epoch and JAM
+verifies it; then the closing card (clone, one command). No title card. Each stage is its own
+screencast, sped up by how long it waits (2× to 40×), so every wait stays on screen with its
+timer running. The intro's crawl and the closing card moved with it (`wallet/film/`). First take:
+65 s, `docs/images/demo.gif` 2.3 MB. A second take (scrolled so the send's own timeline is in
+frame through "Settled on JAM" and "Proven") was stopped by the machine running low on memory
+during the epoch proof; it is re-recorded when the machine allows.
+
+The first proof of concept is retired: kept whole on the branch `archive/first-demo`. Removed from
+main: the Python wallet, the e2e and explorer scripts, the indexer, `nets/demo.sh`, the Docker nets
+(`nets/net.sh`, `ctl.sh`), the public-balance service, the CRS and Linux-jamboree scripts,
+`verify-all.sh`, its screenshots and its CI steps. Kept as the proposal's benchmark: the verifier
+service (`services/privacy`), its circuit (`circuits/`) and prover (`client/privacy.py`);
+`scripts/offline-proof.sh` still proves and verifies a transfer against the service's key, and a
+changed public input is refused. `bootstrap.sh` now installs Aztec's packages and builds the wallet;
+README, DEMO.md (rewritten as the tour of this stack), STACK.md, nets/README.md and the demo page
+describe what runs now.

@@ -17,7 +17,7 @@ client/state.json) of notes and the tree's leaves.
       notes ({"leaves": [...], "sealed": [...]} from the indexer's /state), and mark spent the
       ones whose nullifiers the chain has (<state.json>'s "spent" list, if given)
   privacy.py sync <leaves.json>                       take the tree's leaves and nullifier root
-      from the chain ({"leaves": [hex...], "null_root": hex}, read by nets/demo.sh over JIP-2)
+      from the chain ({"leaves": [hex...], "null_root": hex}, as the first demo read it over JIP-2)
 """
 import bisect, hashlib, json, os, re, subprocess, sys
 from pathlib import Path

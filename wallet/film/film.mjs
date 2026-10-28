@@ -1,10 +1,9 @@
-// The README's two films. The intro, made by running this file: the opening crawl, its words
-// from crawl.md, into intro.mp4 and intro.gif. The demo, made by explorer.mjs with RECORD=1:
-// Alice's and Bob's wallets side by
-// side, then the explorer, then the closing card; into demo.mp4 and demo.gif. Needs ffmpeg on PATH.
+// The two films. The intro, made by running this file: the opening crawl, its words from
+// crawl.md, into intro.mp4 and intro.gif. The demo, made by demo.mjs: Alice and Bob in the wallet
+// with its live view, then the closing card; into demo.mp4 and demo.gif. Needs ffmpeg on PATH.
 // Title scenes are drawn a frame at a time on the page's own clock, so they play the same in
 // every run; the live parts are screencasts, sped up where the chain makes them wait.
-//   node client/e2e/film.mjs        the intro (IMAGES=docs/images, CHROME=system Chrome); no net
+//   node wallet/film/film.mjs       the intro (IMAGES=docs/images, CHROME=system Chrome); no net
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -38,12 +37,11 @@ export class Film {
     rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
   }
 
-  /** One of film.html's scenes (crawl, card, end), drawn frame by frame. */
+  /** One of film.html's scenes (crawl, end), drawn frame by frame. */
   async titles(scene) {
     const page = await this.browser.newPage();
     await page.setViewport({ width: W, height: H });
-    // the card's net: lasair with the curve host calls on, or PolkaJam (FILM_NET, explorer.mjs)
-    await page.goto(`${TITLES}?scene=${scene}&net=${process.env.FILM_NET || "polkajam"}`);
+    await page.goto(`${TITLES}?scene=${scene}`);
     if (scene === "crawl") await page.evaluate((w) => window.film.crawl(w), crawlWords());
     const { length, still } = await page.evaluate(() => ({ length: window.film.length, still: Boolean(window.film.still) }));
     const frames = path.join(this.dir, scene); mkdirSync(frames);

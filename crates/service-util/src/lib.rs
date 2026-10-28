@@ -1,4 +1,4 @@
-//! Shared by the privacy and public-balance services. `no_std`, allocation only for keys.
+//! Shared by the services. `no_std`, allocation only for keys.
 #![no_std]
 extern crate alloc;
 use alloc::vec::Vec;

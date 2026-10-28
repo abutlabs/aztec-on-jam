@@ -74,7 +74,7 @@ Refine gas, the protocol's, measured on lasair. A tiny package holds 1e9, a full
 | A checkpoint's 6 blobs against their KZG commitments, batched | 937.1M | 328.0M | 103, 104 | No; without them it nearly fills a tiny package |
 | Proposer and attestation signatures (ECDSA, secp256k1) | 433M | 433M | none proposed | No |
 | One Aztec client proof (CHONK), path B | 11.36B | 3.46B | 105 | **Yes**, and the full refine budget |
-| The first demo's transfer (our UltraHonk proof, being retired) | 147.0M | 49.1M | 101, 102 | No |
+| A private transfer: our UltraHonk proof at Aztec's size (the proposal's benchmark) | 147.0M | 49.1M | 101, 102 | No |
 
 Sources: `spikes/jip8-lasair` (LEDGER 74), `spikes/chonk-pvm/RESULTS.md`, `spikes/ecdsa-gas`.
 
@@ -145,7 +145,23 @@ with one field changed is refused in 141 ms, and the wallet's in-tab proofs pass
 on six lasair validators with the curve calls on; the wallet's whole story passes on it, and a
 checkpoint's refine costs 64.06M gas with the calls against 251.46M without (3.9×; the same blob
 falls back to PVM code). One timebase ties it together: cfg's `jamEra` (unix time of JAM slot 0)
-drives both the service's clock and the facade's L1-block timestamps.
+drives both the service's clock and the facade's L1-block timestamps, and every net runs its slots
+on the wall clock (lasair's `--era` for an all-lasair net), so Aztec's wall-clock slots and JAM's
+agree however busy the machine is.
+
+**Aztec's prover proves every epoch, and JAM verifies each proof (#69, done).** `on-jam.sh` runs
+Aztec's prover as Aztec's operator docs lay it out: a broker, a prover node and an agent, each
+its own process, plus a second agent in Aztec's own Docker image for public execution (the AVM
+prover is published for Linux only). On a 10-core, 16 GB laptop the root rollup proves in 60 to
+171 s, and a transaction with public calls takes 140 to 330 s in the rollup (6.4 GB peak, so
+one public-execution agent at a time). The sidecar relays each epoch proof as work item kind 2;
+refine verifies it (70.7M gas) against public inputs recomputed from the service's own state, and
+accumulate advances the proven tip.
+
+**The wallet shows who does what (#74, done).** Shield, unshield, send and receive, with five
+live lanes (this tab, Aztec's node, the sidecar, JAM's validators, Aztec's prover) and each
+action's timeline to "proven". It reads the sidecar's `jam_activity`; cryptography stays in
+Aztec's libraries.
 
 **The devnet funds the sponsor at genesis (#64, done).** `aztec start --node` funds the
 SponsoredFPC only with `SPONSORED_FPC=true`; `on-jam.sh` now sets it, configures the settlement
@@ -164,15 +180,16 @@ signatures (#54).
 
 Each step is an issue under #71; the order is the plan's.
 
-1. **#64 The devnet ready for a wallet:** `SPONSORED_FPC=true`, the new genesis root, the node on
-   :8080.
-2. **#65 Our wallet on Aztec's libraries:** the PXE and real client proofs in the tab, Aztec's
-   token, a private transfer from Alice to Bob.
-3. **#66 The devnet on lasair,** with the curve calls on.
-4. **#67 The node checks real client proofs.**
-5. **#68 A committee and P2P.**
-6. **#69 Real epoch proofs:** a prover node; needs a decision on hardware.
-7. **#70 The demo on Aztec's stack:** re-recorded, and today's circuit, services and wallet
-   retired.
+1. **#64 The devnet ready for a wallet** (done).
+2. **#65 Our wallet on Aztec's libraries** (done).
+3. **#66 The devnet on lasair,** with the curve calls on (done).
+4. **#67 The node checks real client proofs** (done).
+5. **#69 Real epoch proofs** (done).
+6. **#74 The wallet's live view** (done).
+7. **#70 The demo on Aztec's stack:** re-recorded on this stack, the first demo retired (done).
+8. **#68 A committee and P2P.**
+9. **#73 Refine checks every client proof:** batch verification in one package, the reference
+   string as a preimage, Aztec's trees in accumulate. Required, not optional.
 
-Separately, #62 checks Aztec's client proofs in refine (path B).
+Separately, #62 checked Aztec's client proofs in refine with Aztec's own verifier (path B, done);
+#73 makes that the rule for every transaction.

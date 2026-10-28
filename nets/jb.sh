@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The demo on native nets, with no Docker and nothing of jamswap's: the nodes run on this
-# machine, `jamboree rpc` (our fork, ../jamboree, branch `lasair`) deploys and submits, the
-# indexer reads with its own JIP-2 client. nets/net.sh hands NET=polkajam and NET=jb-* here.
+# JAM testnets on this machine, with no Docker: the nodes run natively and `jamboree rpc` (our
+# fork, ../jamboree, branch `lasair`) deploys and submits. services/aztec-settlement/devnet.sh
+# brings one up for Aztec on JAM.
 #   NET=polkajam     (the default) PolkaJam's own tiny testnet: the release's `polkajam-testnet`
 #                    starts six validators and an ordinary node serving JIP-2, GRANDPA finality
 # The jb-* nets are launched by jamboree, which can mix clients:
@@ -12,7 +12,7 @@
 # JAM dev account i, at 127.0.0.1:40000+i (jamboree's genesis ports), the Bootstrap service is
 # service 0. lasair dials its peers by those addresses and the dev accounts' peer ids.
 #
-#   nets/jb.sh up | build | deploy | indexer | ctl ... | names | down | headcheck [minutes]
+#   nets/jb.sh up | names | down | headcheck [minutes]
 # Env: POLKAJAM, LASAIR (the client binaries), JAMBOREE, JB_MINUTES (how long jamboree keeps
 #      the net up, headless; default 240), JB_TELEMETRY (the nodes' JIP-3 telemetry to host:port,
 #      e.g. 127.0.0.1:9910 for the observability stack's receiver), JB_RPC (on an all-lasair
@@ -36,12 +36,9 @@ PJ=${POLKAJAM:-$HOME/.cache/jam-privacy/polkajam-v0.8.0/polkajam-v0.8.0-$PJP/pol
 PJT=$(dirname "$PJ")/polkajam-testnet                                 # the same release's launcher
 LZ=${LASAIR:-$SUB/lasair/_build/default/bin/lasair_client.exe}
 LR=${LASAIR_READER:-$SUB/lasair/_build/default/bin/lasair_reader.exe}
-BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build   # the GP 0.8.0 blob builder
 RUN=${RUN:-$ROOT/out/$NET}; SPEC=${SPEC:-$RUN/spec.json}; RPC_PORT=42950; RPC=ws://127.0.0.1:$RPC_PORT
 GENESIS_PORT=40000; BUILDER_BASE=42100                               # lasair i's CE-133 port: 42100+i
 rpc() { "$JB" rpc --url "$RPC" --chain-spec "$SPEC" "$@"; }
-. "$HERE/ctl.sh"
-sid() { python3 -c "import json;print(json.load(open('$ROOT/out/state/$1.json'))['service_id'])"; }
 CHAIN=dev                     # PolkaJam's dev chain: validator i at 127.0.0.1:GENESIS_PORT+i
 case "$NET" in
   # its own genesis ports, off the 40000 that the jb-* nets and spikes/lib/polkajam.sh use, so
@@ -173,26 +170,11 @@ PY2
     tail -8 "$RUN/jamboree.log"; echo "headcheck $NET: jamboree exit $rc"; exit $rc ;;
   rpc-node) rpc_node "$2" ;;
   down)
-    for p in indexer wallet; do [ -f "$RUN/$p.pid" ] && kill "$(cat "$RUN/$p.pid")" 2>/dev/null || true; done
     [ -f "$RUN/jamboree.pid" ] && kill "$(cat "$RUN/jamboree.pid")" 2>/dev/null || true
     testnet_down
     pkill -f -- "--chain $SPEC" 2>/dev/null || true; pkill -f -- "--genesis-spec $SPEC" 2>/dev/null || true
     pkill -f -- "jb.sh rpc-node" 2>/dev/null || true; pkill -f "$LR" 2>/dev/null || true
     sleep 2; rm -rf "$RUN" ;;
-  build) mkdir -p "$ROOT/out"; "$BUILD" "$ROOT/services/public-balance" --out "$ROOT/out"; "$BUILD" "$ROOT/services/privacy" --out "$ROOT/out" ;;
-  deploy)
-    "$0" build; mkdir -p "$ROOT/out/state"
-    for svc in public-balance privacy; do
-      rpc deploy "$ROOT/out/$svc-service.jam" --state "$ROOT/out/state/$svc.json" | tail -1
-    done ;;
-  indexer)
-    [ -f "$RUN/indexer.pid" ] && kill "$(cat "$RUN/indexer.pid")" 2>/dev/null || true
-    docker rm -f jam-privacy-indexer >/dev/null 2>&1 || true      # a Docker net's, if any
-    JAMBOREE=$JB CHAIN_RPC=$RPC CHAIN_SPEC=$SPEC PRIVACY_ID=$(sid privacy) PUBLIC_ID=$(sid public-balance) \
-      NET_NAME=$NET nohup python3 "$ROOT/indexer/indexer.py" > "$RUN/indexer.log" 2>&1 & echo $! > "$RUN/indexer.pid"
-    for _ in $(seq 1 30); do curl -sf localhost:19700/state >/dev/null 2>&1 && break; sleep 1; done
-    curl -s localhost:19700/state | python3 -c "import json,sys; d=json.load(sys.stdin); print('indexer up on $NET: slot', d.get('slot'), 'leaves', d.get('leaf_count'), 'transfers', d.get('transfers'))" ;;
-  ctl) shift; ctl "$@" ;;
   names) echo "$NET: jamboree $JB, PolkaJam $PJ ($PJN), lasair $LZ ($LZN), rpc $RPC, spec $SPEC" ;;
   *) sed -n 2,14p "$0"; exit 1 ;;
 esac

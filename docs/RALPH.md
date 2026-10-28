@@ -1,5 +1,8 @@
 # The build loop
 
+> History: the plan of the first proof of concept, retired when Aztec's own stack replaced it.
+> It is kept whole on the branch `archive/first-demo`; what runs today is in [DEMO.md](DEMO.md).
+
 This is the brief a Ralph loop reads at the start of every iteration. The same text each
 time; the state is in the files and the git history. Read, in this order:
 

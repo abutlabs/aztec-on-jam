@@ -13,20 +13,20 @@ released, our code only at the seam.
 [demo](https://abutlabs.github.io/aztec-on-jam/demo/), and
 [our proposed JAM host calls](https://abutlabs.github.io/aztec-on-jam/jip/).
 
-![Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the explorer read with no key, with Alice's keys and with Bob's viewing key](docs/images/demo.gif)
+![Alice makes a token and mints privately; Bob opens his wallet; Alice sends Bob 40, proved in her browser; JAM's validators verify and finalize it; Bob finds his 40; Aztec's prover proves the epoch and JAM verifies that proof — each step shown live beside the wallet](docs/images/demo.gif)
 
-Recorded live on a six-validator JAM testnet. Nothing is mocked.
+Recorded live: Aztec's released software on six JAM validators, real proofs throughout. Waits
+are sped up, never cut.
 
 ## Quickstart
 
 Aztec's own stack — wallet, sequencer and prover, as released — settling on six JAM validators.
-Needs Rust, Python 3.11+, Node 22+ and Chrome; `bootstrap.sh` installs the rest at pinned
+Needs Rust, Python 3.11+, Node 22+, Chrome and Docker; `bootstrap.sh` installs the rest at pinned
 versions ([docs/TOOLS.md](docs/TOOLS.md)).
 
 ```sh
 git clone https://github.com/abutlabs/aztec-on-jam && cd aztec-on-jam
-scripts/bootstrap.sh                                  # toolchain and builds
-(cd wallet && npm install && npm run build)           # the wallet, once
+scripts/bootstrap.sh                                  # toolchain, Aztec's packages, the wallet
 DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh     # everything up; prints each step and the wallet's URL
 ```
 
@@ -35,17 +35,17 @@ lasair checkout beside this one); leave it out for PolkaJam's testnet. Ctrl-C st
 `tools/aztec-local/on-jam.sh down` cleans up after a run in another terminal. In another
 terminal, `node tools/aztec-local/send-tx.mjs` makes a private transfer end to end.
 
-The first proof of concept — private payments with our own circuit — still runs with
-`nets/demo.sh up` (PolkaJam by default, `NET=jb-lasair6` for lasair): [docs/DEMO.md](docs/DEMO.md).
+What happens in one payment, and how to check it: [docs/DEMO.md](docs/DEMO.md).
 
 ## Status
 
 | Milestone | |
 | --- | --- |
-| Private payments in Aztec's model, live on JAM — the recording above | **done** · [demo](https://abutlabs.github.io/aztec-on-jam/demo/) |
-| Aztec v6's own node, unchanged, settling on JAM through our Ethereum-RPC facade | **done**, test-mode proofs · [architecture](https://abutlabs.github.io/aztec-on-jam/aztec/) |
+| Aztec v6's own node, unchanged, settling on JAM through our sidecar, real proofs | **done** · [architecture](https://abutlabs.github.io/aztec-on-jam/aztec/) |
+| Our wallet on Aztec's libraries, with a live view of who does what — the recording above | **done** · [demo](https://abutlabs.github.io/aztec-on-jam/demo/) |
+| Aztec's prover on a laptop; every epoch proof verified and finalized by JAM | **done** · [run it](https://abutlabs.github.io/aztec-on-jam/operators/) |
 | Aztec's transaction proofs verified on a live JAM net by Aztec's own verifier | **done** — needs our proposed host call: 3.46B gas with it, 11.4B (over two cores' budget) without · [proposal](https://abutlabs.github.io/aztec-on-jam/jip/) |
-| The full stack: our wallet on Aztec's libraries, real proofs end to end, a prover node | **in progress** · [#71](https://github.com/abutlabs/aztec-on-jam/issues/71) |
+| A committee of several nodes, and every client proof checked in refine | **in progress** · [#71](https://github.com/abutlabs/aztec-on-jam/issues/71) |
 
 ## The proposal
 
@@ -60,11 +60,12 @@ text](docs/jip/jip-final.md).
 
 | Path | What |
 | --- | --- |
-| `circuits/`, `services/`, `crates/` | the Noir circuit and the JAM services (privacy, public-balance, aztec-settlement) |
-| `client/`, `indexer/` | the provers, the e2e tests, the films; the JIP-2 indexer behind the wallet and explorer |
-| `wallet/` | our wallet on Aztec's libraries: the PXE and Aztec's prover in the browser tab |
-| `tools/aztec-local/` | Aztec v6's released node on JAM: the Ethereum-RPC facade |
-| `nets/` | the testnets: PolkaJam's, lasair's, Docker and mixed |
+| `services/aztec-settlement/` | Aztec's Rollup, Inbox and Outbox as a JAM service: refine verifies, accumulate records |
+| `tools/aztec-local/` | Aztec v6's released node and prover on JAM: the sidecar (`jam-l1.mjs`) and `on-jam.sh` |
+| `wallet/` | our wallet on Aztec's libraries: the PXE and Aztec's prover in the browser tab; the films |
+| `crates/` | the curve calls, KZG and Aztec's L1 encodings, shared by the services |
+| `services/privacy/`, `circuits/`, `client/` | the proposal's benchmark: an UltraHonk verifier at Aztec's sizes, its circuit and prover |
+| `nets/` | the JAM testnets: PolkaJam's, six lasair validators, mixed |
 | `spikes/` | the measurement behind every number, each with its script |
 | `docs/` | [DEMO.md](docs/DEMO.md) (the implementer's tour), [aztec/STACK.md](docs/aztec/STACK.md) (the port, mapped), [jip/](docs/jip/jip-final.md) (the proposal), [LEDGER.md](docs/LEDGER.md) (every step, with its evidence) |
 
