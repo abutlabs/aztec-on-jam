@@ -23,10 +23,7 @@ import * as artifacts from '@aztec-foundation/l1-artifacts';
 import { getKzg } from '@aztec-labs/blob-lib';
 import { computeAttestationsHash } from '@aztec-labs/ethereum/contracts';
 import { computeCheckpointPayloadDigest } from '@aztec-labs/stdlib/checkpoint';
-import { CheckpointHeader, RootRollupPublicInputs, EpochConstantData, FeeRecipient } from '@aztec-labs/stdlib/rollup';
-import { FinalBlobAccumulator } from '@aztec-labs/blob-lib';
-import { sha256ToField } from '@aztec-labs/foundation/crypto/sha256';
-import { BLS12Fr, BLS12Point } from '@aztec-labs/foundation/curves/bls12';
+import { CheckpointHeader } from '@aztec-labs/stdlib/rollup';
 import { Fr } from '@aztec-labs/foundation/curves/bn254';
 import { EthAddress } from '@aztec-labs/foundation/eth-address';
 
@@ -179,6 +176,8 @@ const views = {
     getProvenCheckpointNumber: async () => (await tips()).proven,
     archiveAt: async ([n]) => (await checkpointLog(n))?.archive ?? word(0),
     archive: async () => (await checkpointLog((await tips()).pending))?.archive ?? word(0),
+    getEpochProofPublicInputs: async ([start, end, args, headers, blob]) =>
+      (await epochProofPublicInputs(BigInt(start), BigInt(end), args, headers, blob)).map((x) => bytesToHex(x)),
     getCheckpoint: async ([n]) => {
       const cp = await checkpointLog(n);
       if (!cp) return undefined;
@@ -441,43 +440,45 @@ function findEpochProof(tx) {
 // The 113 are assembled exactly as Ethereum's getEpochProofPublicInputs() does, with Aztec's
 // own classes; the blob-commitments hash is rebuilt from the commitments this facade computed
 // when it relayed each checkpoint (sha256(0x01, C_0), then sha256(v, checkpoint-start, C_i)).
+// EpochProofLib.computeEpochProofPublicInputs (aztec-packages v6, l1-contracts), line for line:
+// the 113 public inputs Ethereum's Rollup expects of an epoch's root rollup proof. The header
+// hashes and the blob commitments hash are the stored ones, as the Rollup reads its storage.
+async function epochProofPublicInputs(start, end, pia, headers, blobPublicInputs) {
+  const w = (x) => Buffer.from(BigInt(x).toString(16).padStart(64, '0'), 'hex');
+  const h = (x) => Buffer.from(hexToBytes(x));
+  const blob = Buffer.from(hexToBytes(blobPublicInputs));
+  const pubs = Array(113).fill(0).map(() => Buffer.alloc(32));
+  [pia.previousArchive, pia.endArchive, pia.outHash, pia.previousInboxRollingHash, pia.endInboxRollingHash].forEach((x, i) => { pubs[i] = h(x); });
+  const n = Number(end - start + 1n);
+  for (let i = 0; i < n; i++) pubs[5 + i] = h((await checkpointLog(start + BigInt(i))).headerHash);
+  let off = 5 + 32;
+  const suffix = off + 2 * (n - headers.length);
+  headers.forEach((hd, i) => { pubs[suffix + 2 * i] = w(BigInt(hd.coinbase)); pubs[suffix + 2 * i + 1] = w(hd.accumulatedFees); });
+  off += 32 * 2;
+  pubs[off++] = w(C.chainId); pubs[off++] = w(C.version); pubs[off++] = h(C.vkTreeRoot); pubs[off++] = h(C.protocolContractsHash);
+  pubs[off++] = w(BigInt(pia.proverId));
+  pubs[off++] = h((await checkpointLog(end)).blobCommitmentsHash);
+  pubs[off++] = blob.subarray(32, 64);
+  const y = BigInt('0x' + blob.subarray(64, 96).toString('hex'));
+  pubs[off++] = w(y & ((1n << 120n) - 1n)); pubs[off++] = w((y >> 120n) & ((1n << 120n) - 1n)); pubs[off++] = w(y >> 240n);
+  pubs[off++] = w(BigInt('0x' + blob.subarray(96, 127).toString('hex')));
+  pubs[off++] = w(BigInt('0x' + blob.subarray(127, 144).toString('hex')));
+  return pubs;
+}
+
 async function relayEpochProof(rec, decoded) {
   const [args] = decoded.args;
   const start = BigInt(args.start), end = BigInt(args.end);
-  const pia = args.args;
-  const headers = args.headers.map((h) => CheckpointHeader.fromViem(h));
-  const headerHashes = headers.map((h) => h.hash());
-  // the epoch's relayed checkpoints, in slot order, for the commitments-hash chain
-  const relayed = [...txs.values()]
-    .filter((r) => r.propose && !r.dropped && headerHashes.some((hh) => hh.toString() === r.headerHash))
-    .sort((x, y) => (x.slot < y.slot ? -1 : 1));
-  let vHash, firstBlob = true;
-  for (const r of relayed) {
-    (r.commitments ?? []).forEach((c, j) => {
-      vHash = firstBlob ? sha256ToField([true, c]) : sha256ToField([vHash, j === 0, c]);
-      firstBlob = false;
-    });
-  }
-  const blobInputs = Buffer.from(hexToBytes(args.blobInputs));          // versioned hash 32, z 32, y 32, C 48, Q 48
-  const batched = new FinalBlobAccumulator(vHash ?? Fr.ZERO, Fr.fromBuffer(blobInputs.subarray(32, 64)),
-    BLS12Fr.fromBuffer(blobInputs.subarray(64, 96)), BLS12Point.decompress(blobInputs.subarray(96, 144)));
-  const pad = (xs, n, empty) => [...xs, ...Array(n - xs.length).fill(0).map(empty)];
-  const pubs = new RootRollupPublicInputs(
-    Fr.fromString(pia.previousArchive), Fr.fromString(pia.endArchive), Fr.fromString(pia.outHash),
-    Fr.fromString(pia.previousInboxRollingHash), Fr.fromString(pia.endInboxRollingHash),
-    pad(headerHashes, 32, () => Fr.ZERO),
-    pad(args.provenCheckpointFees.map((f) => new FeeRecipient(EthAddress.fromString(f.coinbase), new Fr(BigInt(f.fees)))), 32, () => new FeeRecipient(EthAddress.ZERO, Fr.ZERO)),
-    new EpochConstantData(new Fr(BigInt(C.chainId)), new Fr(BigInt(C.version)), Fr.fromString(C.vkTreeRoot), Fr.fromString(C.protocolContractsHash), new Fr(BigInt(pia.proverId))),
-    batched,
-  ).toFields();
-  if (pubs.length !== 113) throw new Error(`${pubs.length} epoch public inputs`);
+  const blobInputs = Buffer.from(hexToBytes(args.blobInputs));
+  const pubs = await epochProofPublicInputs(start, end, args.args, args.headers, args.blobInputs);
+  const relayed = { length: Number(end - start + 1n) };
   const vk = readFileSync(config.rootRollupVk);
   const proof = Buffer.from(hexToBytes(args.proof));
   const u16 = (n) => Buffer.from([n & 0xff, n >> 8]);
   const u64 = (n) => Buffer.from(new BigUint64Array([n]).buffer);
   const u32 = (n) => { const x = Buffer.alloc(4); x.writeUInt32LE(n); return x; };
   const payload = Buffer.concat([Buffer.from([2, rec.tag]), u64(start), u64(end), u16(vk.length), vk,
-    ...pubs.map((f) => f.toBuffer()), u32(proof.length), proof, blobInputs]);
+    ...pubs, u32(proof.length), proof, blobInputs]);
   const dir = `${config.work}/${rec.hash}`;
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}/payload.bin`, payload);

@@ -33,6 +33,11 @@ if [ "${1:-}" = down ]; then
   pkill -f "$ROOT/wallet/serve.mjs" 2>/dev/null || true
   NET=jb-lasair6 "$ROOT/nets/jb.sh" down >/dev/null 2>&1 || true
   rm -f "$RUN_PID"
+  # return only once the testnet and every port are actually free
+  for _ in $(seq 1 30); do
+    left=$( { pgrep -f "lasair_client|lasair_reader|jamboree --headless|$HERE/node_modules/@aztec-labs/aztec/" || true; } | wc -l | tr -d ' ')
+    [ "$left" = 0 ] && break; sleep 1
+  done
   echo "Aztec on JAM: stopped"; exit 0
 fi
 
@@ -54,7 +59,9 @@ for p in $PORTS; do
   if [ -n "$who" ]; then busy="$busy\n  port $p: $who"; fi
 done
 if [ -f "$RUN_PID" ] && kill -0 "$(cat "$RUN_PID")" 2>/dev/null; then busy="$busy\n  another on-jam.sh is running (pid $(cat "$RUN_PID"))"; fi
-if pgrep -f "lasair_client|polkajam-testnet" >/dev/null 2>&1; then busy="$busy\n  a JAM testnet is already running (nets/demo.sh or another on-jam.sh?)"; fi
+# a JAM testnet's validators hold UDP 40000 and up (the first validator's port)
+who=$(lsof -nP -iUDP:40000 2>/dev/null | awk 'NR==2{print $1" (pid "$2")"}' || true)
+if [ -n "$who" ]; then busy="$busy\n  a JAM testnet's validators (UDP 40000): $who — nets/demo.sh or another on-jam.sh?"; fi
 if [ -n "$busy" ]; then
   printf 'on-jam.sh: something is already running:%b\n\nStop it first:\n  tools/aztec-local/on-jam.sh down     (a previous on-jam.sh)\n  nets/demo.sh down                    (the first demo)\n' "$busy" >&2
   exit 1

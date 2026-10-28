@@ -47,7 +47,8 @@ import { ServerCircuitVks } from '@aztec-labs/noir-protocol-circuits-types/serve
 import { writeFileSync } from 'fs';
 writeFileSync(process.argv[1], ServerCircuitVks['RootRollupArtifact'].keyAsBytes);
 " "$VK_FILE") 2>/dev/null || VK_FILE=""
-VK_HASH=$([ -n "$VK_FILE" ] && shasum -a 256 "$VK_FILE" | cut -c1-64 || echo "")
+# Aztec's sha256ToField, as the service computes it (crates/aztec-l1): 0x00 ‖ the first 31 bytes
+VK_HASH=$([ -n "$VK_FILE" ] && echo "00$(shasum -a 256 "$VK_FILE" | cut -c1-62)" || echo "")
 python3 - "$HERE/cfg.bin" "$O/devnet-cfg.json" "$2" "$3" "$4" "$GENESIS_TIME" "$JAM_ERA" "${PROOF_SUBMISSION_EPOCHS:-1}" "${EPOCH_SLOTS:-4}" "$VK_HASH" <<'PY'
 import json, struct, sys
 out, js, archive, vk_tree, protocol, genesis, era, window, eslots, vk_hash = sys.argv[1:11]

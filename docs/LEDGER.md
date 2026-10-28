@@ -2124,3 +2124,26 @@ stored no verdict). The right VK travels in the extrinsic; the service pins noth
 `spikes/chonk-pvm/storage-hiding.vk` (3,808 bytes) is committed; the transfer's stays
 `out/chonk/vk`. Also found and fixed: five zombie devnet wrappers held delayed `jb.sh down`
 traps that killed fresh nets mid-run — SIGKILL skips the trap.
+
+## 2026-10-28 84 — Aztec's real epoch proof, proved on a laptop, verified and finalized by JAM (#69)
+
+`DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh` (one command, 111 s to start) runs Aztec's
+prover beside the sequencer: broker, prover node and one agent, as Aztec's operator docs lay
+them out. On this Mac (Apple M1 Pro, 10 cores, 16 GB):
+
+| Step | Result |
+|---|---|
+| Checkpoint-root proof | 41–60 s |
+| The epoch's root rollup proof (2^24) | 80–171 s across runs; 87 s in the accepted one |
+| The prover's pre-submit check of the public inputs | passed |
+| JAM refine: the settlement service verifies the root proof | 70,702,701 gas, 0.55 s |
+| Accumulate's verdict | 01 accepted; `tip:proven` = checkpoint 1, archive 0x0a49af6e… |
+| Finality | finalized (best 47 = finalized 47) |
+
+Peak proving memory about 3 GB. Fixed on the way, each found by a run:
+- the broker discarded a slow prover's jobs ("Epoch too old"): `PROVER_BROKER_MAX_EPOCHS_TO_KEEP_RESULTS_FOR` follows the proof window;
+- the sidecar answered `getCheckpoint` with a zero attestations hash; it now returns the relayed proposal's;
+- the sidecar answered `getEpochProofPublicInputs` with zeros (17 of 113 fields differed); it is now a line-for-line port of EpochProofLib.computeEpochProofPublicInputs, shared by the read and the relay;
+- the cfg's epoch-vk hash used plain SHA-256; the service compares Aztec's sha256ToField (0x00 ‖ first 31 bytes).
+Open: epochs with public execution need Aztec's AVM prover, `bb-avm`, published for Linux only;
+`azteclabs/aztec:6.0.0` (arm64) is pulled for a Docker agent on the same broker.
