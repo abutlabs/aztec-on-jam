@@ -92,7 +92,30 @@ print(f"proof {tag}: {verdict}, verifier gas {int.from_bytes(b[1:9], 'little'):,
       f"finalized {fin} ({'FINAL' if int(fin or 0) >= int(slot) else 'not final yet'}), {secs} s")
 PY
 }
+batch() {  # batch TAG FILE...: proofs checked together in one item (mode 0x82), one batch IPA
+  local tag=$1; shift
+  python3 "$HERE/batch.py" "$O/batch-$tag.bin" "$@"
+  rpc submit "$SID" "0x82$(printf %02x "$tag")" --extrinsic "@$O/batch-$tag.bin" --wait --timeout 300 | tail -1
+  local key=0x763a$(printf %02x "$tag") value
+  for _ in $(seq 1 150); do value=$(rpc read "$SID" "$key"); [ "$value" != "(none)" ] && break; sleep 2; done
+  python3 - "$tag" "$value" <<'PY'
+import sys
+tag, v = sys.argv[1:]
+b = bytes.fromhex(v) if v != "(none)" else b""
+if len(b) < 2 or b[0] != 5:
+    print(f"batch {tag}: no batch verdict ({v[:16]})"); sys.exit()
+n = b[1]; names = {1: "VALID", 0: "INVALID", 4: "BATCH-IPA-FAILED"}
+gas = int.from_bytes(b[2 + n:10 + n], "little"); msms = int.from_bytes(b[10 + n:18 + n], "little")
+print(f"batch {tag}: {n} proofs " + " ".join(names.get(x, str(x)) for x in b[2:2 + n]) + f", verifier gas {gas:,} ({gas / n:,.0f} a proof), {msms} MSMs by call 105")
+PY
+}
 for t in $(seq 1 "$N"); do submit "$t" "$O/ext-valid.bin"; done
 submit $((N + 1)) "$O/ext-bad.bin"
 submit $((N + 2)) "$O/ext-storage.bin"
+if [ "$MODE" = 81 ]; then
+  batch 32 "$O/ext-valid.bin" "$O/ext-valid.bin"
+  batch 33 "$O/ext-valid.bin" "$O/ext-storage.bin" "$O/ext-valid.bin"
+  batch 34 "$O/ext-valid.bin" "$O/ext-valid.bin" "$O/ext-storage.bin" "$O/ext-valid.bin"
+  batch 35 "$O/ext-valid.bin" "$O/ext-bad.bin"
+fi
 rpc head

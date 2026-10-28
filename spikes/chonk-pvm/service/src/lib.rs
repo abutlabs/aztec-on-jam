@@ -15,6 +15,13 @@
 //! A work item of mode 0x40 asks accumulate to solicit that preimage; anyone may then provide it.
 //! Without it, a 0x80 item's verdict is 3: the CRS is not available yet.
 //!
+//! A batch (#73), mode 0x82: the extrinsic is [u32 n] then n x [u32 len][proof][u32 len][vk]
+//! (../batch.py), checked as bb's ChonkBatchVerifier does: each proof reduced, then one batch IPA,
+//! one 2^15 Grumpkin MSM (call 105) for them all. Refine outputs [tag][5][n][n verdicts: 1 valid,
+//! 0 its reduction failed, 4 the batch IPA failed][gas u64 LE][MSMs by call 105 u64 LE]. A proof
+//! that does not deserialize stops the refine (bb throws; the PVM has no unwinding), so a batch is
+//! built from proofs a node has already checked, as Aztec's sequencer checks each on arrival.
+//!
 //! bb's Grumpkin MSM goes to the proposed host call 105 where the net has it (../gk105.cpp,
 //! through `curve_calls`' probe), and runs as PVM code where not: the same blob runs on both.
 //!
@@ -42,6 +49,8 @@ const CRS_HASH: [u8; 32] = hex32("d4d4d86aec1285ed609d2651b761d25ae0fc72a5ec11db
 const CRS_LEN: usize = 2_097_352;
 const FROM_PREIMAGE: u8 = 0x80;
 const SOLICIT: u8 = 0x40;
+const BATCH: u8 = 0x82;
+const MAX_BATCH: usize = 32;
 
 const fn nibble(c: u8) -> u8 {
     if c <= b'9' { c - b'0' } else { c - b'a' + 10 }
@@ -61,6 +70,7 @@ const fn hex32(s: &str) -> [u8; 32] {
 extern "C" {
     fn chonk_pvm_verify(input: *const u8, len: usize, mode: i32) -> i32;
     fn chonk_pvm_verify_crs(input: *const u8, len: usize, crs: *const u8, crs_len: usize, mode: i32) -> i32;
+    fn chonk_pvm_verify_batch(input: *const u8, len: usize, crs: *const u8, crs_len: usize, verdicts: *mut u8, max: usize) -> i32;
     // bb's static constructors, called once (../build.sh: the PVM never runs .init_array).
     fn chonk_pvm_init();
     // how many of bb's Grumpkin MSMs call 105 did (../gk105.cpp)
@@ -176,6 +186,23 @@ impl Service for Spike {
             _ => { ext = extrinsic(0).unwrap_or_default(); &ext[..] }
         };
         let before = gas();
+        if mode == BATCH {
+            let mut verdicts = [0u8; MAX_BATCH];
+            let n = match lookup(&CRS_HASH) {
+                Some(crs) if crs.len() == CRS_LEN => unsafe {
+                    chonk_pvm_init();
+                    chonk_pvm_verify_batch(input.as_ptr(), input.len(), crs.as_ptr(), crs.len(), verdicts.as_mut_ptr(), MAX_BATCH)
+                },
+                _ => return alloc::vec![tag, 3].into(),
+            };
+            let used = before - gas();
+            let n = if n < 0 { return alloc::vec![tag, 2].into() } else { n as usize };
+            let mut out = alloc::vec![tag, 5, n as u8];
+            out.extend_from_slice(&verdicts[..n]);
+            out.extend_from_slice(&used.to_le_bytes());
+            out.extend_from_slice(&unsafe { chonk_gk_calls() }.to_le_bytes());
+            return out.into();
+        }
         let v = if mode & FROM_PREIMAGE != 0 {
             match lookup(&CRS_HASH) {
                 Some(crs) if crs.len() == CRS_LEN => {

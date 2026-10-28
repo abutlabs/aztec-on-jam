@@ -2260,3 +2260,12 @@ returned none for every preimage but a service's code, because the guarantor and
 ran refine over an empty service account. It now reads Lambda over the state at the lookup
 anchor. jamboree gains `rpc provide` (local commit 2f84717 on its `lasair` branch, for Aodh to
 push: the fork is public).
+
+## 2026-10-28 90 — Path B: two Aztec client proofs a package, one shared IPA (#73, step 2)
+
+The verifier service checks a batch as bb's ChonkBatchVerifier does, without its threads: each
+proof reduced, then one batch IPA (one 2^15 Grumpkin MSM through call 105). On six lasair
+validators: two transfer proofs VALID VALID in 4.21B gas (2.10B a proof, against 3.26B alone),
+a transfer and a tampered proof VALID INVALID; three or four proofs run out of gas at 5e9. Two
+proofs a package, as #46 estimated (4.1B). A malformed proof traps the refine (bb throws, no
+unwinding in the PVM): batches are built from proofs a node has checked. RESULTS.md, "Batches".

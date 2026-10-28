@@ -151,6 +151,35 @@ Found on the way, a lasair bug: refine's `historical_lookup` found nothing but a
 A guarantor and an auditor ran refine over an empty service account; the lookup now reads the
 state at the package's lookup anchor (lasair 690e223, with a test).
 
+## Batches: several proofs, one IPA (#73, 2026-10-28)
+
+`chonk_pvm_verify_batch` (`shim.cpp`) checks proofs the way bb's `ChonkBatchVerifier` does,
+without its threads: each proof reduced to its deferred TripleIPA opening, then every passing
+proof's accumulator checked together by `ECCVMVerifier::batch_verify_accumulators`, whose one
+2^15 Grumpkin MSM goes to call 105. Mode 0x82; a verdict a proof: 1 valid, 0 its reduction
+failed, 4 the batch IPA failed. Natively, the verdicts are bb's (two valid; valid and tampered;
+three; and 4 for every proof with one CRS point corrupted, the branch no tampered proof reaches:
+the IPA proof is bound into the transcript, so its tampering fails the reduction first).
+
+On six lasair validators, G_R = 5e9 a package:
+
+| Work-item | Verdicts | Verifier gas | A proof |
+|---|---|---|---|
+| Two transfer proofs | VALID VALID | 4,207,258,083 | 2.10B (3.26B alone) |
+| A transfer and a tampered proof | VALID INVALID | 3,632,008,649 | — |
+| Three (transfer, storage, transfer) | out of gas at 5e9 | — | — |
+| Four | out of gas at 5e9 | — | — |
+
+**Two proofs fit a package that discharges its own batch**: the second proof adds about 0.95B
+to one proof's 3.26B. A third does not fit: reductions are 0.8 to 1.1B each, and the discharge's
+call is 1.93B. More a package would mean packages that only reduce, handing their claims to one
+that discharges (not built).
+
+A proof that does not deserialize stops the refine: bb throws, and the PVM has no unwinding, so
+the whole batch gets no verdict. A batch is therefore built from proofs already checked
+natively, as Aztec's sequencer checks each proof on arrival; a malformed proof costs only its
+own package.
+
 ## Not measured here
 
 - The reduction with its BN254 work (KZG batch-mul, pairings) routed to calls 101 and 102. bb

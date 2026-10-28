@@ -13,6 +13,14 @@
 // preimage): [u32 n_bn254][n_bn254 x sizeof(g1::affine_element)][sizeof(g2::affine_element)]
 // [u32 n_grumpkin][n_grumpkin x sizeof(Grumpkin::AffineElement)]. The points are copied, not
 // parsed: parsing 2^15 Grumpkin points costs 261M gas in refine (RESULTS.md).
+//
+// chonk_pvm_verify_batch checks several proofs the way bb's ChonkBatchVerifier does, without its
+// threads: each proof reduced to its deferred TripleIPA opening, then every passing proof's
+// accumulator checked together by one batch IPA (ECCVMVerifier::batch_verify_accumulators), whose
+// one 2^15 Grumpkin MSM is shared. Input: [u32 n] then n x [u32 proof_len][proof][u32 vk_len][vk];
+// the CRS as for chonk_pvm_verify_crs. verdicts[i]: 1 valid, 0 its reduction failed, 4 its
+// reduction passed but the batch IPA failed (one of the batch is bad: check them apart). Returns
+// n, or -1 for a malformed input.
 #include "barretenberg/chonk/chonk_verifier.hpp"
 #include "barretenberg/common/log.hpp"
 #include "barretenberg/common/serialize.hpp"
@@ -64,6 +72,53 @@ template <typename T> bool copy_points(Reader& r, std::vector<T>& out, uint32_t 
 }
 } // namespace
 
+namespace {
+bool init_crs(const uint8_t* crs, size_t crs_len)
+{
+    using namespace bb;
+    Reader c{ crs, crs_len };
+    std::vector<g1::affine_element> bn_points;
+    std::vector<g2::affine_element> g2_point;
+    std::vector<curve::Grumpkin::AffineElement> gr_points;
+    uint32_t n_bn = c.u32();
+    if (!c.ok || n_bn == 0 || !copy_points(c, bn_points, n_bn) || !copy_points(c, g2_point, 1)) return false;
+    uint32_t n_gr = c.u32();
+    if (!c.ok || !copy_points(c, gr_points, n_gr)) return false;
+    srs::init_bn254_mem_crs_factory(bn_points, g2_point[0]);
+    srs::init_grumpkin_mem_crs_factory(gr_points);
+    return true;
+}
+} // namespace
+
+extern "C" int chonk_pvm_verify_batch(const uint8_t* in, size_t len, const uint8_t* crs, size_t crs_len, uint8_t* verdicts, size_t max)
+{
+    using namespace bb;
+    bb_log_level = LogLevel::SILENT;
+    Reader r{ in, len };
+    uint32_t n = r.u32();
+    if (!r.ok || n == 0 || n > max || !init_crs(crs, crs_len)) return -1;
+    std::vector<ECCVMVerifier::DeferredTripleIpaOpening::Accumulator> accumulators;
+    std::vector<uint32_t> passed;
+    for (uint32_t i = 0; i < n; ++i) {
+        auto proof_bytes = r.bytes(r.u32());
+        auto vk_bytes = r.bytes(r.u32());
+        if (!r.ok) return -1;
+        auto proof = ChonkProof::from_field_elements(many_from_buffer<fr>(proof_bytes));
+        auto vk = from_buffer<std::shared_ptr<MegaZKFlavor::VerificationKey>>(vk_bytes);
+        ChonkNativeVerifier verifier(std::make_shared<ChonkNativeVerifier::VKAndHash>(vk));
+        auto reduced = verifier.reduce_to_triple_ipa_opening(proof);
+        verdicts[i] = 0;
+        if (reduced.all_checks_passed) {
+            accumulators.push_back(reduced.triple_ipa_opening.reduce_to_accumulator());
+            passed.push_back(i);
+        }
+    }
+    if (r.left != 0) return -1;
+    bool batch_ok = accumulators.empty() || ECCVMVerifier::batch_verify_accumulators(accumulators);
+    for (uint32_t i : passed) verdicts[i] = batch_ok ? 1 : 4;
+    return int(n);
+}
+
 extern "C" int chonk_pvm_verify_crs(const uint8_t* in, size_t len, const uint8_t* crs, size_t crs_len, int mode)
 {
     using namespace bb;
@@ -71,17 +126,7 @@ extern "C" int chonk_pvm_verify_crs(const uint8_t* in, size_t len, const uint8_t
     Reader r{ in, len };
     auto proof_bytes = r.bytes(r.u32());
     auto vk_bytes = r.bytes(r.u32());
-    if (!r.ok) return -1;
-    Reader c{ crs, crs_len };
-    std::vector<g1::affine_element> bn_points;
-    std::vector<g2::affine_element> g2_point;
-    std::vector<curve::Grumpkin::AffineElement> gr_points;
-    uint32_t n_bn = c.u32();
-    if (!c.ok || n_bn == 0 || !copy_points(c, bn_points, n_bn) || !copy_points(c, g2_point, 1)) return -1;
-    uint32_t n_gr = c.u32();
-    if (!c.ok || !copy_points(c, gr_points, n_gr)) return -1;
-    srs::init_bn254_mem_crs_factory(bn_points, g2_point[0]);
-    srs::init_grumpkin_mem_crs_factory(gr_points);
+    if (!r.ok || !init_crs(crs, crs_len)) return -1;
     return verify_with(proof_bytes, vk_bytes, mode);
 }
 
