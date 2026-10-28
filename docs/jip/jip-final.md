@@ -1,4 +1,4 @@
-# JIP-8: Curve host calls for proof verification
+# JIP-N: Curve host calls for proof verification
 
 This JIP proposes five host calls that give services native-speed elliptic-curve arithmetic for checking
 zero-knowledge proofs and BLS-style commitments: multi-scalar multiplication and the pairing
@@ -9,32 +9,26 @@ under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHon
 181M gas to 52M.
 
 **Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/aztec-on-jam/) —
-Port Aztec's released software settling on a six-validator JAM testnet whose client implements these
-JIP-8 host calls. 
+Aztec's released software, settling on a six-validator JAM testnet whose client implements
+these host calls.
 
 ## Motivation
 
 ### Privacy at launch
 
-The Polkadot Fellowship's manifesto asks its members to understand "the overall priorities and
-tradeoffs in development & design of a global, decentralised and unstoppable network,
-including centralisation risks, non-jurisdictionality, privacy" (*Polkadot Fellowship
-Manifesto*, Draft 5, §6.2), and states Web3's aim as to "reduce the need for the individual to
-trust the group by providing them with tools to interact usefully with the world themselves"
-(Appendix B.3). Its required reading, *ĐApps: What Web 3.0 Looks Like* (G. Wood, 2014), is
-plainer: "Information that we assume to be private, we keep secret and never reveal", and "all
-interactions will be carried out pseudonymously, securely and for many services, trustlessly."
+The Fellowship's required reading, *ĐApps: What Web 3.0 Looks Like* (G. Wood, 2014), states
+the standard plainly: "Information that we assume to be private, we keep secret and never
+reveal."
 
 On a public ledger, zero-knowledge proofs are how that promise is kept: the user proves a
 transaction is valid without revealing it, and validators check the proof without learning
 anything. Today JAM cannot afford that check for the systems people actually use. Verifying
 one Aztec transaction's client proof costs more than two work packages' entire budget, so
 JAM's validators could check private transactions only indirectly, through a proof made by a
-third party's prover.
-With this JIP, JAM's own validators verify every private transaction themselves, at 3.46B gas
-a proof (*Reference implementation*), and every pairing-based check gets 3 to 16 times cheaper.
-Adopted before JAM launches, it needs no activation fork: JAM can start life able to run the
-strongest privacy systems deployed today.
+third party's prover. With this JIP, JAM's own validators verify every private transaction
+themselves (*Reference implementation*), and every pairing-based check gets 3 to 16 times
+cheaper. Adopted before JAM launches, it needs no activation fork: JAM can start life able to
+run the strongest privacy systems deployed today.
 
 ### The cost of proofs today
 
@@ -123,12 +117,11 @@ The strongest reasons to reject this JIP, as we understand them, each with our a
 1. **It writes particular cryptography into consensus, permanently.** JAM's bet is that the
    PVM is the one thing every validator must agree on; everything else is service code. Five
    calls make five libraries' behaviour a consensus rule for every client.
-   *Answer:* the calls are primitives, not verifiers (*Rationale*): an MSM and a pairing check
-   serve every pairing-based system and have not changed while Barretenberg's proof format
-   changed at every major release. The PVM route was measured and recovers 11 to 16%, against
-   the calls' 7 to 25 times (*Alternatives considered*, 1 and 2). And nothing in the protocol
-   depends on a service using them: services detect the calls and fall back to PVM code
-   (*Activation and detection*), so one blob runs on clients with and without this JIP.
+   *Answer:* the calls are primitives, not verifiers (*Rationale*), and the measured PVM route
+   recovers 11 to 16% against the calls' 7 to 25 times (*Alternatives considered*, 1 and 2).
+   Nothing in the protocol depends on a service using them: services probe and fall back to
+   PVM code (*Activation and detection*), so one blob runs on clients with and without this
+   JIP.
 
 2. **Byte-for-byte agreement is hard, and a disagreement forks the chain.** Curve libraries
    differ at the edges — points off the curve, infinity, non-canonical encodings — and
@@ -162,9 +155,9 @@ The strongest reasons to reject this JIP, as we understand them, each with our a
    *Answer:* true, and the reference implementation runs that way. What this JIP adds is the
    check JAM exists to offer: validators re-executing every transaction's verification
    themselves. Without call 105 that check is impossible, not slower: one Aztec client proof
-   costs 11.36B gas, more than two packages' whole budget; with it, 3.46B, measured and
-   finalized on a six-validator net (*Reference implementation*). And every pairing-based
-   check gets 3 to 16 times cheaper.
+   costs more than two packages' whole budget as PVM code, and fits comfortably in one with
+   the call, measured and finalized on a six-validator net (*Rationale*, Grumpkin; *Reference
+   implementation*).
 
 6. **The evidence is narrow.** One client implements the calls, built by the proposal's
    authors; the measurements come from one team; it has had no independent review yet.
@@ -350,8 +343,8 @@ gas.
 - **Before activation,** each index is an unknown host call: `WHAT`, for Cgasunknown = 1000 gas.
 - **Detection.** A service probes with `bn254_pairing_check` and φ8 = 0. Before activation it
   gets `WHAT`. After, it gets `OK` with φ'8 = 1, for G_BN_PAIR(0) = 4,196,895 gas.
-- **Indices.** 101–105 are this JIP's. 106–127 are reserved for later cryptographic calls, each
-  by its own JIP, in order of adoption.
+- **Indices.** 101–105 are this JIP's. Later cryptographic calls would take subsequent
+  indices, each by its own JIP.
 
 ## Determinism and consensus
 
@@ -459,12 +452,9 @@ vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second l
      this machine's per-point time stays about twice the x86 runner's;
    - `bls12_381_g1_msm`: mostly ≥ 2;
    - `bls12_381_pairing_check`: 1.3–1.7;
-   - `grumpkin_g1_msm`, over three runs:
-     - against the median time: 1.7–3.0;
-     - against p99: from 8,192 points, 1.25–1.65; below that, 0.8–1.9, with tails that move
-       between runs (one run's single sizes fell to 0.2–0.9);
-     - the first size timed (n = 1): 0.6 in every run;
-     - at 2^15 points, this machine's arkworks takes a 349 ms median, against the 289 ms p99
-       the price allows the runner, so it is about 1.2× slower, as for `bn254_g1_msm`.
+   - `grumpkin_g1_msm` is the least stable: against p99, 1.25–1.65 from 8,192 points up, but
+     0.6–1.9 below that, with run-to-run tails as low as 0.2; at 2^15 points this machine is
+     about 1.2× slower than the runner's p99 allows, as for `bn254_g1_msm`. The full runs are
+     in the repository.
    The prices are the x86 runner's p99 × 2 with no further headroom, so a machine slower than
    the runner on any one operation falls under the margin there.
