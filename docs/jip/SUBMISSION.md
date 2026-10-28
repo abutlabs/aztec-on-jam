@@ -40,7 +40,10 @@ in order.
 5. **Real review.** The two reviews in `reviews/` are simulated personas. They found real
    defects, but they are not the people. The PR is where review by client teams and the GP's
    maintainers begins.
-6. **The PR.** Title it `JIP-N: Curve host calls for proof verification`. The body should lead
+6. **The PR.** Title it `JIP-N: Curve host calls for proof verification`. Add this line to the
+   repository's README:
+   `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254, BLS12-381 and Grumpkin multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
+   The body should lead
    with the reference implementation — the proposal running end to end, Aztec's released stack
    on a six-validator net with the calls — and link the site
    (https://abutlabs.github.io/jam-privacy-service/, its JIP page), a rendered copy of the

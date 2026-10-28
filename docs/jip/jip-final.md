@@ -1,6 +1,6 @@
 # JIP-8: Curve host calls for proof verification
 
-Five host calls give services native-speed elliptic-curve arithmetic for checking
+This JIP proposes five host calls that give services native-speed elliptic-curve arithmetic for checking
 zero-knowledge proofs and BLS-style commitments: multi-scalar multiplication and the pairing
 check, on BN254 and on BLS12-381, and multi-scalar multiplication on Grumpkin, BN254's cycle
 partner. Each takes its input in the encoding of the matching Ethereum precompile (Grumpkin's
@@ -9,14 +9,8 @@ under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHon
 181M gas to 52M.
 
 **Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/) —
-Aztec's released software settling on a six-validator JAM testnet whose client implements these
-calls.
-
-*README line:* `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254 and BLS12-381 multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
-
-*Status: final draft for later submission (2026-10-23). Not submitted. It revises the first
-draft (`jip-draft.md`) after two simulated reviews (`reviews/`); see the change log. JIP-8 is the
-next free number at polkadot-fellows/JIPs 5202db1 and may change.*
+Port Aztec's released software settling on a six-validator JAM testnet whose client implements these
+calls. 
 
 ## Motivation
 
@@ -25,28 +19,23 @@ metered PVM code: the PVM has no cryptographic host calls (GP 0.8.0, Appendix B,
 Measured on a six-validator PolkaJam v0.8.0 testnet, refine gas from PolkaJam's telemetry, each
 row with its script in [jam-privacy-service](https://github.com/abutlabs/jam-privacy-service):
 
-| Check | As PVM code today | With JIP-8, projected | With JIP-8, measured on lasair | How the projection is obtained |
+| Check | As PVM code today | With this JIP, projected | With this JIP, measured on a client | How the projection is obtained |
 |---|---|---|---|---|
-| UltraHonk, Aztec's epoch-proof shape (plain, Keccak transcript, 2^24, every gate type) | 181,129,375 | about 52.1M (3.5×) | 52,377,458 (3.5×) | Measured split: MSM (62 points) 71.1M, pairing 48.7M, other work 36.0M. Curve work re-priced at this JIP's constants (`spikes/verifier-profile`) |
+| UltraHonk, Aztec's epoch-proof shape (plain, Keccak transcript, 2^24, every gate type) | 181,129,375 | about 52.1M (3.5×) | 52,377,458 (3.5×) | Measured split: MSM (62 points) 71.1M, pairing 48.7M, other work 36.0M. Curve work re-priced at this JIP's constants |
 | UltraHonk at 2^16 | 170,681,509 | about 47.9M (3.6×) | 48,129,253 (3.5×) | The same |
 | One BN254 2-pair pairing check, end to end | 64,337,004 | 8,258,199 (7.8×) | 8,258,199, the price | The same function run as PVM code, and as the call |
 | One BN254 128-point G1 MSM, end to end | 110,727,638 | 12,852,234 (8.6×) | 12,852,234, the price | The same |
 | EIP-4844 KZG point evaluation | 199,453,527 | about 8.9M plus a SHA-256 (about 22×) | 12,111,139 (16.5×) | Composed from calls 103 and 104 (*Suggestions & examples*): the calls 8,879,921, the rest decompressing C and π and the SHA-256 |
 
-**Measured on a client.** lasair implements calls 101–105 behind an activation flag:
-- The services verify through them where the net has them, and fall back to PVM code where not:
-  - `crates/curve-hooks`' `HostCallHooks` for UltraHonk;
-  - `crates/kzg-verify` for EIP-4844.
-- The measured column is refine gas from lasair's in-process refine (`spikes/jip8-lasair/measure.sh`). Gas is the protocol's: without the calls it equals PolkaJam v0.8.0's to the unit on the same payloads.
-- Without the calls, the same blobs cost at most 0.34M more, which is the probe.
+The measured column is refine gas on lasair, a client that implements the calls (*Reference
+implementation*). Gas is the protocol's: without the calls it equals PolkaJam v0.8.0's to the
+unit on the same payloads.
 
-On a full package (5e9 gas), measured with 2^16 proofs: 104 proofs fit and the 105th runs out; on a tiny one (1e9), 20 fit. That is 95 and 19 at Aztec's 2^24. The measured 3.0–3.5× is the gas; lasair's own wall time fell further (a 2^24 check 548 ms → 127 ms on one Apple M-series Mac), but wall time depends on the client's PVM, so the gas carries the argument.
-
-A full refine package (5e9 gas) would check about 95 Aztec-sized UltraHonk proofs instead of
-27, and a tiny one (1e9) about 19 instead of 5. Settling Aztec on JAM (one epoch proof, its blob
-opening and 33 attestation signatures) would fall from about 813M gas to about 494M; measured,
-the epoch proof and its blob opening take 52.4M and 12.1M, so about 497.5M with the signatures.
-The 433M of secp256k1 signature recovery that remains is outside this JIP (*Rationale*).
+A full refine package (5e9 gas) checks 95 Aztec-sized UltraHonk proofs instead of 27, and a tiny
+one (1e9) 19 instead of 5 (measured at 2^16: 104 fit a full package and the 105th runs out).
+Settling an Aztec epoch (its proof, its blob opening and 33 attestation signatures) falls from
+about 813M gas to about 498M. The 433M of secp256k1 signature recovery that remains is outside
+this JIP (*Rationale*).
 
 One saving needs no JIP. The reference verifier's default curve hooks encode and decode every
 point. Hooks that convert field by field verify the same 2^24 proof for 156.0M gas instead of
@@ -71,14 +60,11 @@ which only a host call reaches.
 - **Grumpkin's MSM.** Grumpkin is BN254's cycle partner: its base field is BN254's scalar
   field. Aztec's client proofs (CHONK) end in an inner-product argument over it. A batch of
   them shares one 2^15-point Grumpkin MSM, which costs 9.0 to 9.8B gas as PVM code. That is more
-  than a package, so no package can check even one batch without this call
-  (jam-privacy-service#62, measured with Barretenberg's own verifier compiled for the PVM).
-  arkworks' MSM alone, as PVM code, costs 11.06B at that size, and the call costs 1.93B
-  (`spikes/verifier-profile`, run by lasair). With the call, two client proofs fit a package
-  that discharges its own batch. Measured end to end, one client proof's whole check by
-  Barretenberg's own verifier is 3.46B gas with the call and 11.36B without, and two distinct
-  Aztec client proofs were verified and finalized on a six-validator net (*Reference
-  implementation*). Grumpkin has no pairing, so the MSM is its only call.
+  than a package, so no package can check even one batch without this call (measured with
+  Barretenberg's own verifier compiled for the PVM). arkworks' MSM alone, as PVM code, costs
+  11.06B at that size, and the call costs 1.93B. One client proof's whole check is 3.46B gas
+  with the call and 11.36B without (*Reference implementation*). Grumpkin has no pairing, so
+  the MSM is its only call.
 - **Not in this JIP.** These each need their own measured case and their own proposal:
   - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
   - Poseidon2 over BN254: a refine-side note tree already appends 11,350 notes a package
@@ -97,7 +83,7 @@ which only a host call reaches.
    re-costed `mul_upper_u_u` (`pvm.tex`) would help every field, including the ones this JIP
    leaves out, and would cheapen the 36M of an UltraHonk check that no call touches. It is
    complementary to host calls, not a replacement. Measured by instruction class under the
-   GP's cost model (jam-privacy-service#47), it recovers little on the curves:
+   GP's cost model, it recovers little on the curves:
    - multiply instructions are 8 to 12% of the kernels' gas, and loads and stores of limbs are
      38 to 46%;
    - a widening multiply would save 3 to 6%, and an add-with-carry 7 to 10%: together about 11
@@ -157,7 +143,7 @@ The strongest reasons to reject this JIP, as we understand them, each with our a
    check gets 3 to 16 times cheaper.
 
 6. **The evidence is narrow.** One client implements the calls, built by the proposal's
-   authors; the measurements come from one team; the reviews in `reviews/` are simulated.
+   authors; the measurements come from one team; it has had no independent review yet.
    *Answer:* every number has its script in the reference implementation, and the gas is the
    protocol's, so any client can reproduce it. The same service blobs run unchanged on
    PolkaJam without the calls. This objection is answered only by others: the PR asks client
@@ -186,7 +172,9 @@ Every call takes φ7 = input offset and φ8 = input length, and evaluates in thi
 
 **Semantics are those of the named EIP** (for 105, which has none, those stated below, EIP-196's
 by analogy), with this mapping: wherever the EIP's precompile fails,
-the call returns `HUH`. Where the precompile returns output, the call returns `OK` and writes the
+the call returns `HUH`. One exception: an empty `bls12_381_pairing_check` input holds
+(k = 0, φ'8 = 1), as EIP-197's does for BN254, where EIP-2537 refuses it. Where the precompile
+returns output, the call returns `OK` and writes the
 same bytes, or, for a pairing check, sets φ'8 to the precompile's 0 or 1. Scalars are any 32-byte
 big-endian integer, as in the EIPs. Malformed means:
 - a length that is not a whole number of items, or no items where an MSM needs at least one;
@@ -209,7 +197,7 @@ an MSM of two points with scalars 1.
 
 ### 102. `bn254_pairing_check`
 
-**Gas usage**: G_BN_PAIR(k), k = ⌊φ8 / 192⌋. **Input registers**: φ7, φ8.
+**Gas usage**: G_BN_PAIR(k), k = ⌊φ8 / 192⌋, and k = 1 for 0 < φ8 < 192 (*Common rules*). **Input registers**: φ7, φ8.
 
 - input: k ≥ 0 items of (G1, 64 bytes; G2, 128 bytes: x_im ‖ x_re ‖ y_im ‖ y_re, the imaginary
   part first, as EIP-197).
@@ -225,7 +213,7 @@ an MSM of two points with scalars 1.
 
 ### 104. `bls12_381_pairing_check`
 
-**Gas usage**: G_BLS_PAIR(k), k = ⌊φ8 / 384⌋. **Input registers**: φ7, φ8.
+**Gas usage**: G_BLS_PAIR(k), k = ⌊φ8 / 384⌋, and k = 1 for 0 < φ8 < 384 (*Common rules*). **Input registers**: φ7, φ8.
 
 - input: k ≥ 0 items of (G1, 128 bytes; G2, 256 bytes: x_c0 ‖ x_c1 ‖ y_c0 ‖ y_c1, as EIP-2537).
 - `OK` with φ'8 = 1 if ∏ e(G1_i, G2_i) = 1, else φ'8 = 0. With k = 0, φ'8 = 1.
@@ -247,7 +235,8 @@ bit; a caller converts that to (0, 0).
 
 ### Side-effects
 
-None beyond the output memory and φ'7, φ'8. No state is read or written.
+None beyond the output memory and φ'7, φ'8. No state is read or written. The input is read
+in full before any output is written, so an MSM's output range may overlap its input.
 
 ## Gas pricing
 
@@ -264,16 +253,15 @@ implementation, the worst over the benchmark's input cases. m covers slower clie
 hardware. The price depends on the GP's sizing and the benchmark, not on how fast any client's
 PVM recompiler runs.
 
-**The benchmark** (`spikes/jip-bench`, `e2e`) times each call end to end from its encoded input,
+**The benchmark** (in the reference implementation) times each call end to end from its encoded input,
 with every check above. Each size runs on random group elements and adversarial cases: one base
 repeated, P with −P, half the points at infinity, scalars r − 1 and 2^256 − 1, a pair repeated,
 and a G2 point outside the subgroup last. Two implementations a curve must agree on every
 input: arkworks and substrate-bn for BN254, blst and arkworks for BLS12-381. The faster mature
 one is the reference, arkworks for BN254 and blst (single-threaded) for BLS12-381.
 
-**The constants below** come from one run, GitHub's 4-vCPU x86-64 runner (AMD EPYC 9V45), CI
-run 40026200133, where the implementations agreed on all 144 inputs. They are provisional; see
-the submission note.
+**The constants below** come from one run on GitHub's 4-vCPU x86-64 runner (AMD EPYC 9V45),
+where the implementations agreed on all 144 inputs. They are provisional (*Open questions*, 1).
 
 **Pairing checks**, an affine bound at or above every measured k = 1, 2, 4, 8:
 
@@ -300,8 +288,8 @@ of each call at listed, interpolated, partial, zero and past-the-table lengths.
 | 512 | 39,471,280 | 208,961,727 |
 | each point past 512 | 33,836 | 493,153 |
 
-**Grumpkin's MSM** (105) was priced the same way after the others, in CI run 40505262470
-(GitHub's 4-vCPU x86-64 runner, AMD EPYC 9V74). arkworks and halo2curves agreed on all 96 inputs;
+**Grumpkin's MSM** (105) was priced the same way, on GitHub's 4-vCPU x86-64 runner (AMD EPYC
+9V74). arkworks and halo2curves agreed on all 96 inputs;
 arkworks, faster at every size but one, is the reference. Its table runs to 2^15 points, the
 size of Aztec's IPA, because Pippenger's cost a point falls with n and a slope from 512 would
 overcharge there:
@@ -318,11 +306,11 @@ overcharge there:
 | 128 | 17,737,614 | each point past 32,768 | 54,450 |
 | 256 | 31,408,427 | | |
 
-The 2^15-point call, 1.93B gas, replaces 9.0 to 9.8B of PVM code (jam-privacy-service#62).
+The 2^15-point call, 1.93B gas, replaces 9.0 to 9.8B of PVM code.
 
 Each BN254 call costs less than its own computation as PVM code: a 1-point MSM is 703,667 as a
 call against 9,378,971 as PVM code, and across the sizes measured the saving is 7.2–13.3×
-(`spikes/verifier-profile`). The BLS12-381 calls have no PVM-code baseline here yet.
+in the reference implementation's profile.
 
 ## Activation and detection
 
@@ -369,7 +357,7 @@ and switch on the probe's result.
   coordinate instead of rejecting it answers `OK` there. 105's 25 are also produced by
   Barretenberg's own Grumpkin, a third implementation.
 - **Gas:** `vectors/jip8-gas.jsonl`, each call's gas at the lengths above, computed from this
-  text's schedules alone (`spikes/jip-bench/gas-vectors.py`).
+  text's schedules alone.
 - **Ethereum's,** where the semantics coincide (none exist for Grumpkin):
   - EIP-197's pairing vectors, for 102;
   - EIP-196's MUL vectors, for 101 with n = 1;
@@ -382,7 +370,7 @@ the code and every measurement's script are in [the repository](https://github.c
 
 - **A client.** lasair, an independent GP 0.8.0 client, implements all five calls behind
   activation flags (*Activation and detection*), and passes the JAM-native vectors in its gate.
-- **Services that adopt them.** `crates/curve-calls` detects the calls and falls back to PVM
+- **Services that adopt them.** The services detect the calls and fall back to PVM
   code where a net lacks them, so one service blob runs on clients with and without this JIP.
   The same blobs run unchanged on PolkaJam v0.8.0, which does not implement it.
 - **Aztec on JAM, live.** Aztec v6's released software — its wallet libraries, sequencer node
@@ -456,44 +444,3 @@ vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second l
        the price allows the runner, so it is about 1.2× slower, as for `bn254_g1_msm`.
    The prices are the x86 runner's p99 × 2 with no further headroom, so a machine slower than
    the runner on any one operation falls under the margin there.
-5. **An empty BLS12-381 pairing input.** EIP-2537 refuses it ("invalid input length"); this
-   JIP defines k = 0 as holding, as EIP-197 does for BN254. That contradicts *Semantics are
-   those of the named EIP*, so the text should name the exception. lasair follows the JIP.
-6. **A partial pairing input.** `bn254_pairing_check`'s gas reads k = ⌊φ8 / 192⌋, which for
-   0 < φ8 < 192 is 0, while the common rule charges "at least the 1-item price". lasair follows
-   the common rule. One of the two should change.
-7. **Gas between listed MSM sizes** (settled). The text now says it: rounded up, the listed
-   per-point constant past the table, and φ8 = 0 priced as one item. A review of call 105
-   showed that a client rounding down would differ by one gas at most interpolated sizes.
-8. **An output over the input.** For the MSMs, φ9…φ9+out may overlap φ7…φ7+φ8. lasair reads the
-   input before writing, so the result is defined; the text should say so.
-
-## Change log from the first draft
-
-Comments are the simulated reviewers': Gavin Wood (GW) and Zac Williamson (ZW), in
-`reviews/`. Decisions on their disagreements are in `reviews/synthesis.md`.
-
-| Change | Comments |
-|---|---|
-| Narrowed to four calls; KZG, secp256k1 and Poseidon2 removed, Grumpkin deferred | GW-6, GW-7, GW-11, ZW-5, ZW-8, ZW-12 |
-| Objections, and answers: six reasons to reject this JIP, each answered from the evidence | — |
-| A reference implementation section: lasair implements all five; Aztec's released stack settles on a lasair net with them; two distinct Aztec client proofs verified and finalized | — |
-| Grumpkin's MSM added as call 105, once a direct check of Aztec's client proofs was measured: its 2^15 MSM is 9.0 to 9.8B gas as PVM code, so no package finishes a batch without the call (jam-privacy-service#62). GW's condition for adding it | GW (`reviews/gavin-wood-responds-to-zac-williamson.md`) |
-| Pricing invariant stated in the GP's terms, R_GP = 10/3 gas/ns, replacing one recompiler's R = 8 | GW-2, ZW-11 |
-| Constants re-derived end to end: decoding and every check, adversarial inputs, p99, single-threaded blst, two implementations | GW-3, ZW-10 |
-| One normative schedule per call: an MSM table, pairing bounds, gas from φ8, evaluation order | GW-4, ZW-3 |
-| EIP semantics adopted (scalars any 32 bytes, k = 0 holds) with a mapping to `OK`/`HUH` | GW-5, ZW-9 |
-| Motivation leads with the measured UltraHonk gain; the 50× share comparison is dropped | GW-10, ZW-1, ZW-2 |
-| Rationale and Alternatives considered added | GW-1, ZW-13 |
-| Activation keyed to the lookup-anchor slot; detection probe; index reservation; no Ψ_I | GW-8, GW-13 |
-| Determinism: normative text, independent implementations fuzzed against each other | GW-9 |
-| KZG composition under Suggestions | GW-6, ZW-5 |
-| Process paragraph | GW-11 |
-| JAM-native vectors | GW-5, ZW-9 |
-| Corrections: the host-call list (28 calls, 0–27), no "reference machine" in the GP, `WHAT`'s 1000 gas, the Poseidon2 motivation the #43 measurement contradicted | GW-14, ZW-8 |
-
-Not adopted:
-- a fixed-G2 pairing call (ZW-4), because it would put an external setup into consensus;
-- a blob-batch call (ZW-2), for the same reason;
-- making the instruction-level route a precondition (GW-1). It is complementary, and is
-  recorded as open.
