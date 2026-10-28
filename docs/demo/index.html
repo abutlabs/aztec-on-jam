@@ -51,24 +51,35 @@ NET=jb-lasair6 nets/demo.sh up       # the same, on six lasair validators</pre>
     <p>The real thing: Aztec's wallet libraries, circuits, sequencer and prover, unchanged. JAM
       replaces Ethereum underneath. A private token transfer, proved in the browser, verified by
       Aztec's node, settled and finalized by six JAM validators.</p>
-    <div class="paths">
-      <div class="path"><h3>Aztec's, unchanged</h3>
-        <ul class="plain">
-          <li>The PXE, aztec.js and wallet-sdk — the wallet's engine</li>
-          <li>Aztec's circuits: contracts, private kernels, rollup</li>
-          <li>Barretenberg, Aztec's prover</li>
-          <li>Aztec's sequencer node</li>
-          <li>Aztec's prover node, broker and agents</li>
-        </ul>
-        <p class="meta">A new Aztec release is a version bump.</p></div>
-      <div class="path"><h3>Ours</h3>
-        <ul class="plain">
-          <li><b>The wallet's interface</b>, on Aztec's libraries</li>
-          <li><b>The JAM sidecar</b> — answers Aztec's node the way Ethereum would, and turns its blocks into JAM work</li>
-          <li><b>The settlement service</b> — Aztec's Ethereum rollup contract, rewritten as a JAM service</li>
-          <li><b>lasair</b>, our JAM client, with the JIP built in</li>
-        </ul></div>
-    </div>
+    <h3 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px">Aztec's code, as released (v6.0.0)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Package</th><th>What it does here</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/aztec">@aztec-labs/aztec</a></td><td>Aztec's node: the sequencer, and the prover's node, broker and agents</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/pxe">@aztec-labs/pxe</a></td><td>The private execution environment: keys, notes and private transactions, in the browser</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/aztec.js">@aztec-labs/aztec.js</a></td><td>Transactions, contracts and accounts</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/wallets">@aztec-labs/wallets</a> · <a href="https://www.npmjs.com/package/@aztec-labs/wallet-sdk">@aztec-labs/wallet-sdk</a></td><td>The embedded wallet our interface drives</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/accounts">@aztec-labs/accounts</a></td><td>Schnorr accounts</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/noir-contracts.js">@aztec-labs/noir-contracts.js</a></td><td>Aztec's Token and sponsored-fee contracts</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/noir-protocol-circuits-types">@aztec-labs/noir-protocol-circuits-types</a></td><td>Aztec's private kernels and rollup circuits</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-foundation/bb.js">@aztec-foundation/bb.js</a></td><td>Barretenberg, Aztec's prover: in the browser and natively</td></tr>
+        <tr><td><a href="https://github.com/AztecProtocol/aztec-packages/tree/master/barretenberg">Barretenberg (C++)</a></td><td>Aztec's own transaction verifier, compiled for JAM's VM</td></tr>
+        <tr><td><a href="https://www.npmjs.com/package/@aztec-labs/stdlib">@aztec-labs/stdlib</a> · <a href="https://www.npmjs.com/package/@aztec-labs/blob-lib">@aztec-labs/blob-lib</a> · <a href="https://www.npmjs.com/package/@aztec-foundation/l1-artifacts">@aztec-foundation/l1-artifacts</a></td><td>Aztec's block, data and rollup-contract formats — so our sidecar speaks exactly Aztec's language</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">Unchanged. A new Aztec release is a version bump.</p>
+    <h3 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px">What we built</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Module</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/abutlabs/jam-privacy-service/tree/main/wallet">Wallet interface</a></td><td>The screens; everything underneath is Aztec's wallet libraries</td></tr>
+        <tr><td><a href="https://github.com/abutlabs/jam-privacy-service/blob/main/tools/aztec-local/jam-l1.mjs">JAM sidecar</a></td><td>Answers Aztec's node the way Ethereum would, and turns its blocks and proofs into JAM work</td></tr>
+        <tr><td><a href="https://github.com/abutlabs/jam-privacy-service/tree/main/services/aztec-settlement">Settlement service</a></td><td>Aztec's Ethereum rollup contract, rewritten as a JAM service</td></tr>
+        <tr><td><a href="https://github.com/abutlabs/jam-privacy-service/tree/main/spikes/chonk-pvm">Transaction verifier service</a></td><td>Runs Aztec's verifier on JAM, so validators re-check every transaction</td></tr>
+        <tr><td>lasair</td><td>Our JAM client, with the JIP built in</td></tr>
+        <tr><td><a href="../jip/">The JIP</a></td><td>Native elliptic-curve math for JAM, so verifying Aztec's proofs is affordable</td></tr>
+      </tbody>
+    </table></div>
     <div class="tbl"><table>
       <thead><tr><th>A private token transfer</th><th>Measured</th></tr></thead>
       <tbody>
