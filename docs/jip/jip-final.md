@@ -14,6 +14,30 @@ calls.
 
 ## Motivation
 
+### Privacy at launch
+
+The Polkadot Fellowship's manifesto asks its members to understand "the overall priorities and
+tradeoffs in development & design of a global, decentralised and unstoppable network,
+including centralisation risks, non-jurisdictionality, privacy" (*Polkadot Fellowship
+Manifesto*, Draft 5, §6.2), and states Web3's aim as to "reduce the need for the individual to
+trust the group by providing them with tools to interact usefully with the world themselves"
+(Appendix B.3). Its required reading, *ĐApps: What Web 3.0 Looks Like* (G. Wood, 2014), is
+plainer: "Information that we assume to be private, we keep secret and never reveal", and "all
+interactions will be carried out pseudonymously, securely and for many services, trustlessly."
+
+On a public ledger, zero-knowledge proofs are how that promise is kept: the user proves a
+transaction is valid without revealing it, and validators check the proof without learning
+anything. Today JAM cannot afford that check for the systems people actually use. Verifying
+one Aztec transaction's client proof costs more than two work packages' entire budget, so
+JAM's validators could check private transactions only indirectly, through a proof made by a
+third party's prover.
+With this JIP, JAM's own validators verify every private transaction themselves, at 3.46B gas
+a proof (*Reference implementation*), and every pairing-based check gets 3 to 16 times cheaper.
+Adopted before JAM launches, it needs no activation fork: JAM can start life able to run the
+strongest privacy systems deployed today.
+
+### The cost of proofs today
+
 A service that checks a proof spends most of its gas on curve arithmetic, which today is
 metered PVM code: the PVM has no cryptographic host calls (GP 0.8.0, Appendix B, calls 0–27).
 Measured on a six-validator PolkaJam v0.8.0 testnet, refine gas from PolkaJam's telemetry, each
