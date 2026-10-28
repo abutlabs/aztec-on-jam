@@ -7,6 +7,7 @@
 //   3. both private balances are read back and asserted.
 // Exit 0 only if every transaction mines and the balances are 960 and 40.
 //   node send-tx.mjs [node url]       (default http://[::1]:8080)
+import './node-check.mjs';
 import { createAztecNodeClient } from '@aztec-labs/aztec.js/node';
 import { getContractInstanceFromInstantiationParams } from '@aztec-labs/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec-labs/aztec.js/fee';
@@ -19,7 +20,7 @@ import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
 
 const node = createAztecNodeClient(process.argv[2] ?? 'http://[::1]:8080');
-const wallet = await EmbeddedWallet.create(node, { pxeConfig: { proverEnabled: false }, ephemeral: true });
+const wallet = await EmbeddedWallet.create(node, { pxeConfig: { proverEnabled: true }, ephemeral: true });  // the node verifies real proofs (#67)
 const accounts = await getInitialTestAccountsData();
 await createFundedInitializerlessAccounts(wallet, accounts);
 const admin = accounts[0].address;

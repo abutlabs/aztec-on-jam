@@ -5,6 +5,7 @@
 //      and that transfer's original is never sent.
 // Exit 0 only if the mined transfer settles and the tampered one is refused.
 //   node real-proofs-check.mjs [node url]       (default http://[::1]:8080)
+import './node-check.mjs';
 import { createAztecNodeClient } from '@aztec-labs/aztec.js/node';
 import { getContractInstanceFromInstantiationParams } from '@aztec-labs/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec-labs/aztec.js/fee';

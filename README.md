@@ -19,20 +19,24 @@ Recorded live on a six-validator JAM testnet. Nothing is mocked.
 
 ## Quickstart
 
-Needs Rust, Python 3.11+, Node 20+ and Chrome. `bootstrap.sh` installs the rest at pinned
+Aztec's own stack — wallet, sequencer and prover, as released — settling on six JAM validators.
+Needs Rust, Python 3.11+, Node 22+ and Chrome; `bootstrap.sh` installs the rest at pinned
 versions ([docs/TOOLS.md](docs/TOOLS.md)).
 
 ```sh
-scripts/bootstrap.sh          # toolchain, sibling checkouts, both services built
-nets/demo.sh up               # six JAM validators, services deployed, wallet on :19710 — about 75 s
-nets/demo.sh check            # a shield, a private send, an unshield: 37 assertions
-open "http://localhost:19710/?user=alice"        # Alice's wallet (?user=bob in another window)
-open "http://localhost:19710/explorer.html"      # what the chain shows, and what a key reads in it
-nets/demo.sh down
+git clone https://github.com/abutlabs/jam-privacy-service && cd jam-privacy-service
+scripts/bootstrap.sh                                  # toolchain and builds
+(cd wallet && npm install && npm run build)           # the wallet, once
+DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh     # everything up; prints each step and the wallet's URL
 ```
 
-Other nets (lasair, mixed, Docker), the single moves, and the e2e and race tests:
-[docs/DEMO.md](docs/DEMO.md).
+`DEVNET_NET=jb-lasair6` runs six **lasair** validators with the JIP's native curve math (needs the
+lasair checkout beside this one); leave it out for PolkaJam's testnet. Ctrl-C stops everything;
+`tools/aztec-local/on-jam.sh down` cleans up after a run in another terminal. In another
+terminal, `node tools/aztec-local/send-tx.mjs` makes a private transfer end to end.
+
+The first proof of concept — private payments with our own circuit — still runs with
+`nets/demo.sh up` (PolkaJam by default, `NET=jb-lasair6` for lasair): [docs/DEMO.md](docs/DEMO.md).
 
 ## Status
 

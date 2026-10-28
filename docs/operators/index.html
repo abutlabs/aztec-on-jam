@@ -37,12 +37,13 @@ scripts/bootstrap.sh      # pinned toolchain; needs Rust, Python 3.11+, Node 22+
 
   <section>
     <h2>Start everything</h2>
-    <pre>DEVNET_NET=jb-lasair6 PROOF_SUBMISSION_EPOCHS=10000 PROVER=1 \
-  tools/aztec-local/on-jam.sh --node --sequencer</pre>
+    <pre>(cd wallet && npm install && npm run build)          # the wallet, once
+DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre>
     <p>One command brings up six JAM validators with the settlement service, the JAM sidecar,
-      Aztec's sequencer node, and Aztec's prover. Leave <code>DEVNET_NET</code> out to use
-      PolkaJam's testnet instead of lasair.</p>
-    <pre>cd wallet && npm install && npm run build && node serve.mjs    # the wallet, on :19720</pre>
+      Aztec's sequencer node, Aztec's prover and the wallet. It prints each step as it finishes
+      and the wallet's address at the end. Leave <code>DEVNET_NET</code> out to use PolkaJam's
+      testnet instead of lasair; <code>PROVER=0</code> skips the prover. Stop with Ctrl-C, or
+      <code>tools/aztec-local/on-jam.sh down</code> from another terminal.</p>
   </section>
 
   <section>
