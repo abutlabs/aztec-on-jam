@@ -8,9 +8,9 @@ by analogy with BN254's), with the same semantics, and is priced from end-to-end
 under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification falls from
 181M gas to 52M.
 
-**Reference implementation, running end to end:** <https://abutlabs.github.io/jam-privacy-service/> —
+**Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/) —
 Aztec's released software settling on a six-validator JAM testnet whose client implements these
-calls, with every measurement's script in <https://github.com/abutlabs/jam-privacy-service>.
+calls.
 
 *README line:* `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254 and BLS12-381 multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
 
@@ -377,10 +377,8 @@ and switch on the probe's result.
 
 ## Reference implementation
 
-The proposal is implemented and running end to end. Overview, architecture and measurements:
-<https://abutlabs.github.io/jam-privacy-service/> (the proposal's page:
-<https://abutlabs.github.io/jam-privacy-service/jip/>). Code and every measurement's script:
-<https://github.com/abutlabs/jam-privacy-service>.
+The proposal is implemented and running end to end ([Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/));
+the code and every measurement's script are in [the repository](https://github.com/abutlabs/jam-privacy-service).
 
 - **A client.** lasair, an independent GP 0.8.0 client, implements all five calls behind
   activation flags (*Activation and detection*), and passes the JAM-native vectors in its gate.
