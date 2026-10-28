@@ -17,6 +17,10 @@
 #
 #   spikes/chonk-pvm/on-lasair.sh [N]    N valid proofs (default 2), then one tampered, then a
 #                                        second distinct Aztec flow (the 7-layer storage proof)
+#   TX=dir ...                           #73 step 3 instead: capture-tx.mjs's genesis.bin and
+#                                        tx-N.ext, each verified and applied to Aztec's trees
+#                                        (mode 0x83) in chain order, then a stale replay, a
+#                                        tampered proof, and the trees against Aztec's own ends
 #   UP=0 ...                             use the net already up (nets/jb.sh up)
 # Needs: build.sh and measure.sh run (out/chonk-pvm-service.jam, out/verify-1.bin), lasair
 # built (dune build in ../lasair), and jamboree built (../jamboree).
@@ -109,6 +113,65 @@ gas = int.from_bytes(b[2 + n:10 + n], "little"); msms = int.from_bytes(b[10 + n:
 print(f"batch {tag}: {n} proofs " + " ".join(names.get(x, str(x)) for x in b[2:2 + n]) + f", verifier gas {gas:,} ({gas / n:,.0f} a proof), {msms} MSMs by call 105")
 PY
 }
+if [ -n "${TX:-}" ]; then
+  # #73 step 3: the trees move only by proven transitions. Genesis snapshots first (mode 0x41,
+  # accumulate holds them once), then each captured transaction (mode 0x83): refine verifies the
+  # proof against the pinned hiding vk and applies the kernel's outputs to the trees (state.cpp);
+  # accumulate advances only from the snapshots it holds.
+  [ "$MODE" = 81 ] || { echo "TX needs CRS=preimage" >&2; exit 1; }
+  rpc submit "$SID" "0x4101$(python3 -c "import sys; sys.stdout.write(open('$TX/genesis.bin', 'rb').read(192).hex())")" --wait --timeout 300 | tail -1
+  for _ in $(seq 1 150); do [ "$(rpc read "$SID" trees)" != "(none)" ] && break; sleep 2; done
+  echo "genesis trees held: $(rpc read "$SID" trees | cut -c1-20)…"
+
+  read_tx() {  # read_tx LABEL TAG: the "t:"++tag record, once stored
+    local value; local key=0x743a$(printf %02x "$2")
+    for _ in $(seq 1 150); do value=$(rpc read "$SID" "$key"); [ "$value" != "(none)" ] && break; sleep 2; done
+    python3 - "$1" "$value" <<'PY'
+import sys
+label, v = sys.argv[1:]
+b = bytes.fromhex(v.removeprefix("0x")) if v != "(none)" else b""
+names = {1: "APPLIED", 0: "PROOF INVALID", 5: "TRANSITION REFUSED", 2: "MALFORMED", 3: "NO CRS",
+         8: "NOT THE HIDING VK", 9: "STALE START"}
+if not b: print(f"{label}: no record ({v})"); sys.exit()
+line = f"{label}: {names.get(b[0], b[0])}"
+if len(b) >= 241:
+    line += (f", fee {int.from_bytes(b[193:225], 'big')}, refine gas {int.from_bytes(b[225:233], 'little'):,}, "
+             f"{int.from_bytes(b[233:241], 'little')} MSMs by call 105")
+print(line)
+PY
+  }
+
+  tag=0x20; first=""
+  for ext in $(ls "$TX"/tx-*.ext | sort -V); do
+    [ -n "$first" ] || first=$ext
+    rpc submit "$SID" "0x83$(printf %02x "$tag")" --extrinsic "@$ext" --wait --timeout 300 | tail -1
+    read_tx "$(basename "$ext")" "$tag"; tag=$((tag + 1))
+  done
+
+  # adversarial: the first transaction again (its start snapshots are history: accumulate must
+  # refuse), and its proof with one byte flipped (refine must refuse, trees untouched)
+  rpc submit "$SID" "0x83$(printf %02x "$tag")" --extrinsic "@$first" --wait --timeout 300 >/dev/null
+  read_tx "$(basename "$first") again" "$tag"; tag=$((tag + 1))
+  python3 - "$first" "$O/tx-tampered.ext" <<'PY'
+import sys
+b = bytearray(open(sys.argv[1], "rb").read())
+proof_len = int.from_bytes(b[0:4], "little")
+b[4 + proof_len - 100] ^= 1   # inside the proof, past the kernel's public inputs
+open(sys.argv[2], "wb").write(b)
+PY
+  rpc submit "$SID" "0x83$(printf %02x "$tag")" --extrinsic "@$O/tx-tampered.ext" --wait --timeout 300 >/dev/null
+  read_tx "$(basename "$first") tampered" "$tag"
+
+  # the chain's trees must be the end snapshots Aztec's own prover computed for the last block
+  python3 - "$(ls "$TX"/tx-*.state | sort -V | tail -1)" "$(rpc read "$SID" trees)" <<'PY'
+import sys
+want = open(sys.argv[1], "rb").read()[-192:].hex()
+got = sys.argv[2].removeprefix("0x")
+print("trees MATCH Aztec's end snapshots" if got == want else f"trees MISMATCH\n want {want}\n got  {got}")
+PY
+  rpc head; exit 0
+fi
+
 for t in $(seq 1 "$N"); do submit "$t" "$O/ext-valid.bin"; done
 submit $((N + 1)) "$O/ext-bad.bin"
 submit $((N + 2)) "$O/ext-storage.bin"

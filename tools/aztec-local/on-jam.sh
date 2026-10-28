@@ -19,6 +19,8 @@
 #   WALLET_PORT, EXPLORER_PORT  the wallet's and the explorer's pages (default 19720, 19730)
 #   EMPTY_CHECKPOINTS=1     build and prove a checkpoint every slot, empty or not (default 0: only
 #                           blocks with transactions, as hardware is the bottleneck; empty-checkpoints.mjs)
+#   PROOF_STORE=1           persist every proving job's inputs and outputs to a file store
+#                           (out/aztec-devnet/proof-store), which capture-tx.mjs reads (default 0)
 #   COMMITTEE=n             n validators (2 to 5), each its own Aztec node, attesting over P2P to
 #                           each checkpoint, which the settlement service checks in refine; the
 #                           default is an open committee, one node, as Aztec's local network runs
@@ -28,6 +30,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
 NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}; EXPLORER_PORT=${EXPLORER_PORT:-19730}
 COMMITTEE=${COMMITTEE:-0}; EMPTY_CHECKPOINTS=${EMPTY_CHECKPOINTS:-0}
+# every prover process (broker, prover node, agents) inherits the store and uses the same files
+[ "${PROOF_STORE:-0}" = 1 ] && export PROVER_PROOF_STORE=file://$D/proof-store
 PORTS="8545 $NODE_PORT 8083 8084 8086 8880 8885 $WALLET_PORT $EXPLORER_PORT 19800 42950"
 for (( i = 1; i < COMMITTEE; i++ )); do PORTS="$PORTS $((8090 + i)) $((8880 + i))"; done; [ "$COMMITTEE" -gt 1 ] && PORTS="$PORTS 8090"
 RUN_PID=$ROOT/out/aztec-on-jam.pid     # the running on-jam.sh; outside $D, which each run wipes
