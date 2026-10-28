@@ -23,7 +23,7 @@
 //! built from proofs a node has already checked, as Aztec's sequencer checks each on arrival.
 //!
 //! A private transaction (#73), mode 0x83: the extrinsic is [u32 len][proof][u32 len][vk][hints]
-//! (../capture-tx.mjs), the vk must be Aztec's hiding kernel to the rollup (`TO_ROLLUP_VK`, pinned
+//! (tools/aztec-local/capture-tx.mjs), the vk must be Aztec's hiding kernel to the rollup (`TO_ROLLUP_VK`, pinned
 //! here). Refine verifies the proof, then applies its effect to Aztec's note hash, nullifier and
 //! public data trees as Aztec's private tx base rollup does (../state.cpp), the kernel's outputs
 //! read from the proof itself. Refine outputs [tag][6][verdict: 1 applied, 0 the proof invalid,

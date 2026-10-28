@@ -3,7 +3,7 @@
 // found and updated in descending order), and the end roots are checked against trees rebuilt from
 // their final leaves alone. Then each of the circuit's checks, broken one at a time.
 // With a file argument, a captured transaction instead ([1282 x F kernel public inputs][hints]
-// [6 x F the end snapshots Aztec's prover computed], capture-tx.mjs).
+// [6 x F the end snapshots Aztec's prover computed], tools/aztec-local/capture-tx.mjs).
 #include "state.cpp"
 #include <algorithm>
 #include <cstdio>
