@@ -71,8 +71,10 @@ which only a host call reaches.
   (jam-privacy-service#62, measured with Barretenberg's own verifier compiled for the PVM).
   arkworks' MSM alone, as PVM code, costs 11.06B at that size, and the call costs 1.93B
   (`spikes/verifier-profile`, run by lasair). With the call, two client proofs fit a package
-  that discharges its own batch. Grumpkin has no pairing, so
-  the MSM is its only call.
+  that discharges its own batch. Measured end to end, one client proof's whole check by
+  Barretenberg's own verifier is 3.46B gas with the call and 11.36B without, and two distinct
+  Aztec client proofs were verified and finalized on a six-validator net (*Reference
+  implementation*). Grumpkin has no pairing, so the MSM is its only call.
 - **Not in this JIP.** These each need their own measured case and their own proposal:
   - secp256k1 recovery: the largest remaining cost of settling Aztec, but Ethereum-specific;
   - Poseidon2 over BN254: a refine-side note tree already appends 11,350 notes a package
@@ -312,6 +314,31 @@ and switch on the probe's result.
   - EIP-196's MUL vectors, for 101 with n = 1;
   - EIP-2537's MSM and pairing vectors, for 103 and 104.
 
+## Reference implementation
+
+The proposal is implemented and running end to end. Overview, architecture and measurements:
+<https://abutlabs.github.io/jam-privacy-service/> (the proposal's page:
+<https://abutlabs.github.io/jam-privacy-service/jip/>). Code and every measurement's script:
+<https://github.com/abutlabs/jam-privacy-service>.
+
+- **A client.** lasair, an independent GP 0.8.0 client, implements all five calls behind
+  activation flags (*Activation and detection*), and passes the JAM-native vectors in its gate.
+- **Services that adopt them.** `crates/curve-calls` detects the calls and falls back to PVM
+  code where a net lacks them, so one service blob runs on clients with and without this JIP.
+  The same blobs run unchanged on PolkaJam v0.8.0, which does not implement it.
+- **Aztec on JAM, live.** Aztec v6's released software — its wallet libraries, sequencer node
+  and prover — settles on six lasair validators with the calls on. Measured there, refine gas:
+
+  | Check in refine | Without the calls | With the calls |
+  |---|---|---|
+  | A checkpoint: its header, blob and KZG checks | 251,459,989 | 64,057,914 |
+  | One Aztec client proof, by Barretenberg's own verifier (a token transfer) | 11.36B | 3,456,104,321 |
+  | One Aztec client proof (a 7-layer storage proof, the heaviest flow) | over a package | 3,729,308,707 |
+  | The same transfer with one byte flipped: refused | — | 625,503,052 |
+
+  Both client proofs and the refusal were accumulated and finalized by GRANDPA; every report
+  was audited by more than two thirds of the validators, re-executing refine.
+
 ## Suggestions & examples
 
 **KZG point evaluation (EIP-4844) from 103 and 104.** The proof π shows a commitment C opens to y
@@ -390,6 +417,7 @@ Comments are the simulated reviewers': Gavin Wood (GW) and Zac Williamson (ZW), 
 | Change | Comments |
 |---|---|
 | Narrowed to four calls; KZG, secp256k1 and Poseidon2 removed, Grumpkin deferred | GW-6, GW-7, GW-11, ZW-5, ZW-8, ZW-12 |
+| A reference implementation section: lasair implements all five; Aztec's released stack settles on a lasair net with them; two distinct Aztec client proofs verified and finalized | — |
 | Grumpkin's MSM added as call 105, once a direct check of Aztec's client proofs was measured: its 2^15 MSM is 9.0 to 9.8B gas as PVM code, so no package finishes a batch without the call (jam-privacy-service#62). GW's condition for adding it | GW (`reviews/gavin-wood-responds-to-zac-williamson.md`) |
 | Pricing invariant stated in the GP's terms, R_GP = 10/3 gas/ns, replacing one recompiler's R = 8 | GW-2, ZW-11 |
 | Constants re-derived end to end: decoding and every check, adversarial inputs, p99, single-threaded blst, two implementations | GW-3, ZW-10 |

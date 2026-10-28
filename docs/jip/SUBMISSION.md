@@ -40,9 +40,13 @@ in order.
 5. **Real review.** The two reviews in `reviews/` are simulated personas. They found real
    defects, but they are not the people. The PR is where review by client teams and the GP's
    maintainers begins.
-6. **The PR.** Title it `JIP-N: Curve host calls for proof verification`. The body should link
-   a rendered copy, this repository's measurements and the vectors. The repo is public, so
-   check first that nothing in it links lasair's private repository.
+6. **The PR.** Title it `JIP-N: Curve host calls for proof verification`. The body should lead
+   with the reference implementation — the proposal running end to end, Aztec's released stack
+   on a six-validator net with the calls — and link the site
+   (https://abutlabs.github.io/jam-privacy-service/, its JIP page), a rendered copy of the
+   text, this repository's measurements and the vectors. Rename the repository (#72) **before**
+   opening the PR: GitHub Pages does not redirect, so links made now would break. The repo is
+   public, so check first that nothing in it links lasair's private repository.
 
 ## Open work that does not block submission
 

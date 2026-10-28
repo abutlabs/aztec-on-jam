@@ -98,8 +98,9 @@
       <li><b>Final draft</b>, after two internal reviews:
         <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/jip/jip-final.md">the full text</a>,
         with the specification, pricing rule and test vectors. Its number is assigned at submission.</li>
-      <li><b>Implemented</b> in lasair behind an activation flag; every measurement above has its
-        script in the repository.</li>
+      <li><b>Implemented and running end to end:</b> lasair implements all five calls, and
+        <a href="../demo/">Aztec's released stack</a> settles on a six-validator lasair testnet
+        with them. Every measurement above has its script in the repository.</li>
       <li><b>Safe to adopt incrementally:</b> services detect the calls at run time and fall back
         to in-VM code, so one blob serves nets with and without them.</li>
     </ul>
