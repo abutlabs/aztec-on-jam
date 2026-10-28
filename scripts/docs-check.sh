@@ -16,5 +16,8 @@ check "JAM PRIVACY" "the crawl says AZTEC ON JAM now"
 grep -rn -E "call 10[1-5]|calls 10[1-5]|101–10[45]" "$HERE"/docs/index.html "$HERE"/docs/aztec/index.html "$HERE"/docs/demo/index.html "$HERE"/docs/operators/index.html 2>/dev/null | grep -v "<td>" | grep -q . && { FAIL=1; echo "STALE (say 'the JIP' in prose; numbers live in tables and the JIP page):"; grep -rn -E "call 10[1-5]|calls 10[1-5]|101–10[45]" "$HERE"/docs/index.html "$HERE"/docs/aztec/index.html "$HERE"/docs/demo/index.html "$HERE"/docs/operators/index.html | grep -v "<td>" | head -5; }
 check "research path|not needed for path A|optional path" "refine checking the work is the point, never optional"
 check "no curve call<" "the per-tile chip was removed; the legend says it once"
+check "REVISE|TODO|FIXME|\?\?|updated 20[0-9][0-9]|Done 20[0-9][0-9]|still being wired|grows as they land|setTimeout" "developer notes stay off the public pages"
+check ">#[0-9]{2,3}<" "issue numbers stay off the public pages (link the roadmap in words)"
+check "facade" "say 'JAM sidecar' on the public pages"
 [ $FAIL = 0 ] && echo "docs-check: clean"
 exit $FAIL

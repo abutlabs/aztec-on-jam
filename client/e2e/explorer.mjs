@@ -68,7 +68,7 @@ async function settle(page, want) {
 }
 const same = (a, b) => a.public === b.public && a.private === b.private;
 
-if (film) { console.log("== the film's opening: the card"); await film.titles("card"); }
+// no title card: what the film shows is said on the page around it, not in a timed frame (Aodh, 2026-10-28)
 const alice = await wallet("alice"), bob = await wallet("bob");
 const a0 = await balances(alice), b0 = await balances(bob);
 console.log(`start: Alice ${JSON.stringify(a0)}, Bob ${JSON.stringify(b0)}`);

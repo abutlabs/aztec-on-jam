@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Demo · Aztec on JAM</title>
-<meta name="description" content="Private payments in Aztec's model, running live on a six-validator JAM testnet.">
+<meta name="description" content="Two proofs of concept on a six-validator JAM testnet: private payments in Aztec's model, and Aztec's own released stack settling on JAM.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../site.css">
@@ -23,78 +23,64 @@
 <div class="wrap">
   <header style="display:grid;gap:12px">
     <h1>The demo</h1>
-    <p class="lede">Private payments in Aztec's model — notes, nullifiers, proofs made on the
-      sender's device — running live on a six-validator JAM testnet. Nothing in the recording is
-      mocked.</p>
+    <p class="lede">Two proofs of concept, each running on a six-validator JAM testnet on one laptop.
+      The first shows private payments in Aztec's model. The second runs Aztec's own software,
+      as released, with JAM in Ethereum's place.</p>
   </header>
 
-  <img class="shot" src="../images/demo.gif" alt="Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the chain explorer read with no key, with Alice's keys, and with Bob's viewing key">
-
   <section>
-    <h2>What the chain shows</h2>
+    <h2>1 · Private payments in Aztec's model</h2>
+    <img class="shot" src="../images/demo.gif" alt="Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the chain explorer read with no key, with Alice's keys, and with Bob's viewing key">
+    <p>Alice proves a private payment in her browser; JAM's validators verify it and record only
+      ciphertext; Bob finds the money with his key. Our circuit, written to Aztec's design, proved
+      with Aztec's tools.</p>
     <div class="tbl"><table>
-      <thead><tr><th>Move</th><th>Anyone can read on chain</th><th>Not on chain</th></tr></thead>
+      <thead><tr><th>A private send</th><th>Measured</th></tr></thead>
       <tbody>
-        <tr><td>Pay publicly</td><td>payer, payee, amount</td><td></td></tr>
-        <tr><td>Shield</td><td>the account, the amount, a note commitment</td><td>who will own the note</td></tr>
-        <tr><td>Send privately</td><td>two nullifiers, two commitments, two sealed notes</td><td>sender, recipient, amount</td></tr>
-        <tr><td>Unshield</td><td>the amount and the receiving account</td><td>which notes paid for it</td></tr>
+        <tr><td>Prove it in the browser</td><td class="num">1.0 s</td></tr>
+        <tr><td>Verify it on JAM, with our JIP / without</td><td class="num">49M / 147M gas</td></tr>
+        <tr><td>Submission to settled (600 in an hour, none lost)</td><td class="num">13.4 s median</td></tr>
       </tbody>
     </table></div>
-    <p>The recording's last minute reads the same chain three ways: with no key (private
-      transfers are ciphertext), with the sender's keys (her spends and change appear), and with
-      a <b>viewing key</b> (incoming notes open; spending stays invisible). Self-custody with
-      selective disclosure — Aztec's model, enforced by JAM.</p>
+    <pre>nets/demo.sh up                      # PolkaJam's testnet, wallet on :19710
+NET=jb-lasair6 nets/demo.sh up       # the same, on six lasair validators</pre>
   </section>
 
   <section>
-    <h2>What's Aztec, What's New?</h2>
+    <h2>2 · Aztec's own stack, settling on JAM</h2>
+    <p>The real thing: Aztec's wallet libraries, circuits, sequencer and prover, unchanged. JAM
+      replaces Ethereum underneath. A private token transfer, proved in the browser, verified by
+      Aztec's node, settled and finalized by six JAM validators.</p>
     <div class="paths">
-      <div class="path"><h3>Real</h3>
+      <div class="path"><h3>Aztec's, unchanged</h3>
         <ul class="plain">
-          <li>Revise this section with each Aztec Library that we ported unchanged - Goal is to use unchanged Aztec releases to keep up with their updates</li>
-          <li>PXE</li>
-          <li>Aztec Circuits - Runs unchanged</li>
-          <li>Barretenberg - runs unchanged</li>
-          <li>Aztec Sequencer Node- runs unchanged</li>
-          <li>Aztec Prover Node - runs unchanged</li>
-        </ul></div>
-      <div class="path"><h3>Reduced</h3>
+          <li>The PXE, aztec.js and wallet-sdk — the wallet's engine</li>
+          <li>Aztec's circuits: contracts, private kernels, rollup</li>
+          <li>Barretenberg, Aztec's prover</li>
+          <li>Aztec's sequencer node</li>
+          <li>Aztec's prover node, broker and agents</li>
+        </ul>
+        <p class="meta">A new Aztec release is a version bump.</p></div>
+      <div class="path"><h3>Ours</h3>
         <ul class="plain">
-          <li>Dev-chain money: a faucet, an unsigned public ledger, published dev keys</li>
-          <li>Notes found by trial decryption, not Aztec's tagging; one proof per package, no folding</li>
-          <li>JAM L1 Sidecar: Interprets Aztec Sequencer to JAM service?? Revise</li>
-          <li>The network: six validators, two independent JAM clients, GRANDPA finality</li>
+          <li><b>The wallet's interface</b>, on Aztec's libraries</li>
+          <li><b>The JAM sidecar</b> — answers Aztec's node the way Ethereum would, and turns its blocks into JAM work</li>
+          <li><b>The settlement service</b> — Aztec's Ethereum rollup contract, rewritten as a JAM service</li>
+          <li><b>lasair</b>, our JAM client, with the JIP built in</li>
         </ul></div>
     </div>
-  </section>
-
-  <section>
-    <h2>Numbers</h2>
-    <p>One Apple M-series Mac; gas is the protocol's, identical on every conforming client.</p>
     <div class="tbl"><table>
-      <thead><tr><th>What</th><th>Measured</th></tr></thead>
+      <thead><tr><th>A private token transfer</th><th>Measured</th></tr></thead>
       <tbody>
-        <tr><td>Prove a transfer in Chrome</td><td class="num">1.0 s</td></tr>
-        <tr><td>Verify it on-chain (with our JIP / without)</td><td class="num">49.1M / 147.0M gas</td></tr>
-        <tr><td>Apply it to state</td><td class="num">103k gas</td></tr>
-        <tr><td>Submission to settled state (median, 600 transfers in an hour, none lost)</td><td class="num">13.4 s</td></tr>
-        <tr><td>Verifications per JAM core per 6-second slot, full spec, with our JIP</td><td class="num">101</td></tr>
+        <tr><td>Deploy a token, proved in the browser</td><td class="num">19 s</td></tr>
+        <tr><td>Mint privately</td><td class="num">11 s</td></tr>
+        <tr><td>Send privately, end to end</td><td class="num">20 s</td></tr>
+        <tr><td>A tampered proof, refused by Aztec's node</td><td class="num">0.14 s</td></tr>
+        <tr><td>JAM verifies a block of it, with our JIP / without</td><td class="num">64M / 251M gas</td></tr>
       </tbody>
     </table></div>
-    <p class="meta">The same service blob runs on PolkaJam (Parity's client, v0.8.0) and on lasair
-      (ours) with identical gas — the measurements, client comparisons and scripts are in
-      <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/DEMO.md">docs/DEMO.md</a>.</p>
-  </section>
-
-  <section>
-    <h2>Run it - REVISE THIS SECTION - is demo.sh picking up lasair nodes? UI still shows polkajam</h2>
-    <pre>scripts/bootstrap.sh     # pinned toolchain and builds
-nets/demo.sh up          # six validators, services deployed, wallet on :19710
-nets/demo.sh check       # a shield, a private send, an unshield: 37 assertions
-nets/demo.sh down</pre>
-    <p class="meta">Needs Rust, Python 3.11+, Node 20+ and Chrome.
-      <a href="https://github.com/abutlabs/jam-privacy-service/blob/main/docs/DEMO.md">Ten minutes, for a JAM implementer</a>.</p>
+    <p class="meta">Still a dev chain: test accounts, fees paid by a sponsor contract, one sequencer.
+      Setup: <a href="../operators/">Run it</a>.</p>
   </section>
 
   <footer class="site-foot">

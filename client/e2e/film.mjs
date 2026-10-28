@@ -1,6 +1,6 @@
 // The README's two films. The intro, made by running this file: the opening crawl, its words
 // from crawl.md, into intro.mp4 and intro.gif. The demo, made by explorer.mjs with RECORD=1:
-// film.html's card of what is running and what is not, then Alice's and Bob's wallets side by
+// Alice's and Bob's wallets side by
 // side, then the explorer, then the closing card; into demo.mp4 and demo.gif. Needs ffmpeg on PATH.
 // Title scenes are drawn a frame at a time on the page's own clock, so they play the same in
 // every run; the live parts are screencasts, sped up where the chain makes them wait.
