@@ -5,8 +5,12 @@ zero-knowledge proofs and BLS-style commitments: multi-scalar multiplication and
 check, on BN254 and on BLS12-381, and multi-scalar multiplication on Grumpkin, BN254's cycle
 partner. Each takes its input in the encoding of the matching Ethereum precompile (Grumpkin's
 by analogy with BN254's), with the same semantics, and is priced from end-to-end benchmarks
-under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification would fall from
-about 181M gas to about 52M.
+under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification falls from
+181M gas to 52M.
+
+**Reference implementation, running end to end:** <https://abutlabs.github.io/jam-privacy-service/> —
+Aztec's released software settling on a six-validator JAM testnet whose client implements these
+calls, with every measurement's script in <https://github.com/abutlabs/jam-privacy-service>.
 
 *README line:* `- [JIP-8](./JIP-8.md): **Curve host calls for proof verification** - BN254 and BLS12-381 multi-scalar multiplication and pairing checks as host calls, with Ethereum's precompile encodings and benchmark-derived gas.`
 
