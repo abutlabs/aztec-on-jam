@@ -10,97 +10,127 @@
 </head>
 <body class="explorer">
 <header class="top">
-  <div class="brand">
+  <a class="brand" href="#/">
     <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l10.4 6v12L16 28 5.6 22V10z"/><circle cx="16" cy="16" r="3.6"/></svg>
     <div><b>Imperial <span>Ledger</span></b><small>what this testnet shows anyone, and what keys add</small></div>
-  </div>
-  <div id="net" class="pill mono">connecting…</div>
+  </a>
+  <nav class="nav" role="tablist">
+    <button role="tab" data-tab="home" aria-selected="true">Home</button>
+    <button role="tab" data-tab="jam">JAM chain</button>
+    <button role="tab" data-tab="keys">Viewing keys</button>
+  </nav>
 </header>
 
-<main>
-  <section class="public" aria-label="Public ledger">
-    <h2>Public ledger <small>anyone sees this</small></h2>
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="blocks" aria-selected="true">Aztec blocks</button>
-      <button role="tab" data-tab="settle">Settled on JAM</button>
-      <button role="tab" data-tab="balances">Public balances</button>
-      <button role="tab" data-tab="jam">JAM chain</button>
-    </nav>
+<div class="hero">
+  <div class="inner">
+    <h1>The Aztec on JAM explorer</h1>
+    <form id="search" class="search" role="search">
+      <input id="q" class="mono" placeholder="Search by address / transaction hash / block number or hash" spellcheck="false" autocomplete="off" aria-label="Search">
+      <button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
+    </form>
+    <div id="found" class="found" role="status"></div>
+  </div>
+</div>
 
-    <div class="panel" data-panel="blocks">
+<main>
+  <!-- home: the chain at a glance, the newest blocks and transactions, what JAM holds -->
+  <div class="page" data-panel="home">
+    <section class="stats">
+      <div><span class="label">Latest Aztec block</span><b id="s-block" class="mono">—</b><small id="s-block-age"></small></div>
+      <div><span class="label">Recorded on JAM</span><b id="s-settled" class="mono">—</b><small id="s-settled-cp"></small></div>
+      <div><span class="label">Proven on JAM</span><b id="s-proven" class="mono">—</b><small id="s-proven-cp"></small></div>
+      <div><span class="label">JAM finalized</span><b id="s-jam" class="mono">—</b><small id="s-jam-best"></small></div>
+      <div><span class="label">Total supply</span><b id="supply" class="mono">—</b><small id="supply-of">no token chosen</small></div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <div class="cardhead"><h2>Latest blocks</h2><label class="check"><input type="checkbox" id="show-empty"> empty ones too</label></div>
+        <ol id="blocks" class="items"></ol>
+      </section>
+      <section class="card">
+        <div class="cardhead"><h2>Latest transactions</h2></div>
+        <ol id="txs" class="items"></ol>
+      </section>
+    </div>
+
+    <div class="cols">
+      <section class="card">
+        <div class="cardhead"><h2>Checkpoints on JAM</h2></div>
+        <ol id="checkpoints" class="items"></ol>
+      </section>
+      <section class="card">
+        <div class="cardhead"><h2>Epoch proofs on JAM</h2></div>
+        <ol id="epochs" class="items"></ol>
+      </section>
+    </div>
+
+    <section class="card notes">
       <p class="note">What Aztec publishes for each transaction: note hashes (commitments to new private
         notes), nullifiers (marks of spent notes, not linkable to them), encrypted logs and public state
         writes. A private payment shows no sender, recipient or amount.</p>
-      <label class="check"><input type="checkbox" id="show-empty"> show empty blocks</label>
-      <ol id="blocks" class="rows"></ol>
-    </div>
+      <p class="note"><b>Recorded on JAM:</b> JAM checked the block's data against its commitments and the
+        proposer's signatures, and holds it in order; nothing yet proves its transactions were executed
+        correctly. <b>Proven on JAM:</b> JAM verified Aztec's epoch proof, one proof that every transaction,
+        block and checkpoint of the epoch is valid.</p>
+    </section>
+  </div>
 
-    <div class="panel" data-panel="settle" hidden>
-      <p class="note">Aztec's node proposes each checkpoint to JAM instead of Ethereum: the sidecar hands it
-        to the settlement service as a work package; refine verifies it, accumulate records it. Later,
-        Aztec's prover proves a whole epoch and JAM verifies that proof.</p>
-      <h3>Epoch proofs</h3>
-      <ol id="epochs" class="rows"></ol>
-      <h3>Checkpoints</h3>
-      <ol id="checkpoints" class="rows"></ol>
-    </div>
+  <!-- one block, one transaction, one address: filled by the route -->
+  <div class="page" data-panel="block" hidden><section class="card detail" id="block-view"></section></div>
+  <div class="page" data-panel="tx" hidden><section class="card detail" id="tx-view"></section></div>
+  <div class="page" data-panel="address" hidden><section class="card detail" id="address-view"></section></div>
 
-    <div class="panel" data-panel="balances" hidden>
-      <label>Token<input id="token" class="mono" placeholder="token address (0x…)" spellcheck="false"></label>
-      <div id="supply" class="fact"></div>
-      <label>Address<input id="lookup" class="mono" placeholder="any address (0x…)" spellcheck="false"></label>
-      <button id="look" class="ghost">Read its public balance</button>
-      <div id="looked" class="fact"></div>
-      <p class="note">Read straight from the token's public storage through Aztec's node: no wallet, no
-        keys. The total supply is public too; who holds the private part of it is not stored anywhere in
-        the clear.</p>
-    </div>
-
-    <div class="panel" data-panel="jam" hidden>
+  <div class="page" data-panel="jam" hidden>
+    <section class="card detail">
+      <h2>JAM's own chain</h2>
       <div class="kv"><span>best</span><b id="jam-best" class="mono">—</b><span>finalized</span><b id="jam-final" class="mono">—</b></div>
-      <ol id="jam-blocks" class="rows mono"></ol>
-      <p class="note">JAM's own chain, read over JIP-2 from a validator. Over time:
+      <ol id="jam-blocks" class="items"></ol>
+      <p class="note">Read over JIP-2 from a JAM validator. Over time:
         <a id="grafana" target="_blank" rel="noopener">chain health in Grafana</a> (when the obs stack is up).</p>
-    </div>
-  </section>
+    </section>
+  </div>
 
-  <section class="private" aria-label="Private ledger">
-    <h2>Private ledger <small>only with keys</small></h2>
-    <div id="locked" class="panel">
-      <p class="note">Paste the viewing keys from the wallet (Receive → Show viewing keys). With them this tab
-        finds and decrypts that account's notes and sees which are spent. They cannot sign, so nothing here
-        can spend. The keys stay in this tab's memory; closing it forgets them.</p>
-      <textarea id="keys" class="mono" rows="7" placeholder='{"kind": "aztec-view-keys/1", …}' spellcheck="false"></textarea>
-      <button id="unlock" class="go">Read with these keys</button>
-    </div>
-    <div id="unlocked" class="panel" hidden>
-      <div>
-        <div class="label">Account</div>
-        <div id="who" class="mono addr"></div>
+  <div class="page" data-panel="keys" hidden>
+    <section class="card detail private" aria-label="Private ledger">
+      <h2>Private ledger <small>only with keys</small></h2>
+      <div id="locked" class="panel">
+        <p class="note">Paste the viewing keys from the wallet (Receive → Show viewing keys). With them this tab
+          finds and decrypts that account's notes and sees which are spent. They cannot sign, so nothing here
+          can spend. The keys stay in this tab's memory; closing it forgets them.</p>
+        <textarea id="keys" class="mono" rows="7" placeholder='{"kind": "aztec-view-keys/1", …}' spellcheck="false"></textarea>
+        <button id="unlock" class="go">Read with these keys</button>
       </div>
-      <div class="balances">
-        <div class="bal private">
-          <div class="label">Private</div>
-          <div><span id="priv">—</span> <span class="sym">RBL</span></div>
-          <div class="hint">found with these keys</div>
+      <div id="unlocked" class="panel" hidden>
+        <div>
+          <div class="label">Account</div>
+          <a id="who" class="mono addr"></a>
         </div>
-        <div class="bal public">
-          <div class="label">Public</div>
-          <div><span id="pub">—</span> <span class="sym">RBL</span></div>
-          <div class="hint">anyone can read this</div>
+        <div class="balances">
+          <div class="bal private">
+            <div class="label">Private</div>
+            <div><span id="priv">—</span> <span class="sym">RBL</span></div>
+            <div class="hint">found with these keys</div>
+          </div>
+          <div class="bal public">
+            <div class="label">Public</div>
+            <div><span id="pub">—</span> <span class="sym">RBL</span></div>
+            <div class="hint">anyone can read this</div>
+          </div>
         </div>
+        <h3>Payments received</h3>
+        <ol id="history" class="items"></ol>
+        <p class="note">Aztec's Token tells only the recipient about a payment, in an encrypted event; mints and
+          unshields tell no one. So these keys list what this account received, while the balance above
+          counts everything, spends included. Payments listed here are marked <span class="yours-chip">yours</span>
+          in the public ledger: the same transaction, seen with and without keys.</p>
+        <button id="forget" class="ghost small">Forget these keys (reloads this tab)</button>
       </div>
-      <h3>Payments received</h3>
-      <ol id="history" class="rows"></ol>
-      <p class="note">Aztec's Token tells only the recipient about a payment, in an encrypted event; mints and
-        unshields tell no one. So these keys list what this account received, while the balance above
-        counts everything, spends included. Payments listed here are marked <span class="yours-chip">yours</span>
-        in the public ledger: the same transaction, seen with and without keys.</p>
-      <button id="forget" class="ghost small">Forget these keys (reloads this tab)</button>
-    </div>
-  </section>
+      <label class="tokenpick">Token<input id="token" class="mono" placeholder="token address (0x…)" spellcheck="false"></label>
+    </section>
+  </div>
 </main>
-<footer><span id="status">starting</span></footer>
+<footer><span id="net" class="mono">connecting…</span> · <span id="status">starting</span></footer>
 <script type="module" src="/src/explorer.js"></script>
 </body>
 </html>

@@ -80,7 +80,7 @@ The wallet's live view shows who is doing what: this tab, Aztec's node, the side
 validators, Aztec's prover, each with a timer while it works, and every action's timeline from
 the proof in the tab to the epoch proof verified on JAM.
 
-Its **Explorer ↗** link opens the Imperial Ledger (port 19730) on what the chain shows anyone:
+Its **Explorer ↗** link opens the Imperial Ledger (port 19730), a block explorer with a search for addresses, transactions and blocks, on what the chain shows anyone:
 each transaction's commitments, nullifiers and ciphertext, with no sender, recipient or amount;
 each checkpoint's and epoch proof's work package on JAM; public balances; JAM's own chain. Paste
 an account's viewing keys from the wallet (Receive → Show viewing keys) and the explorer's own

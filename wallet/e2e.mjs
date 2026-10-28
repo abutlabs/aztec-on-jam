@@ -118,10 +118,10 @@ const ledger = await (await browser.createBrowserContext()).newPage();
 ledger.on('pageerror', (e) => console.log(`  [ledger] pageerror: ${String(e).slice(0, 200)}`));
 await ledger.goto(explorerUrl);
 await ledger.waitForFunction(() => document.body.dataset.ready === '1' || document.getElementById('status').className === 'error', { polling: 'mutation', timeout: 120000 });
-await ledger.waitForFunction(() => document.querySelectorAll('#blocks .block:not(.empty) .tx').length > 0, { polling: 'mutation', timeout: 30000 });
+await ledger.waitForFunction(() => document.querySelectorAll('#txs .tx').length > 0, { polling: 'mutation', timeout: 30000 });
 ok('the explorer opens from the wallet\'s link and lists transactions, with no keys', !(await ledger.$('.yours:not(:empty)')),
-  `${await ledger.$$eval('#blocks .block:not(.empty)', (b) => b.length)} blocks with transactions`);
-ok('total supply is public', /Total supply: 1000 RBL/.test(await text(ledger, '#supply')), await text(ledger, '#supply'));
+  `${await ledger.$$eval('#txs .tx', (t) => t.length)} transactions listed`);
+ok('total supply is public', (await text(ledger, '#supply')) === '1000 RBL', await text(ledger, '#supply'));
 await act(ledger, 'ledger', '#unlock', { '#keys': bobKeys });
 await ledger.waitForFunction(() => document.getElementById('priv').textContent === '40'
   && /received 40 from/.test(document.getElementById('history').textContent), { polling: 'mutation', timeout: 120000 });

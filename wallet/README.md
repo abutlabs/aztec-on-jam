@@ -16,7 +16,9 @@ reference for how the libraries fit; none of its code is copied (it carries no l
 ## The explorer: the Imperial Ledger
 
 A second page, on its own port (so its own origin and storage), opened from the wallet's
-**Explorer ↗** link. Its public ledger is what anyone sees: each Aztec block's transactions as
+**Explorer ↗** link, laid out as a block explorer: search an address, a transaction hash or a
+block; the home page shows the chain at a glance, the latest blocks and transactions, and what JAM
+holds; each block, transaction and address has a page. What anyone sees: each Aztec block's transactions as
 Aztec publishes them (note hashes, nullifiers, encrypted logs, public writes; no sender, recipient
 or amount), each checkpoint's and epoch proof's work package on JAM, a token's public balances and
 total supply read straight from public storage, and JAM's own chain over JIP-2.
