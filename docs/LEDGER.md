@@ -2218,3 +2218,30 @@ service (`services/privacy`), its circuit (`circuits/`) and prover (`client/priv
 changed public input is refused. `bootstrap.sh` now installs Aztec's packages and builds the wallet;
 README, DEMO.md (rewritten as the tour of this stack), STACK.md, nets/README.md and the demo page
 describe what runs now.
+
+## 2026-10-28 88 — A committee of three Aztec validators, attesting over P2P, checked by refine (#68)
+
+`COMMITTEE=3 PROVER=0 DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh`: Aztec's P2P bootstrap
+node and three sequencer nodes (validators = test-mnemonic accounts 0, 2, 3; HTTP :8080, :8091,
+:8092; P2P 40401+), `cfg` holding the three addresses and seed 0x2a. The sidecar reports the
+committee (`getCommitteeAt`, `getAttesters` and the GSE's index reads, `getTargetCommitteeSize`,
+the seed) and the proposer by ValidatorSelectionLib's rule, keccak(epoch, slot, seed) mod n,
+which is the rule refine checks.
+
+| | |
+|---|---|
+| Checkpoints 1–11 (slots 4–14) | proposed by 0x8c40 (7), 0x90f7 (3), 0x3c44 (1, slot 14): the seed's order |
+| Attestations | every non-proposer attested to every proposal ("Attesting to checkpoint proposal") |
+| Refine (proposer signature, committee commitment vs cfg) | all 11 accepted, 0 refused |
+| Transactions | `send-tx.mjs` PASS through the committee: deploy, private mint, sponsored transfer |
+| Open mode after the change | `send-tx.mjs` PASS, committee `[]` |
+
+Refusals are covered by `aztec-l1`'s `signatures_match_aztecs_code` on Aztec's own fixtures: a
+wrong proposer signature, a swapped committee and a bad signature are refused.
+
+Fixed on the way: no Aztec node could listen on P2P ("no valid addresses were provided for
+transports [@libp2p/tcp]"). npm had resolved the nested `@multiformats/multiaddr` to 12.5.1 while
+`@multiformats/mafmt` 12.1.6 used the root 12.1.14, and mafmt does not recognise 12.5.1 objects.
+Aztec's image (`azteclabs/aztec:6.0.0`) has 12.3.1 in every nested copy; `tools/aztec-local`
+now overrides to 12.3.1. Noise left: while the parent checkpoint is still in flight, a pipelining
+proposer's simulation is answered `Rollup__InvalidArchive` and retried a moment later.

@@ -136,6 +136,22 @@ async function inFlight(n) {
 }
 const slotAt = (ts) => (BigInt(ts) - BigInt(C.genesisTime)) / BigInt(C.slotSeconds);
 
+// --- The committee: cfg's, for every epoch ---------------------------------------------------
+// Aztec's Rollup samples each epoch's committee from its validator set; here the set is cfg's
+// committee (devnet.sh, from on-jam.sh's validator keys) and every epoch's committee is all of it.
+// Empty means open — anyone proposes, nobody attests — as Aztec's local network runs. A slot's
+// proposer is ValidatorSelectionLib's pick, keccak(epoch, slot, seed) mod size: the rule the
+// settlement service checks in refine (crates/aztec-l1 signatures.rs).
+const COMMITTEE = (C.committee ?? []).map((a) => a.toLowerCase());
+const SEED = BigInt(C.sampleSeed ?? 0);
+const U256 = { type: 'uint256' };
+function proposerAt(ts) {
+  if (!COMMITTEE.length) return zeroAddress;
+  const slot = slotAt(ts), epoch = slot / BigInt(C.epochSlots);
+  const i = BigInt(keccak256(encodeAbiParameters([U256, U256, U256], [epoch, slot, SEED]))) % BigInt(COMMITTEE.length);
+  return COMMITTEE[Number(i)];
+}
+
 // --- Logs and transactions it synthesizes ------------------------------------------------
 const logs = [];          // {address, topics, data, blockNumber, blockHash, transactionHash, logIndex}
 const txs = new Map();    // hash -> relayed transaction
@@ -257,14 +273,14 @@ const views = {
     getRewardDistributor: async () => A.rewardDistributor,
     getStakingAsset: async () => A.stakingAsset,
     getGSE: async () => A.gse,
-    getCommitteeAt: async () => [],
-    getEpochCommittee: async () => [],
-    getCurrentEpochCommittee: async () => [],
-    getTargetCommitteeSize: async () => 0n,
-    getSampleSeedAt: async () => 0n,
-    getCurrentSampleSeed: async () => 0n,
-    getCurrentProposer: async () => zeroAddress,
-    getProposerAt: async () => zeroAddress,
+    getCommitteeAt: async () => COMMITTEE,
+    getEpochCommittee: async () => COMMITTEE,
+    getCurrentEpochCommittee: async () => COMMITTEE,
+    getTargetCommitteeSize: async () => BigInt(COMMITTEE.length),
+    getSampleSeedAt: async () => SEED,
+    getCurrentSampleSeed: async () => SEED,
+    getCurrentProposer: async () => proposerAt(now()),
+    getProposerAt: async ([ts]) => proposerAt(ts),
     getEscapeHatch: async () => zeroAddress,
     getSlasher: async () => zeroAddress,
     getLagInEpochsForValidatorSet: async () => 2n,
@@ -272,8 +288,8 @@ const views = {
     getVkTreeRoot: async () => C.vkTreeRoot,
     getProtocolContractsHash: async () => C.protocolContractsHash,
     getGenesisArchiveTreeRoot: async () => C.genesisArchive,
-    getAttesterCountAtTime: async () => 0n,
-    getAttesters: async () => [],
+    getAttesterCountAtTime: async () => BigInt(COMMITTEE.length),
+    getAttesters: async () => COMMITTEE,
     isEscapeHatchOpen: async () => false,
   },
   inbox: {
@@ -301,6 +317,7 @@ const views = {
   governance: { governanceProposer: async () => A.governanceProposer },
   governanceProposer: { ROUND_SIZE: async () => 10n, QUORUM_SIZE: async () => 6n, getInstance: async () => A.rollup },
   feeJuice: { owner: async () => A.governance, balanceOf: async () => 0n },
+  gse: { getAttestersFromIndicesAtTime: async ([, , indices]) => indices.map((i) => COMMITTEE[Number(i)]) },
 };
 // A revert as a node reports one: JSON-RPC error 3 with Aztec's custom error ABI-encoded, so the
 // node's viem decodes it by name (ErrorsAbi).

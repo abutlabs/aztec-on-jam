@@ -5,5 +5,9 @@
   "description": "Aztec v6's released node, unchanged, for recording what it asks of its L1 (#52) and for running it on JAM (#53)",
   "dependencies": {
     "@aztec-labs/aztec": "6.0.0"
-  }
+  },
+  "overrides": {
+    "@multiformats/multiaddr": "12.3.1"
+  },
+  "//": "overrides: libp2p's multiaddr at 12.3.1, as Aztec's own image (azteclabs/aztec:6.0.0) ships it; npm otherwise resolves 12.5.1, whose addresses mafmt rejects, and Aztec's P2P cannot listen (#68)"
 }

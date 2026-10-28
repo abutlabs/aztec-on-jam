@@ -16,11 +16,17 @@
 #                           peaks at about 6.4 GB, and two at once overflow Docker Desktop's 8 GB)
 #   PROVER_REAL_PROOFS=false  Aztec's test mode: client proofs not verified (default true)
 #   NODE_PORT               the node's port (default 8080, where Aztec's wallets look)
-# Logs: out/aztec-devnet/ — devnet.log, jam-l1.log, node.log, broker.log, prover.log, agent.log, avm-agent.log, wallet.log.
+#   COMMITTEE=n             n validators (2 to 5), each its own Aztec node, attesting over P2P to
+#                           each checkpoint, which the settlement service checks in refine; the
+#                           default is an open committee, one node, as Aztec's local network runs
+# Logs: out/aztec-devnet/ — devnet.log, jam-l1.log, node.log (node-<i>.log, bootnode.log), broker.log,
+# prover.log, agent.log, avm-agent.log, wallet.log.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
 NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}
-PORTS="8545 $NODE_PORT 8083 8084 8086 8885 $WALLET_PORT 19800 42950"
+COMMITTEE=${COMMITTEE:-0}
+PORTS="8545 $NODE_PORT 8083 8084 8086 8880 8885 $WALLET_PORT 19800 42950"
+for (( i = 1; i < COMMITTEE; i++ )); do PORTS="$PORTS $((8090 + i)) $((8880 + i))"; done; [ "$COMMITTEE" -gt 1 ] && PORTS="$PORTS 8090"
 RUN_PID=$ROOT/out/aztec-on-jam.pid     # the running on-jam.sh; outside $D, which each run wipes
 AVM_NAME=aztec-on-jam-avm              # the Docker container of Aztec's public-execution prover
 
@@ -102,6 +108,20 @@ if [ "$PROVER" = 1 ]; then export PROOF_SUBMISSION_EPOCHS=${PROOF_SUBMISSION_EPO
 # the prover node's admin API key for this run: the sidecar reads its epoch jobs for the wallet
 ADMIN_KEY=$(openssl rand -hex 32)
 
+# --- the committee (COMMITTEE=n) ----------------------------------------------------------------
+# Keys from Foundry's and Aztec's public test mnemonic: account 0, the sequencer node's as in the
+# open setup, then accounts 2 to n (account 1 is the prover's publisher). Each validator is a node
+# of its own; cfg's committee is their addresses, which the sidecar reports and refine checks.
+TEST_KEYS=(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcaee95b6caee5d1b5
+  0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a 0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
+  0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a 0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba)
+[ "$COMMITTEE" -le ${#TEST_KEYS[@]} ] || fail "COMMITTEE=$COMMITTEE: at most ${#TEST_KEYS[@]} validators"
+VKEYS=("${TEST_KEYS[@]:0:$(( COMMITTEE > 0 ? COMMITTEE : 1 ))}")
+VADDRS=($(cd "$HERE" && node --input-type=module -e "import { privateKeyToAddress } from 'viem/accounts'; for (const k of process.argv.slice(1)) console.log(privateKeyToAddress(k).toLowerCase())" "${VKEYS[@]}"))
+COMMITTEE_ADDRESSES=""
+if [ "$COMMITTEE" -gt 0 ]; then COMMITTEE_ADDRESSES=$(IFS=,; echo "${VADDRS[*]}"); fi
+export COMMITTEE_ADDRESSES
+
 # --- 1. the JAM testnet and the settlement service ---------------------------------------------
 say "1/5 starting six ${DEVNET_NET:-polkajam} validators and deploying the settlement service (about 2–3 minutes)"
 "$ROOT/services/aztec-settlement/devnet.sh" "$D" "$GENESIS_ARCHIVE" "$VK_TREE_ROOT" "$PROTOCOL_CONTRACTS_HASH" > "$D/devnet.log" 2>&1 & track $!
@@ -129,22 +149,51 @@ for _ in $(seq 1 20); do grep -q "jam-l1 on" "$D/jam-l1.out" 2>/dev/null && brea
 grep -q "jam-l1 on" "$D/jam-l1.out" || fail "the JAM sidecar did not start" "$D/jam-l1.out"
 say "2/5 JAM sidecar up on :8545 (Aztec's node will treat it as Ethereum)"
 
-# --- 3. Aztec's sequencer node -----------------------------------------------------------------
+# --- 3. Aztec's sequencer node, or a committee of them --------------------------------------------
 # Real proofs by default: the node verifies each transaction's client proof before pooling it.
-# The sequencer's keys: the first account of Foundry's and Aztec's test mnemonic, as the local network uses.
-KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcaee95b6caee5d1b5
-say "3/5 starting Aztec's sequencer node"
-SEQ_PUBLISHER_PRIVATE_KEYS=$KEY VALIDATOR_PRIVATE_KEYS=$KEY COINBASE=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \
-SEQ_BUILD_CHECKPOINT_IF_EMPTY=${SEQ_BUILD_CHECKPOINT_IF_EMPTY:-true} \
-PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-work \
-ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true SPONSORED_FPC=true P2P_ENABLED=false \
-DATA_DIRECTORY=$D/node-data BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
-ARCHIVER_POLLING_INTERVAL_MS=1000 ARCHIVER_VIEM_POLLING_INTERVAL_MS=1000 LOG_LEVEL=${LOG_LEVEL:-info} \
-  "$HERE/node_modules/.bin/aztec" start --node --sequencer --port "$NODE_PORT" > "$D/node.log" 2>&1 & NODE_PID=$!; track $NODE_PID
-until grep -q "Aztec Node started" "$D/node.log" 2>/dev/null; do
-  kill -0 "$NODE_PID" 2>/dev/null || fail "Aztec's node stopped while starting" "$D/node.log"; sleep 2
-done
+# Validator i is a sequencer node with validator i's keys: it proposes in its slots and attests in
+# the others'. With a committee the nodes find each other through a P2P bootstrap node on this
+# machine (UDP/TCP 40400 and up); the open setup runs one node with P2P off.
+p2p_env() {
+  if [ "$COMMITTEE" -gt 1 ]; then
+    echo "P2P_ENABLED=true P2P_IP=127.0.0.1 P2P_LISTEN_ADDR=127.0.0.1 P2P_PORT=$((40401 + $1)) BOOTSTRAP_NODES=$ENR"
+  else echo "P2P_ENABLED=false"; fi
+}
+start_node() {   # i port log
+  local i=$1 sfx=""; [ "$1" = 0 ] || sfx=-$1
+  mkdir -p "$D/node-data$sfx" "$D/bb-work$sfx"
+  SEQ_PUBLISHER_PRIVATE_KEYS=${VKEYS[$i]} VALIDATOR_PRIVATE_KEYS=${VKEYS[$i]} COINBASE=${VADDRS[$i]} \
+  SEQ_BUILD_CHECKPOINT_IF_EMPTY=${SEQ_BUILD_CHECKPOINT_IF_EMPTY:-true} \
+  PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-work$sfx \
+  ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true SPONSORED_FPC=true \
+  DATA_DIRECTORY=$D/node-data$sfx BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
+  ARCHIVER_POLLING_INTERVAL_MS=1000 ARCHIVER_VIEM_POLLING_INTERVAL_MS=1000 LOG_LEVEL=${LOG_LEVEL:-info} \
+    env $(p2p_env "$i") "$HERE/node_modules/.bin/aztec" start --node --sequencer --port "$2" --admin-port $((8880 + i)) > "$3" 2>&1 &
+  STARTED_PID=$!; track $STARTED_PID
+  until grep -q "Aztec Node started" "$3" 2>/dev/null; do
+    kill -0 "$STARTED_PID" 2>/dev/null || fail "Aztec's node $i stopped while starting" "$3"; sleep 2
+  done
+}
+if [ "$COMMITTEE" -gt 1 ]; then
+  say "3/5 starting Aztec's P2P bootstrap node and a committee of $COMMITTEE sequencer nodes"
+  mkdir -p "$D/bootnode-data"
+  P2P_IP=127.0.0.1 P2P_LISTEN_ADDR=127.0.0.1 P2P_PORT=40400 L1_CHAIN_ID=31337 DATA_DIRECTORY=$D/bootnode-data LOG_LEVEL=${LOG_LEVEL:-info} \
+    "$HERE/node_modules/.bin/aztec" start --p2p-bootstrap --port 8090 > "$D/bootnode.log" 2>&1 & track $!
+  ENR=""
+  for _ in $(seq 1 60); do
+    ENR=$(curl -s -m2 -X POST -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"bootstrap_getEncodedEnr","params":[]}' http://127.0.0.1:8090 2>/dev/null | grep -oE 'enr:[^"]+' || true)
+    [ -n "$ENR" ] && break; sleep 1
+  done
+  [ -n "$ENR" ] || fail "Aztec's P2P bootstrap node did not start" "$D/bootnode.log"
+else
+  say "3/5 starting Aztec's sequencer node"
+fi
+start_node 0 "$NODE_PORT" "$D/node.log"; NODE_PID=$STARTED_PID
 say "    Aztec node up on :$NODE_PORT"
+for (( i = 1; i < COMMITTEE; i++ )); do
+  start_node "$i" $((8090 + i)) "$D/node-$i.log"
+  say "    validator $i's node up on :$((8090 + i))"
+done
 
 # --- 4. Aztec's prover: broker, prover node and agents, each its own process (Aztec's operator-docs layout) ---
 # Where Aztec's docs say `--network mainnet`, this devnet gives every role the registry address and

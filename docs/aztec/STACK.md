@@ -170,11 +170,17 @@ service with the matching genesis archive root
 own `getGenesisValues`), and serves the node on `localhost:8080` (NODE_PORT overrides), where a
 wallet built for Aztec's local network looks.
 
-**The committee is open today.** The facade reports an empty committee, which Aztec's node
-treats as open: anyone proposes and nobody attests (`epoch-cache/src/committee_lookup.ts`), as
-Aztec's own local network runs. A committee needs the facade to report `cfg`'s committee and
-several Aztec nodes with P2P and validator keys; the settlement service already checks the
-signatures (#54).
+**A committee attests to every checkpoint (#68, done).** `COMMITTEE=n` (2 to 5) runs n Aztec
+nodes, each with a validator key, finding each other through Aztec's P2P bootstrap node. `cfg`
+holds the committee and a sample seed; the sidecar reports them (`getCommitteeAt`, the GSE's
+attester list, `getProposerAt` by ValidatorSelectionLib's rule), so the nodes take turns to
+propose and attest to each other's proposals, and refine checks each checkpoint's proposer
+signature and committee commitment against `cfg` as Aztec's Rollup does at `propose`. Measured
+with three: eleven checkpoints proposed by all three in the seed's order, every one accepted,
+transactions through all of them. The default stays an open committee, one node, as Aztec's
+local network runs. One install fix made it run: npm resolved libp2p's multiaddr to 12.5.1, whose
+addresses Aztec's address matcher rejects, so no node could listen; `tools/aztec-local` pins
+12.3.1, as Aztec's own image ships it.
 
 ## The plan
 
@@ -187,7 +193,7 @@ Each step is an issue under #71; the order is the plan's.
 5. **#69 Real epoch proofs** (done).
 6. **#74 The wallet's live view** (done).
 7. **#70 The demo on Aztec's stack:** re-recorded on this stack, the first demo retired (done).
-8. **#68 A committee and P2P.**
+8. **#68 A committee and P2P** (done).
 9. **#73 Refine checks every client proof:** batch verification in one package, the reference
    string as a preimage, Aztec's trees in accumulate. Required, not optional.
 

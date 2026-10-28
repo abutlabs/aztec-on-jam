@@ -43,7 +43,10 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
       Aztec's sequencer node, Aztec's prover and the wallet. It prints each step as it finishes
       and the wallet's address at the end. Leave <code>DEVNET_NET</code> out to use PolkaJam's
       testnet instead of lasair; <code>PROVER=0</code> skips the prover. Docker runs the
-      public-execution agent: Aztec publishes that prover for Linux only. Stop with Ctrl-C, or
+      public-execution agent: Aztec publishes that prover for Linux only. <code>COMMITTEE=3</code>
+      runs a committee of three validators instead of one open sequencer: three Aztec nodes that
+      find each other over P2P, take turns to propose and attest to each other's checkpoints,
+      which JAM checks against the committee before accepting. Stop with Ctrl-C, or
       <code>tools/aztec-local/on-jam.sh down</code> from another terminal.</p>
   </section>
 
@@ -71,6 +74,7 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
         <tr><td><code>ETHEREUM_HOSTS</code></td><td>the JAM sidecar, <code>http://127.0.0.1:8545</code></td></tr>
         <tr><td><code>L1_CONSENSUS_HOST_URLS</code> (blob data)</td><td>a local blob store the sequencer writes</td></tr>
         <tr><td>P2P, for the prover to find transactions</td><td>the prover reads them from the sequencer node</td></tr>
+        <tr><td>The validator committee, staked on L1</td><td>a fixed committee in the settlement service's configuration; the sidecar reports it to every node</td></tr>
         <tr><td>Agent hardware: 32 cores, 128 GB</td><td>two agents on a 10-core, 16 GB laptop — slow is fine, proving never blocks the chain</td></tr>
         <tr><td>Proof submission window</td><td>widened, so a slow prover is never late</td></tr>
       </tbody>

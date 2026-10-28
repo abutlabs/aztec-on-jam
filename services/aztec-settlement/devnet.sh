@@ -48,19 +48,25 @@ writeFileSync(process.argv[1], ServerCircuitVks['RootRollupArtifact'].keyAsBytes
 " "$VK_FILE") 2>/dev/null || VK_FILE=""
 # Aztec's sha256ToField, as the service computes it (crates/aztec-l1): 0x00 ‖ the first 31 bytes
 VK_HASH=$([ -n "$VK_FILE" ] && echo "00$(shasum -a 256 "$VK_FILE" | cut -c1-62)" || echo "")
-python3 - "$HERE/cfg.bin" "$O/devnet-cfg.json" "$2" "$3" "$4" "$GENESIS_TIME" "$JAM_ERA" "${PROOF_SUBMISSION_EPOCHS:-1}" "${EPOCH_SLOTS:-4}" "$VK_HASH" <<'PY'
+# COMMITTEE_ADDRESSES: the validators, comma-separated (on-jam.sh's COMMITTEE=n); none means an
+# open committee, as Aztec's local network runs. SAMPLE_SEED fixes every epoch's proposer order.
+python3 - "$HERE/cfg.bin" "$O/devnet-cfg.json" "$2" "$3" "$4" "$GENESIS_TIME" "$JAM_ERA" "${PROOF_SUBMISSION_EPOCHS:-1}" "${EPOCH_SLOTS:-4}" "$VK_HASH" "${COMMITTEE_ADDRESSES:-}" "${SAMPLE_SEED:-0x2a}" <<'PY'
 import json, struct, sys
-out, js, archive, vk_tree, protocol, genesis, era, window, eslots, vk_hash = sys.argv[1:11]
+out, js, archive, vk_tree, protocol, genesis, era, window, eslots, vk_hash, committee, seed = sys.argv[1:13]
+committee = [a.strip().lower() for a in committee.split(",") if a.strip()]
+assert len(committee) <= 16, "the service holds at most 16 committee members"
 cfg = dict(genesisArchive=archive, genesisTime=int(genesis), slotSeconds=36, epochSlots=int(eslots), minFee=1000, manaLimit=2**63,
            chainId=31337, version=1, vkTreeRoot=vk_tree, protocolContractsHash=protocol,
            proofSubmissionEpochs=int(window),   # PROOF_SUBMISSION_EPOCHS: a slow prover's window (#69)
-           jamEra=int(era), epochVkHash="0x" + (vk_hash or "00" * 32))
+           jamEra=int(era), epochVkHash="0x" + (vk_hash or "00" * 32),
+           committee=committee, sampleSeed="0x" + seed[2:].rjust(64, "0"))
 w = lambda h: bytes.fromhex(h[2:].rjust(64, "0"))
 open(out, "wb").write(w(archive) + struct.pack(">QQQ", cfg["genesisTime"], 36, cfg["epochSlots"]) + (1000).to_bytes(16, "big")
                       + (2**63).to_bytes(32, "big") + (31337).to_bytes(32, "big") + (1).to_bytes(32, "big")
                       + w(cfg["epochVkHash"]) + w(vk_tree) + w(protocol) + struct.pack(">Q", cfg["proofSubmissionEpochs"])
                       + bytes.fromhex("00000000000000000000000000000000a11ce002")   # the facade's Rollup
-                      + bytes(32) + bytes([0]) + bytes(320)                             # no committee, as the local network
+                      + w(cfg["sampleSeed"]) + bytes([len(committee)])                  # the committee (#54, #68)
+                      + b"".join(bytes.fromhex(a[2:]) for a in committee).ljust(320, b"\0")
                       + struct.pack(">Q", cfg["jamEra"]))
 json.dump(cfg, open(js, "w"))
 PY
