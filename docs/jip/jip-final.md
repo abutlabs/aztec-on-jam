@@ -94,7 +94,7 @@ which only a host call reaches.
 
 ## Alternatives considered
 
-1. **Better PVM code.** Field-wise curve hooks save 14% of an UltraHonk check, and services
+1. **Better PVM code.** Field-wise curve hooks save ~14% of an UltraHonk check, and services
    should adopt them. Algorithmic gains are mostly already in the arkworks code services run.
    What remains is the PVM's own overhead on 254- and 381-bit arithmetic.
 2. **An instruction or gas-table change.** A widening multiply-accumulate, add-with-carry, or a
@@ -458,3 +458,20 @@ vectors, go-ethereum v1.14.12's EIP-196/197 and EIP-2537 vectors, and a second l
      in the repository.
    The prices are the x86 runner's p99 × 2 with no further headroom, so a machine slower than
    the runner on any one operation falls under the margin there.
+
+**Found building the reference implementation:**
+
+5. **Aztec's public functions in refine.** Refine checks each transaction's private part: its
+   client proof. Its public part (calls to contracts' public functions, compiled to Aztec's AVM
+   bytecode) is executed by Aztec's sequencer and proved by Aztec's AVM prover, and JAM sees it
+   only through the epoch proof. In the demo, deploying a token, minting, and moving funds
+   between private and public balances all have public parts. Two routes, neither measured:
+   - **Re-execute:** Barretenberg's AVM simulator (C++, about 20,000 lines) built for the PVM,
+     re-running each transaction's public calls from the hints Aztec's prover collects, every
+     hint checked against the state trees. Refine does the work; its gas, and whether it fits
+     the PVM's code limit beside the verifier, are unknown.
+   - **Verify Aztec's AVM proof:** a BN254 proof with KZG commitments, 14,532 fields (about
+     465 KB), whose verifier would use calls 101 and 102. Refine checks Aztec's prover instead
+     of executing.
+   Which route a JAM rollup should take, and so whether AVM proof verification belongs among
+   this JIP's examples, is open.
