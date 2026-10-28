@@ -31,24 +31,6 @@
   <img class="shot" src="../images/demo.gif" alt="Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the chain explorer read with no key, with Alice's keys, and with Bob's viewing key">
 
   <section>
-    <h2>One payment, end to end</h2>
-    <ol class="steps">
-      <li><div><b>The sender proves, on their own machine.</b>
-        <p>A browser tab builds a zero-knowledge proof of the transfer with Aztec's proving stack
-        (Noir and Barretenberg): about one second.</p></div></li>
-      <li><div><b>JAM validators verify it.</b>
-        <p>The proof travels in a work-package; the service verifies it on-chain for 49M gas with
-        our <a href="../jip/">proposed JIP</a>, 147M without — 1 to 3% of a package.</p></div></li>
-      <li><div><b>The chain writes only ciphertext.</b>
-        <p>New note commitments, spent-note nullifiers, and two sealed notes. No sender, no
-        receiver, no amount.</p></div></li>
-      <li><div><b>The receiver finds the money with their key.</b>
-        <p>Their browser scans the sealed notes; the one that opens is theirs. Nobody told them;
-        nobody else can tell.</p></div></li>
-    </ol>
-  </section>
-
-  <section>
     <h2>What the chain shows</h2>
     <div class="tbl"><table>
       <thead><tr><th>Move</th><th>Anyone can read on chain</th><th>Not on chain</th></tr></thead>
@@ -66,20 +48,23 @@
   </section>
 
   <section>
-    <h2>Real, and reduced</h2>
+    <h2>What's Aztec, What's New?</h2>
     <div class="paths">
       <div class="path"><h3>Real</h3>
         <ul class="plain">
-          <li>The proofs: made by the sender, verified on-chain; any tampering is refused</li>
-          <li>The state: written only from the chain's own roots; replays change nothing</li>
-          <li>The keys: self-custodial, never leave the browser</li>
-          <li>The network: six validators, two independent JAM clients, GRANDPA finality</li>
+          <li>Revise this section with each Aztec Library that we ported unchanged - Goal is to use unchanged Aztec releases to keep up with their updates</li>
+          <li>PXE</li>
+          <li>Aztec Circuits - Runs unchanged</li>
+          <li>Barretenberg - runs unchanged</li>
+          <li>Aztec Sequencer Node- runs unchanged</li>
+          <li>Aztec Prover Node - runs unchanged</li>
         </ul></div>
       <div class="path"><h3>Reduced</h3>
         <ul class="plain">
-          <li>The circuit is ours, written to Aztec's shapes — not Aztec's kernel circuits. Replacing it is the <a href="../aztec/">current work</a></li>
           <li>Dev-chain money: a faucet, an unsigned public ledger, published dev keys</li>
           <li>Notes found by trial decryption, not Aztec's tagging; one proof per package, no folding</li>
+          <li>JAM L1 Sidecar: Interprets Aztec Sequencer to JAM service?? Revise</li>
+          <li>The network: six validators, two independent JAM clients, GRANDPA finality</li>
         </ul></div>
     </div>
   </section>
@@ -103,7 +88,7 @@
   </section>
 
   <section>
-    <h2>Run it</h2>
+    <h2>Run it - REVISE THIS SECTION - is demo.sh picking up lasair nodes? UI still shows polkajam</h2>
     <pre>scripts/bootstrap.sh     # pinned toolchain and builds
 nets/demo.sh up          # six validators, services deployed, wallet on :19710
 nets/demo.sh check       # a shield, a private send, an unshield: 37 assertions

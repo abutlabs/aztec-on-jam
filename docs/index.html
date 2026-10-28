@@ -41,9 +41,9 @@
         their own code; validators execute it, audit each other, and finalize the result.</p>
         <p class="meta"><a href="https://graypaper.com">graypaper.com</a></p></div>
       <div class="card"><h3>Aztec on JAM</h3>
-        <p>Everything Aztec takes from Ethereum — JAM provides, with far more capacity. We built the
-        proof-of-concept, benchmarked, and drafted a JAM-Improvement-Proposal
-        ( <a href="https://github.com/polkadot-fellows/JIPs">JIP</a> ) that makes AZTEC on JAM fast.</p>
+        <p>Everything Aztec takes from Ethereum — JAM provides, without an L2. We built the
+        proof-of-concept, benchmarks, and drafted a JAM-Improvement-Proposal
+        ( <a href="https://github.com/polkadot-fellows/JIPs">JIP</a> ) that makes AZTEC onJAM fast.</p>
         <p class="meta"><a href="https://github.com/abutlabs/jam-privacy-service">the repository</a></p></div>
     </div>
   </section>
@@ -98,20 +98,12 @@
   <section>
     <h2>What stands today</h2>
     <ol class="steps">
-      <li><div><span class="state done">LIVE</span><b><a href="demo/">A working private-payment demo on JAM</a></b>
-        <p>A browser proves a private transfer in about a second; six JAM validators verify it
-        and update encrypted state; the receiver finds the money with their key. Runs on two
-        independent JAM clients.</p></div></li>
-      <li><div><span class="state done">LIVE</span><b><a href="aztec/">Aztec's own stack, settling on JAM</a></b>
-        <p>Aztec's released node and wallet libraries, our facade and settlement service under
-        them: real client proofs made in the tab, verified by the node, checkpoints finalized on
-        six lasair validators.</p></div></li>
-      <li><div><span class="state done">LIVE</span><b><a href="jip/">Aztec's proofs, verified by JAM validators</a></b>
-        <p>Aztec's own verifier, compiled for JAM's VM, checked a real Aztec transaction proof
-        on a live six-validator net — practical only with our proposed host calls.</p></div></li>
-      <li><div><span class="state next">NEXT</span><b>The rest of the plan</b>
-        <p>A committee, a prover node, the rebrand, the film. Tracked in
-        <a href="https://github.com/abutlabs/jam-privacy-service/issues/71">#71</a>.</p></div></li>
+      <li><div><span class="state done">Proof-of-Concept</span><b><a href="demo/">A localhost proof-of-concept</a></b>
+        <p>A browser proves a private transfer; six JAM validators verify it
+        and update encrypted state; the receiver finds the money with their key.</p></div></li>
+      <li><div><span class="state done">Proof-of-Concept</span><b><a href="aztec/">Aztec's own stack, settling on JAM</a></b>
+        <p>Aztec's released node and wallet libraries, run unchanged. Aztecs sequencer and prover nodes run as released. 
+        checkpoints finalized on 'Tiny' JAM testnet.</p></div></li>
     </ol>
   </section>
 
