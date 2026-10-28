@@ -1,4 +1,4 @@
-/* mmap declarations only, for the rv64e PVM guest (jam-privacy-service#62); bb maps files
+/* mmap declarations only, for the rv64e PVM guest (aztec-on-jam#62); bb maps files
    only in its low-memory mode, which the verifier does not use. */
 #ifndef _PVM_SYS_MMAN_H
 #define _PVM_SYS_MMAN_H

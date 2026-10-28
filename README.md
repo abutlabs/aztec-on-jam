@@ -1,4 +1,4 @@
-# jam-privacy-service
+# aztec-on-jam
 
 **Aztec on JAM: private payments, proved on your device, verified by the chain.**
 
@@ -8,10 +8,10 @@ or amount. [JAM](https://graypaper.com) is Polkadot's next protocol — hundreds
 verifiable compute. This project puts JAM in Ethereum's place under Aztec: Aztec's software as
 released, our code only at the seam.
 
-**Docs: [abutlabs.github.io/jam-privacy-service](https://abutlabs.github.io/jam-privacy-service/)**
-— the [architecture](https://abutlabs.github.io/jam-privacy-service/aztec/), the
-[demo](https://abutlabs.github.io/jam-privacy-service/demo/), and
-[our proposed JAM host calls](https://abutlabs.github.io/jam-privacy-service/jip/).
+**Docs: [abutlabs.github.io/aztec-on-jam](https://abutlabs.github.io/aztec-on-jam/)**
+— the [architecture](https://abutlabs.github.io/aztec-on-jam/aztec/), the
+[demo](https://abutlabs.github.io/aztec-on-jam/demo/), and
+[our proposed JAM host calls](https://abutlabs.github.io/aztec-on-jam/jip/).
 
 ![Alice's and Bob's wallets side by side: Alice pays Bob in public, shields, and sends 40 privately; Bob finds the note and unshields; then the explorer read with no key, with Alice's keys and with Bob's viewing key](docs/images/demo.gif)
 
@@ -24,7 +24,7 @@ Needs Rust, Python 3.11+, Node 22+ and Chrome; `bootstrap.sh` installs the rest 
 versions ([docs/TOOLS.md](docs/TOOLS.md)).
 
 ```sh
-git clone https://github.com/abutlabs/jam-privacy-service && cd jam-privacy-service
+git clone https://github.com/abutlabs/aztec-on-jam && cd aztec-on-jam
 scripts/bootstrap.sh                                  # toolchain and builds
 (cd wallet && npm install && npm run build)           # the wallet, once
 DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh     # everything up; prints each step and the wallet's URL
@@ -42,10 +42,10 @@ The first proof of concept — private payments with our own circuit — still r
 
 | Milestone | |
 | --- | --- |
-| Private payments in Aztec's model, live on JAM — the recording above | **done** · [demo](https://abutlabs.github.io/jam-privacy-service/demo/) |
-| Aztec v6's own node, unchanged, settling on JAM through our Ethereum-RPC facade | **done**, test-mode proofs · [architecture](https://abutlabs.github.io/jam-privacy-service/aztec/) |
-| Aztec's transaction proofs verified on a live JAM net by Aztec's own verifier | **done** — needs our proposed host call: 3.46B gas with it, 11.4B (over two cores' budget) without · [proposal](https://abutlabs.github.io/jam-privacy-service/jip/) |
-| The full stack: our wallet on Aztec's libraries, real proofs end to end, a prover node | **in progress** · [#71](https://github.com/abutlabs/jam-privacy-service/issues/71) |
+| Private payments in Aztec's model, live on JAM — the recording above | **done** · [demo](https://abutlabs.github.io/aztec-on-jam/demo/) |
+| Aztec v6's own node, unchanged, settling on JAM through our Ethereum-RPC facade | **done**, test-mode proofs · [architecture](https://abutlabs.github.io/aztec-on-jam/aztec/) |
+| Aztec's transaction proofs verified on a live JAM net by Aztec's own verifier | **done** — needs our proposed host call: 3.46B gas with it, 11.4B (over two cores' budget) without · [proposal](https://abutlabs.github.io/aztec-on-jam/jip/) |
+| The full stack: our wallet on Aztec's libraries, real proofs end to end, a prover node | **in progress** · [#71](https://github.com/abutlabs/aztec-on-jam/issues/71) |
 
 ## The proposal
 
@@ -53,7 +53,7 @@ Verifying a zero-knowledge proof is mostly elliptic-curve arithmetic, which JAM'
 ordinary code. We drafted a JAM Improvement Proposal adding five curve host calls — the
 operations Ethereum ships as precompiles. Measured on a live net: verification 3 to 16×
 cheaper, and Aztec's own client proofs become verifiable at all.
-[The case and the numbers](https://abutlabs.github.io/jam-privacy-service/jip/) · [full
+[The case and the numbers](https://abutlabs.github.io/aztec-on-jam/jip/) · [full
 text](docs/jip/jip-final.md).
 
 ## Layout

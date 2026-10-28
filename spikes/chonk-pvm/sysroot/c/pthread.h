@@ -1,4 +1,4 @@
-/* Single-threaded pthread declarations for the rv64e PVM guest (jam-privacy-service#62).
+/* Single-threaded pthread declarations for the rv64e PVM guest (aztec-on-jam#62).
    The guest has one thread; the link supplies no-op implementations. */
 #ifndef _PVM_PTHREAD_H
 #define _PVM_PTHREAD_H

@@ -14,7 +14,7 @@ not touch what the run uses may proceed; each step gets its own ledger entry.
 
 ## Where things are
 
-- `/Users/austinkloske/Projects/abutlabs/Aiden/submodules/jam-privacy-service` — this
+- `/Users/austinkloske/Projects/abutlabs/Aiden/submodules/aztec-on-jam` — this
   repo: the service (`services/privacy`), the public-balance helper, spikes, nets, docs.
   Push to `origin main` after every verified step.
 - `../aztec-packages` (fork, pinned at `v6.0.0`), `../aztec-node` (fork), `../demo-wallet`
@@ -103,11 +103,11 @@ the ledger.
 
 ## GitHub issues: the work is visible there
 
-The repo `abutlabs/jam-privacy-service` tracks everything as issues, so Aodh can follow
+The repo `abutlabs/aztec-on-jam` tracks everything as issues, so Aodh can follow
 and so later sessions can pick up where this one stopped:
 
 - One `milestone` issue per milestone, one `step` issue per plan step (they exist; `gh
-  issue list -R abutlabs/jam-privacy-service`). A new piece of work gets a new issue
+  issue list -R abutlabs/aztec-on-jam`). A new piece of work gets a new issue
   before it starts; a finding that decides something goes on a `research` issue as a
   comment with the evidence; a choice made under *Liberties* gets a `decision` issue
   naming its price and the way back; anything that stops a step gets a `blocker` issue.
@@ -193,7 +193,7 @@ submit later.
 
 ## Every iteration
 
-1. Read the ledger's last entry, then `gh issue list -R abutlabs/jam-privacy-service`.
+1. Read the ledger's last entry, then `gh issue list -R abutlabs/aztec-on-jam`.
 2. Review the open issues: pick the next unblocked one by the order below (a dependency
    first; then the one whose result most changes the others). Say in the ledger why that
    one.

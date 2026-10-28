@@ -1,4 +1,4 @@
-/* Minimal picolibc configuration for jam-privacy-service#62's rv64e PVM sysroot. */
+/* Minimal picolibc configuration for aztec-on-jam#62's rv64e PVM sysroot. */
 #ifndef _PICOLIBC_H_
 #define _PICOLIBC_H_
 #define _NEWLIB_VERSION "4.3.0"

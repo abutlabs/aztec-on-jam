@@ -12,7 +12,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-        with: { path: jam-privacy-service }
+        with: { path: aztec-on-jam }
       - uses: actions/checkout@v4
         with: { repository: abutlabs/jamswap, path: jamswap }
       - uses: actions/setup-python@v5
@@ -29,7 +29,7 @@ jobs:
       - name: PolkaJam (x86-64, recompiler)
         run: |
           sudo sysctl -w vm.unprivileged_userfaultfd=1 kernel.apparmor_restrict_unprivileged_userns=0
-          eval "$(grep -E '^POLKAJAM_NATIVE=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          eval "$(grep -E '^POLKAJAM_NATIVE=' aztec-on-jam/scripts/bootstrap.sh | sed 's/ *#.*//')"
           mkdir -p pj && curl -sfL "https://github.com/paritytech/polkajam-releases/releases/download/$POLKAJAM_NATIVE/polkajam-$POLKAJAM_NATIVE-linux-x86_64.tgz" | tar xz -C pj
           echo "PJD=$PWD/pj/polkajam-$POLKAJAM_NATIVE-linux-x86_64" >> "$GITHUB_ENV"
       - name: The three spikes on PolkaJam
@@ -37,13 +37,13 @@ jobs:
           set -o pipefail
           for s in kzg-gas ecdsa-gas poseidon2-gas; do
             echo "### $s" | tee -a "$GITHUB_STEP_SUMMARY"
-            jam-privacy-service/spikes/$s/measure.sh 2>&1 | grep -E "agree|recover|match|^\|" | tee -a "$GITHUB_STEP_SUMMARY"
+            aztec-on-jam/spikes/$s/measure.sh 2>&1 | grep -E "agree|recover|match|^\|" | tee -a "$GITHUB_STEP_SUMMARY"
           done
-          grep -m1 -o 'PVM backend: [a-z]*' jam-privacy-service/spikes/kzg-gas/out/testnet.log | tee backend.txt
+          grep -m1 -o 'PVM backend: [a-z]*' aztec-on-jam/spikes/kzg-gas/out/testnet.log | tee backend.txt
       - name: The same Rust natively, and R and f
         run: |
           set -o pipefail
-          cd jam-privacy-service/spikes/jip-bench
+          cd aztec-on-jam/spikes/jip-bench
           cargo run -q --release --bin jip-bench -- ../kzg-gas/vectors ../ecdsa-gas/vectors/inputs.txt 2> native.txt | tee -a "$GITHUB_STEP_SUMMARY"
           echo "### R and f, $(nproc) vCPU, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" | tee -a "$GITHUB_STEP_SUMMARY"
           ./pricing.py .. "$(sed 's/PVM backend: //' ../../../backend.txt)" < native.txt | tee -a "$GITHUB_STEP_SUMMARY"

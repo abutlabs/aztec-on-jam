@@ -14,6 +14,6 @@ css = css.replace("@media (prefers-color-scheme: dark) { html { color-scheme: da
 head = page[page.index("<title>"):page.index("</head>")]
 head = head.replace('<link rel="stylesheet" href="../site.css">', "<style>\n" + css + "\n</style>")
 body = page[page.index("<body>") + len("<body>"):page.index("</body>")]
-body = re.sub(r'href="\.\./([^"]*)"', r'href="https://abutlabs.github.io/jam-privacy-service/\1"', body)
+body = re.sub(r'href="\.\./([^"]*)"', r'href="https://abutlabs.github.io/aztec-on-jam/\1"', body)
 open(sys.argv[1], "w", encoding="utf-8").write(head + body)
 print("artifact written")

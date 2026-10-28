@@ -1,4 +1,4 @@
-"""stubs.cpp for every symbol the linked verifier still lacks (jam-privacy-service#62): each
+"""stubs.cpp for every symbol the linked verifier still lacks (aztec-on-jam#62): each
 function logs its name through chonk_trap and stops the refine; each data symbol (a vtable,
 typeinfo, VTT or object) is zeroed storage. All of them sit on logging, exception or file
 paths. Usage: stubs.py UNDEFINED_SYMBOLS DEMANGLED_SYMBOLS > stubs.cpp"""

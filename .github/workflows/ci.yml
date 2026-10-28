@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-        with: { path: jam-privacy-service }
+        with: { path: aztec-on-jam }
       - uses: actions/checkout@v4
         with: { repository: abutlabs/jamswap, path: jamswap }
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
           rustup toolchain install nightly-2025-05-10 --profile minimal --component rust-src
       - name: Noir and Barretenberg at the pins
         run: |
-          eval "$(grep -E '^(NOIR|BB)=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          eval "$(grep -E '^(NOIR|BB)=' aztec-on-jam/scripts/bootstrap.sh | sed 's/ *#.*//')"
           curl -sL https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
           ~/.nargo/bin/noirup -v "$NOIR"
           curl -sL https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
@@ -40,7 +40,7 @@ jobs:
       - name: Python dependency (cryptography)
         run: python3 -m pip install -q "cryptography>=41"
       - name: Poseidon2, sealed notes and the client's trees against their vectors
-        working-directory: jam-privacy-service
+        working-directory: aztec-on-jam
         run: |
           python3 client/poseidon2.py
           python3 client/notecrypt.py
@@ -56,22 +56,22 @@ jobs:
             const h = Buffer.from(blake2b(new TextEncoder().encode("abc"), 64)).toString("hex");
             if (!h.startsWith("ba80a53f981c4d0d")) throw new Error(h); console.log("blake2b.js ok")'
       - name: The circuits compile
-        working-directory: jam-privacy-service/circuits
+        working-directory: aztec-on-jam/circuits
         run: for c in transfer hash_cli path_cli; do (cd $c && ~/.nargo/versions/nargo-1.0.0-rc.5 compile --silence-warnings); done
       - name: A real transfer, proved and verified offline
-        working-directory: jam-privacy-service
+        working-directory: aztec-on-jam
         run: scripts/offline-proof.sh
       - name: The services built for the PVM (jam080-build, GP 0.8.0)
         run: |
           cargo build --release -q --manifest-path jamswap/tools/jam080/builder/Cargo.toml
           B=jamswap/tools/jam080/builder/target/release/jam080-build
           mkdir -p out
-          $B jam-privacy-service/services/public-balance --out out
-          $B jam-privacy-service/services/privacy --out out
-          $B jam-privacy-service/services/aztec-settlement --out out
+          $B aztec-on-jam/services/public-balance --out out
+          $B aztec-on-jam/services/privacy --out out
+          $B aztec-on-jam/services/aztec-settlement --out out
           ls -la out
       - name: Aztec v6's L1 encodings against Aztec's own fixtures
-        working-directory: jam-privacy-service
+        working-directory: aztec-on-jam
         run: cargo test -q -p aztec-l1
       - name: jamboree (our fork) for `jamboree rpc`
         run: |
@@ -83,7 +83,7 @@ jobs:
           # PolkaVM's recompiler sandboxes its workers: userfaultfd and unprivileged user
           # namespaces, which Ubuntu 24.04's AppArmor restricts by default
           sudo sysctl -w vm.unprivileged_userfaultfd=1 kernel.apparmor_restrict_unprivileged_userns=0
-          eval "$(grep -E '^POLKAJAM_NATIVE=' jam-privacy-service/scripts/bootstrap.sh | sed 's/ *#.*//')"
+          eval "$(grep -E '^POLKAJAM_NATIVE=' aztec-on-jam/scripts/bootstrap.sh | sed 's/ *#.*//')"
           mkdir -p pj && curl -sfL "https://github.com/paritytech/polkajam-releases/releases/download/$POLKAJAM_NATIVE/polkajam-$POLKAJAM_NATIVE-linux-x86_64.tgz" | tar xz -C pj
-          N=10 JAMBOREE=$PWD/jamboree/target/release/jamboree jam-privacy-service/scripts/bench-refine-polkajam.sh \
-            pj/polkajam-$POLKAJAM_NATIVE-linux-x86_64 jam-privacy-service/out/offline/tx.hex out/privacy-service.jam | tee -a "$GITHUB_STEP_SUMMARY"
+          N=10 JAMBOREE=$PWD/jamboree/target/release/jamboree aztec-on-jam/scripts/bench-refine-polkajam.sh \
+            pj/polkajam-$POLKAJAM_NATIVE-linux-x86_64 aztec-on-jam/out/offline/tx.hex out/privacy-service.jam | tee -a "$GITHUB_STEP_SUMMARY"

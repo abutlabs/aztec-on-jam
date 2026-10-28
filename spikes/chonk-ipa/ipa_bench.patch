@@ -26,7 +26,7 @@ index 9cbab25..fa9621c 100644
      }
  }
  
-+// jam-privacy-service#46/#61: the deferred IPA discharge of a CHONK batch. Each proof leaves a
++// aztec-on-jam#46/#61: the deferred IPA discharge of a CHONK batch. Each proof leaves a
 +// NativeAccumulator (15 round challenges and a claimed G_0); batch_verify_accumulators checks N of them
 +// with one 2^15-point SRS MSM. The cost does not depend on the values, so the accumulators are random
 +// (the check itself fails; only its time is measured).

@@ -1,4 +1,4 @@
-# The shim's input from a proof, a vk and bb's CRS files (jam-privacy-service#62).
+# The shim's input from a proof, a vk and bb's CRS files (aztec-on-jam#62).
 import sys, struct, os
 proof, vk, crs, n_bn, n_gr, out = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
 p = open(proof, "rb").read(); v = open(vk, "rb").read()

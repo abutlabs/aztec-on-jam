@@ -8,7 +8,7 @@ by analogy with BN254's), with the same semantics, and is priced from end-to-end
 under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHonk verification falls from
 181M gas to 52M.
 
-**Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/) —
+**Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/aztec-on-jam/) —
 Port Aztec's released software settling on a six-validator JAM testnet whose client implements these
 JIP-8 host calls. 
 
@@ -41,7 +41,7 @@ strongest privacy systems deployed today.
 A service that checks a proof spends most of its gas on curve arithmetic, which today is
 metered PVM code: the PVM has no cryptographic host calls (GP 0.8.0, Appendix B, calls 0–27).
 Measured on a six-validator PolkaJam v0.8.0 testnet, refine gas from PolkaJam's telemetry, each
-row with its script in [jam-privacy-service](https://github.com/abutlabs/jam-privacy-service):
+row with its script in [aztec-on-jam](https://github.com/abutlabs/aztec-on-jam):
 
 | Check | As PVM code today | With this JIP, projected | With this JIP, measured on a client | How the projection is obtained |
 |---|---|---|---|---|
@@ -389,8 +389,8 @@ and switch on the probe's result.
 
 ## Reference implementation
 
-The proposal is implemented and running end to end ([Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/));
-the code and every measurement's script are in [the repository](https://github.com/abutlabs/jam-privacy-service).
+The proposal is implemented and running end to end ([Aztec on JAM](https://abutlabs.github.io/aztec-on-jam/));
+the code and every measurement's script are in [the repository](https://github.com/abutlabs/aztec-on-jam).
 
 - **A client.** lasair, an independent GP 0.8.0 client, implements all five calls behind
   activation flags (*Activation and detection*), and passes the JAM-native vectors in its gate.

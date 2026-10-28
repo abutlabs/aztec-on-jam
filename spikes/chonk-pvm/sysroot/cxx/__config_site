@@ -1,4 +1,4 @@
-// jam-privacy-service#62: libc++ 21 for the rv64e PVM guest over picolibc. Threads are on, over
+// aztec-on-jam#62: libc++ 21 for the rv64e PVM guest over picolibc. Threads are on, over
 // no-op pthread stubs (one thread): bb names std::mutex even single-threaded, as wasi's libc++ allows.
 #ifndef _LIBCPP___CONFIG_SITE
 #define _LIBCPP___CONFIG_SITE

@@ -32,5 +32,5 @@ lasair validators, six PolkaJam validators, or three of each, with the same serv
   chain spec alone. Offered upstream (jamixir/jamboree#49).
 
 Repo, the demo in four commands, and every number with the command that measured it:
-https://github.com/abutlabs/jam-privacy-service (start with docs/DEMO.md).
+https://github.com/abutlabs/aztec-on-jam (start with docs/DEMO.md).
 Questions and "that's wrong because…" very welcome.

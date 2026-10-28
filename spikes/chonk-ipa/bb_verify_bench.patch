@@ -6,7 +6,7 @@ index 44c0690..84bfe90 100644
      add_vk_path_option(verify);
  
      add_verbose_flag(verify);
-+    add_print_bench_flag(verify); // jam-privacy-service#62: the CHONK verifier's split
++    add_print_bench_flag(verify); // aztec-on-jam#62: the CHONK verifier's split
      add_debug_flag(verify);
      add_scheme_option(verify);
      add_crs_path_option(verify);
@@ -17,7 +17,7 @@ index 44c0690..84bfe90 100644
 -            return execute_non_prove_command(api);
 +            {
 +                const int rc = execute_non_prove_command(api);
-+                if (print_bench) { // jam-privacy-service#62: the CHONK verifier's split
++                if (print_bench) { // aztec-on-jam#62: the CHONK verifier's split
 +                    bb::detail::GLOBAL_BENCH_STATS.print_aggregate_counts_hierarchical(std::cout);
 +                    std::cout << std::flush;
 +                }

@@ -1,4 +1,4 @@
-/* Forced first include for bb on the rv64e PVM guest (jam-privacy-service#62): what
+/* Forced first include for bb on the rv64e PVM guest (aztec-on-jam#62): what
    bb's common/net.hpp includes on Linux and wasm, so bb's sources stay unchanged. */
 #pragma once
 #include <arpa/inet.h>

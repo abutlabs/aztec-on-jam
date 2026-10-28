@@ -46,7 +46,7 @@ in order.
    The body should lead
    with the reference implementation — the proposal running end to end, Aztec's released stack
    on a six-validator net with the calls — and link the site
-   (https://abutlabs.github.io/jam-privacy-service/, its JIP page), a rendered copy of the
+   (https://abutlabs.github.io/aztec-on-jam/, its JIP page), a rendered copy of the
    text, this repository's measurements and the vectors. Rename the repository (#72) **before**
    opening the PR: GitHub Pages does not redirect, so links made now would break. The repo is
    public, so check first that nothing in it links lasair's private repository.

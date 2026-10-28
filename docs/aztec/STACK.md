@@ -3,7 +3,7 @@
 Aztec's software runs as released, above the settlement layer; JAM takes Ethereum's place below
 it. This file sorts each part by whose code it is, says how it keeps up with Aztec's releases,
 and says which parts need the proposed curve host calls (`docs/jip`). The plan that follows from
-it is #71. As a page: https://abutlabs.github.io/jam-privacy-service/aztec/
+it is #71. As a page: https://abutlabs.github.io/aztec-on-jam/aztec/
 
 ```mermaid
 flowchart TB

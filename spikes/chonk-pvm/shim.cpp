@@ -1,4 +1,4 @@
-// jam-privacy-service#62 step 2: bb 6.0.0's CHONK verifier, unchanged, behind one C entry point,
+// aztec-on-jam#62 step 2: bb 6.0.0's CHONK verifier, unchanged, behind one C entry point,
 // so a PVM service (or a native harness) can call it. The input carries everything a verifier
 // needs, with no files:
 //   [u32 proof_len][proof][u32 vk_len][vk][u32 n_bn254][n_bn254 x 64: G1 points][128: G2 point]

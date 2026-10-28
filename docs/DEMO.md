@@ -1,4 +1,4 @@
-# Ten minutes with jam-privacy-service
+# Ten minutes with aztec-on-jam
 
 Shielded payments as a JAM service: Aztec's model (notes, nullifiers, client-side proofs)
 with JAM doing the checking. This page is for a JAM implementer who wants to see it run,
@@ -149,15 +149,15 @@ notes and the slot it landed in.
 
 | What | Value | Measured by |
 | --- | --- | --- |
-| One verification in refine (14 public inputs, zk, Keccak, bb 5.0.0) | **146,996,585 gas** on PolkaJam with field-wise curve hooks, under a second; 169,112,761 with the verifier's default hooks | `services/privacy/check.sh`, `spikes/jip8-lasair/pj-fallback.sh` ([#55](https://github.com/abutlabs/jam-privacy-service/issues/55)) |
+| One verification in refine (14 public inputs, zk, Keccak, bb 5.0.0) | **146,996,585 gas** on PolkaJam with field-wise curve hooks, under a second; 169,112,761 with the verifier's default hooks | `services/privacy/check.sh`, `spikes/jip8-lasair/pj-fallback.sh` ([#55](https://github.com/abutlabs/aztec-on-jam/issues/55)) |
 | How many fit a package | 6 on tiny (1e9), 34 on full (5e9), by their gas | |
-| The same verification with the proposed curve host calls ([docs/jip](jip/jip-final.md)), measured on lasair, the only client that implements them | **49,132,410 gas**: 20 on tiny, 101 on full. The same blob falls back to the hooks above where a net lacks the calls | `spikes/jip8-lasair/measure.sh` ([#59](https://github.com/abutlabs/jam-privacy-service/issues/59)) |
+| The same verification with the proposed curve host calls ([docs/jip](jip/jip-final.md)), measured on lasair, the only client that implements them | **49,132,410 gas**: 20 on tiny, 101 on full. The same blob falls back to the hooks above where a net lacks the calls | `spikes/jip8-lasair/measure.sh` ([#59](https://github.com/abutlabs/aztec-on-jam/issues/59)) |
 | Accumulate, one transfer (two nullifiers into the indexed tree, two leaves, two sealed notes, both roots) | 103,089 gas, 1% of a report's 10 million | lasair's in-process rig |
 | A proof in the browser (Chrome, Apple M-series, 10 threads) | 1.0 s; loading the provers first takes 2.3 s, once | the wallet's own log; `client/e2e/e2e.mjs` |
 | A proof with bb natively | 0.74 s (median of 600) | `client/soak.py` |
 | A transfer, submitted to accumulated (PolkaJam, one a slot for an hour) | 13.4 s median, 15.8 s p99, 600 of 600 | `client/soak.py`, [soak-pj6.md](soak-pj6.md) |
 | Note tree and nullifier tree depth | 40 each; depth 16 to 40 costs refine under 1% | `spikes/depth/measure.py` |
-| Built for size instead of speed | 1.8x the gas: the PVM meters instructions, so the services build at opt-level 3 with LTO | [#13](https://github.com/abutlabs/jam-privacy-service/issues/13) |
+| Built for size instead of speed | 1.8x the gas: the PVM meters instructions, so the services build at opt-level 3 with LTO | [#13](https://github.com/abutlabs/aztec-on-jam/issues/13) |
 
 ## Two clients, side by side
 
@@ -204,7 +204,7 @@ Reduced:
   3.46B gas a proof with the proposed call 105 and 11.4B without, against 49M to 169M for ours
   ([spikes/chonk-pvm](../spikes/chonk-pvm/RESULTS.md)). Replacing our circuit with Aztec's own
   stack is the current work: [aztec/STACK.md](aztec/STACK.md),
-  [#71](https://github.com/abutlabs/jam-privacy-service/issues/71).
+  [#71](https://github.com/abutlabs/aztec-on-jam/issues/71).
 - **One proof per package, no folding.** A tree takes one package a slot, in order; more
   throughput means more trees (cores) or folding many transfers into one proof.
 - **Dev-chain money, unsigned.** The public-balance service has a faucet anyone may call, and

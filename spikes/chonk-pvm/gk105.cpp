@@ -1,4 +1,4 @@
-// jam-privacy-service#62: bb's Grumpkin MSM through the proposed host call 105
+// aztec-on-jam#62: bb's Grumpkin MSM through the proposed host call 105
 // (grumpkin_g1_msm), where the net has it. bb is not changed: the service links with
 // --wrap for bb's two Grumpkin MSM entry points (service/build.rs), so every caller outside
 // scalar_multiplication.cpp (the IPA, the ECCVM verifier, batch_mul) reaches these functions,

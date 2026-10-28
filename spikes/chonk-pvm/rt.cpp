@@ -1,5 +1,5 @@
 // The C and C++ runtime bb's verifier needs on the single-threaded rv64e PVM guest
-// (jam-privacy-service#62), defined where the verifier may run it. Allocation, abort and
+// (aztec-on-jam#62), defined where the verifier may run it. Allocation, abort and
 // chonk_trap come from the Rust service; stubs.cpp (generated) traps on the rest, which only
 // logging, exceptions and files reach.
 #include <chrono>
