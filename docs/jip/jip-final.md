@@ -106,6 +106,63 @@ which only a host call reaches.
 4. **Larger refine budgets.** A bigger budget leaves each check's share of a package unchanged.
    The cost is relative to all other work on a core.
 
+## Objections, and answers
+
+The strongest reasons to reject this JIP, as we understand them, each with our answer.
+
+1. **It writes particular cryptography into consensus, permanently.** JAM's bet is that the
+   PVM is the one thing every validator must agree on; everything else is service code. Five
+   calls make five libraries' behaviour a consensus rule for every client.
+   *Answer:* the calls are primitives, not verifiers (*Rationale*): an MSM and a pairing check
+   serve every pairing-based system and have not changed while Barretenberg's proof format
+   changed at every major release. The PVM route was measured and recovers 11 to 16%, against
+   the calls' 7 to 25 times (*Alternatives considered*, 1 and 2). And nothing in the protocol
+   depends on a service using them: services detect the calls and fall back to PVM code
+   (*Activation and detection*), so one blob runs on clients with and without this JIP.
+
+2. **Byte-for-byte agreement is hard, and a disagreement forks the chain.** Curve libraries
+   differ at the edges — points off the curve, infinity, non-canonical encodings — and
+   Ethereum's precompiles have produced consensus bugs there.
+   *Answer:* the edges are specified (*Common rules*, *Determinism and consensus*) and tested:
+   103 JAM-native vectors, produced by two independent implementations a curve and, for 105,
+   by Barretenberg as a third; Ethereum's own EIP-196, EIP-197 and EIP-2537 vectors; and a
+   second library over 10,000 random and adversarial inputs a call in the reference
+   implementation. The cases where a client that reduces a coordinate would differ from one
+   that rejects it each have a vector. We ask for a second client team to implement before acceptance.
+
+3. **Gas prices are fragile.** Too low, a call becomes a way to overload validators; too high,
+   nobody uses it. Ours come from one reference machine and today's libraries.
+   *Answer:* each price is the reference machine's p99 time times a stated margin, a rule
+   anyone can rerun (*Gas pricing*); the measured prices against a second machine are in
+   *Open questions* 4. Like the Gray Paper's other gas constants, they can be amended. A price
+   set too high breaks nothing: services fall back to PVM code.
+
+4. **The curves may age badly.** BN254's security is estimated near 100 bits after the
+   exTNFS attacks; proof systems are moving to small fields without pairings; no
+   pairing-based scheme survives a quantum computer. Call 105 serves mainly one proof system.
+   *Answer:* BLS12-381 and pairings are already in the Gray Paper (`beefy.tex`), so this adds
+   no new class of assumption. BN254 is what deployed systems verify today: Noir and
+   Barretenberg, Groth16, Aztec. A later JIP can deprecate a call the way this one adds it, at
+   an activation timeslot. And the proposal is separable: 101–104 can be adopted without 105,
+   at an activation slot of their own (the reference implementation already activates 105
+   separately).
+
+5. **It is not strictly needed.** Aztec's own design works on JAM without it: Aztec's prover
+   folds every transaction into one epoch proof, and JAM checks that in 340.8M gas.
+   *Answer:* true, and the reference implementation runs that way. What this JIP adds is the
+   check JAM exists to offer: validators re-executing every transaction's verification
+   themselves. Without call 105 that check is impossible, not slower: one Aztec client proof
+   costs 11.36B gas, more than two packages' whole budget; with it, 3.46B, measured and
+   finalized on a six-validator net (*Reference implementation*). And every pairing-based
+   check gets 3 to 16 times cheaper.
+
+6. **The evidence is narrow.** One client implements the calls, built by the proposal's
+   authors; the measurements come from one team; the reviews in `reviews/` are simulated.
+   *Answer:* every number has its script in the reference implementation, and the gas is the
+   protocol's, so any client can reproduce it. The same service blobs run unchanged on
+   PolkaJam without the calls. This objection is answered only by others: the PR asks client
+   teams to review, and one to implement.
+
 ## Host-call specification
 
 ### Common rules
@@ -421,6 +478,7 @@ Comments are the simulated reviewers': Gavin Wood (GW) and Zac Williamson (ZW), 
 | Change | Comments |
 |---|---|
 | Narrowed to four calls; KZG, secp256k1 and Poseidon2 removed, Grumpkin deferred | GW-6, GW-7, GW-11, ZW-5, ZW-8, ZW-12 |
+| Objections, and answers: six reasons to reject this JIP, each answered from the evidence | — |
 | A reference implementation section: lasair implements all five; Aztec's released stack settles on a lasair net with them; two distinct Aztec client proofs verified and finalized | — |
 | Grumpkin's MSM added as call 105, once a direct check of Aztec's client proofs was measured: its 2^15 MSM is 9.0 to 9.8B gas as PVM code, so no package finishes a batch without the call (jam-privacy-service#62). GW's condition for adding it | GW (`reviews/gavin-wood-responds-to-zac-williamson.md`) |
 | Pricing invariant stated in the GP's terms, R_GP = 10/3 gas/ns, replacing one recompiler's R = 8 | GW-2, ZW-11 |
