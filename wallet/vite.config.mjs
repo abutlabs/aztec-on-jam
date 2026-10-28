@@ -40,7 +40,8 @@ const isolation = {
 export default {
   plugins: [polyfills(), sqliteRuntimeFiles()],
   define: { 'process.env': '{}' },
-  build: { target: 'esnext', chunkSizeWarningLimit: 12000 },
+  // two pages: the wallet, and the explorer (served on its own port, so its own origin and storage)
+  build: { target: 'esnext', chunkSizeWarningLimit: 12000, rollupOptions: { input: { wallet: 'index.html', explorer: 'explorer.html' } } },
   server: { headers: isolation },
   preview: { headers: isolation },
 };

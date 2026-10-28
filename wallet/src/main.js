@@ -9,6 +9,7 @@
 // proposed, checkpointed, proven), and the JAM sidecar's jam_activity (relay milestones, JAM's
 // finalized slot, the prover node's epoch jobs). Nothing here changes what Aztec's code does.
 //   ?node=  Aztec's node (default http://localhost:8080)   ?jam=  the sidecar (default :8545)
+//   ?explorer=  the explorer (default http://localhost:19730), given node, jam, jip2 and the token
 import { createAztecNodeClient } from '@aztec-labs/aztec.js/node';
 import { getContractInstanceFromInstantiationParams } from '@aztec-labs/aztec.js/contracts';
 import { AztecAddress } from '@aztec-labs/aztec.js/addresses';
@@ -18,11 +19,13 @@ import { SPONSORED_FPC_SALT } from '@aztec-labs/constants';
 import { SponsoredFPCContract } from '@aztec-labs/noir-contracts.js/SponsoredFPC';
 import { TokenContract } from '@aztec-labs/noir-contracts.js/Token';
 import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
+import { exportViewKeys } from './view-keys.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const NODE_URL = params.get('node') ?? 'http://localhost:8080';
 const JAM_URL = params.get('jam') ?? 'http://localhost:8545';
+const EXPLORER_URL = params.get('explorer') ?? 'http://localhost:19730';
 const wait = { timeout: 600, interval: 2 };
 const dur = (ms) => (ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`);
 const short = (a) => `${String(a).slice(0, 8)}…${String(a).slice(-6)}`;
@@ -213,6 +216,28 @@ const showSenders = async () => {
   }));
 };
 
+// the token in use is remembered per node, so a reload comes back to it (the account and notes
+// persist on their own, in the PXE's store); storage may be unavailable, which only loses that
+const TOKEN_KEY = `token@${NODE_URL}`;
+const remember = (address) => { try { localStorage.setItem(TOKEN_KEY, address.toString()); } catch {} explorerLink(); };
+const forget = () => { try { localStorage.removeItem(TOKEN_KEY); } catch {} };
+const recall = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
+
+/** the explorer, told where everything is (never any keys: those are pasted, so no URL holds them) */
+function explorerLink() {
+  const q = new URLSearchParams({ node: NODE_URL, jam: JAM_URL });
+  if (params.get('jip2')) q.set('jip2', params.get('jip2'));
+  if (token) q.set('token', token.address.toString());
+  $('explorer').href = `${EXPLORER_URL}/?${q}`;
+}
+
+const needAccount = () => { if (!me) throw new Error('create an account first'); return me; };
+const needToken = () => {
+  needAccount();
+  if (!token) throw new Error('no token yet: deploy a new token, or paste a token address and press "Use this token"');
+  return token;
+};
+
 async function attach(address) {
   // the instance was published on deployment; the node serves its preimage to any PXE
   const instance = await node.getContract(address);
@@ -220,6 +245,7 @@ async function attach(address) {
   await wallet.registerContract(instance, TokenContract.artifact);
   token = await TokenContract.at(address, wallet);
   $('token-address').value = address.toString();
+  remember(address);
 }
 
 async function refresh() {
@@ -235,6 +261,7 @@ async function refresh() {
 
 async function boot() {
   node = createAztecNodeClient(NODE_URL);
+  explorerLink();
   const info = await node.getNodeInfo();
   $('net').dataset.chain = String(info.l1ChainId);
   $('net').textContent = `chain ${info.l1ChainId}`;
@@ -253,6 +280,12 @@ async function boot() {
   while ((await node.getBlockNumber()) < 1) await new Promise((r) => setTimeout(r, 2000));
   const accounts = await wallet.getAccounts();
   if (accounts.length) { me = accounts[0].item; showAddress(); await showSenders(); }
+  const saved = recall();
+  if (saved) {
+    // a restarted chain no longer has the contract: forget it rather than fail every action
+    try { await attach(AztecAddress.fromStringUnsafe(saved)); } catch (e) { console.error('the remembered token', e); forget(); }
+    await refresh().catch((e) => console.error('reading balances after a reload', e));
+  }
   lane('tab', 'ready', 'idle');
   say(accounts.length ? 'ready' : 'ready — create an account', 'done');
   document.body.dataset.ready = '1';
@@ -275,40 +308,43 @@ $('create').onclick = () => run('Create an account', async () => {
 });
 
 $('deploy').onclick = () => run('Deploy a token', async () => {
-  const out = await TokenContract.deploy(wallet, me, 'Rebel Token', 'RBL', 6).send({ from: me, fee: fee(), wait });
+  const out = await TokenContract.deploy(wallet, needAccount(), 'Rebel Token', 'RBL', 6).send({ from: me, fee: fee(), wait });
   token = out.contract; $('token-address').value = token.address.toString();
+  remember(token.address);
   await refresh();
   return out;
 }, { tx: true });
 
 $('attach').onclick = () => run('Use a token', async () => {
-  await attach(AztecAddress.fromStringUnsafe($('token-address').value.trim()));
+  const address = $('token-address').value.trim();
+  if (!address) throw new Error('paste a token address first');
+  await attach(AztecAddress.fromStringUnsafe(address));
   await refresh();
 });
 
 $('mint').onclick = () => run(`Mint ${$('mint-amount').value} privately`, async () => {
-  const out = await token.methods.mint_to_private(me, amount('mint-amount')).send({ from: me, fee: fee(), wait });
+  const out = await needToken().methods.mint_to_private(me, amount('mint-amount')).send({ from: me, fee: fee(), wait });
   await refresh(); return out;
 }, { tx: true });
 
 $('mint-public').onclick = () => run(`Mint ${$('mint-amount').value} publicly`, async () => {
-  const out = await token.methods.mint_to_public(me, amount('mint-amount')).send({ from: me, fee: fee(), wait });
+  const out = await needToken().methods.mint_to_public(me, amount('mint-amount')).send({ from: me, fee: fee(), wait });
   await refresh(); return out;
 }, { tx: true });
 
 $('send').onclick = () => run(`Send ${$('send-amount').value} privately`, async () => {
   const to = AztecAddress.fromStringUnsafe($('send-to').value.trim());
-  const out = await token.methods.transfer(to, amount('send-amount')).send({ from: me, fee: fee(), wait });
+  const out = await needToken().methods.transfer(to, amount('send-amount')).send({ from: me, fee: fee(), wait });
   await refresh(); return out;
 }, { tx: true });
 
 $('shield').onclick = () => run(`Shield ${$('shield-amount').value}`, async () => {
-  const out = await token.methods.transfer_to_private(me, amount('shield-amount')).send({ from: me, fee: fee(), wait });
+  const out = await needToken().methods.transfer_to_private(me, amount('shield-amount')).send({ from: me, fee: fee(), wait });
   await refresh(); return out;
 }, { tx: true });
 
 $('unshield').onclick = () => run(`Unshield ${$('unshield-amount').value}`, async () => {
-  const out = await token.methods.transfer_to_public(me, me, amount('unshield-amount'), 0).send({ from: me, fee: fee(), wait });
+  const out = await needToken().methods.transfer_to_public(me, me, amount('unshield-amount'), 0).send({ from: me, fee: fee(), wait });
   await refresh(); return out;
 }, { tx: true });
 
@@ -316,6 +352,13 @@ $('add-sender').onclick = () => run('Register a sender', async () => {
   await wallet.registerSender(AztecAddress.fromStringUnsafe($('sender-address').value.trim()), 'sender');
   await showSenders();
 });
+
+$('show-keys').onclick = () => run('Show viewing keys', async () => {
+  $('keys-text').value = await exportViewKeys(wallet, needAccount(), { token: token?.address });
+  $('keys-box').hidden = false; $('show-keys').hidden = true;
+});
+$('hide-keys').onclick = () => { $('keys-text').value = ''; $('keys-box').hidden = true; $('show-keys').hidden = false; };
+$('copy-keys').onclick = () => run('Copy viewing keys', () => navigator.clipboard.writeText($('keys-text').value));
 
 $('refresh').onclick = () => run('Sync and read balances', refresh);
 

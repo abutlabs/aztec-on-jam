@@ -13,7 +13,10 @@
     <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l11 5v8c0 6.6-4.6 11.6-11 13.2C9.6 27.6 5 22.6 5 16V8z"/></svg>
     <div><b>JAM <span>Rebel</span> Wallet</b><small>private payments, settled on JAM</small></div>
   </div>
-  <div id="net" class="pill mono">connecting…</div>
+  <div class="row">
+    <div id="net" class="pill mono">connecting…</div>
+    <a id="explorer" class="pill link" target="_blank" rel="noopener" title="The public ledger, and what viewing keys add, in a new tab">Explorer ↗</a>
+  </div>
 </header>
 
 <main>
@@ -70,6 +73,14 @@
       <label>Sender<input id="sender-address" class="mono" placeholder="sender address (0x…)" spellcheck="false"></label>
       <button id="add-sender" class="go">Register sender</button>
       <ul id="senders" class="mono"></ul>
+      <button id="show-keys" class="ghost">Show viewing keys</button>
+      <div id="keys-box" class="panel" hidden>
+        <p class="note warn">Anyone holding these sees all of this account's activity: every note it holds,
+          and which it has spent. They cannot spend: your signing key never leaves this tab. Paste them into
+          the explorer to see what they reveal.</p>
+        <textarea id="keys-text" class="mono" rows="8" readonly spellcheck="false"></textarea>
+        <div class="row"><button id="copy-keys" class="ghost">Copy</button><button id="hide-keys" class="ghost">Hide</button></div>
+      </div>
     </div>
     <div class="panel" data-panel="token" hidden>
       <label>Token<input id="token-address" class="mono" placeholder="token address (0x…)" spellcheck="false"></label>

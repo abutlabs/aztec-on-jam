@@ -22,6 +22,9 @@ button:disabled { opacity: .45; cursor: wait; }
 input { font: inherit; width: 100%; min-width: 0; background: var(--card-2); color: var(--ink); border: 1px solid var(--rule);
   border-radius: 10px; padding: 11px 12px; font-size: 14px; }
 input:focus { outline: 2px solid var(--violet); outline-offset: 1px; }
+textarea { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; width: 100%; min-width: 0; resize: vertical;
+  background: var(--card-2); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; }
+textarea:focus { outline: 2px solid var(--violet); outline-offset: 1px; }
 
 /* --- top bar --- */
 .top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between;
@@ -32,6 +35,8 @@ input:focus { outline: 2px solid var(--violet); outline-offset: 1px; }
 .brand b span { color: var(--accent); }
 .brand small { color: var(--muted); font-size: 12.5px; }
 .pill { font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--rule); border-radius: 99px; padding: 6px 12px; }
+.pill.link { color: var(--violet); font-weight: 600; text-decoration: none; }
+.pill.link:hover { border-color: var(--violet); }
 
 /* --- layout --- */
 main { max-width: 1120px; margin: 0 auto; padding: 14px 16px 64px; display: grid; gap: 18px;
@@ -68,6 +73,7 @@ section { background: var(--card); border: 1px solid var(--rule); border-radius:
 .ghost.small { padding: 4px 10px; font-size: 12px; }
 .note { margin: 0; color: var(--muted); font-size: 12.5px; }
 #senders { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+.note.warn { color: var(--busy); }
 
 /* --- who is doing what --- */
 .live { padding: 18px; }

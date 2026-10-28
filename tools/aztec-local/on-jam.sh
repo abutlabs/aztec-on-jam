@@ -16,16 +16,19 @@
 #                           peaks at about 6.4 GB, and two at once overflow Docker Desktop's 8 GB)
 #   PROVER_REAL_PROOFS=false  Aztec's test mode: client proofs not verified (default true)
 #   NODE_PORT               the node's port (default 8080, where Aztec's wallets look)
+#   WALLET_PORT, EXPLORER_PORT  the wallet's and the explorer's pages (default 19720, 19730)
+#   EMPTY_CHECKPOINTS=1     build and prove a checkpoint every slot, empty or not (default 0: only
+#                           blocks with transactions, as hardware is the bottleneck; empty-checkpoints.mjs)
 #   COMMITTEE=n             n validators (2 to 5), each its own Aztec node, attesting over P2P to
 #                           each checkpoint, which the settlement service checks in refine; the
 #                           default is an open committee, one node, as Aztec's local network runs
 # Logs: out/aztec-devnet/ — devnet.log, jam-l1.log, node.log (node-<i>.log, bootnode.log), broker.log,
-# prover.log, agent.log, avm-agent.log, wallet.log.
+# prover.log, agent.log, avm-agent.log, wallet.log, explorer.log, empty-checkpoints.log.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
-NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}
-COMMITTEE=${COMMITTEE:-0}
-PORTS="8545 $NODE_PORT 8083 8084 8086 8880 8885 $WALLET_PORT 19800 42950"
+NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}; EXPLORER_PORT=${EXPLORER_PORT:-19730}
+COMMITTEE=${COMMITTEE:-0}; EMPTY_CHECKPOINTS=${EMPTY_CHECKPOINTS:-0}
+PORTS="8545 $NODE_PORT 8083 8084 8086 8880 8885 $WALLET_PORT $EXPLORER_PORT 19800 42950"
 for (( i = 1; i < COMMITTEE; i++ )); do PORTS="$PORTS $((8090 + i)) $((8880 + i))"; done; [ "$COMMITTEE" -gt 1 ] && PORTS="$PORTS 8090"
 RUN_PID=$ROOT/out/aztec-on-jam.pid     # the running on-jam.sh; outside $D, which each run wipes
 AVM_NAME=aztec-on-jam-avm              # the Docker container of Aztec's public-execution prover
@@ -163,7 +166,7 @@ start_node() {   # i port log
   local i=$1 sfx=""; [ "$1" = 0 ] || sfx=-$1
   mkdir -p "$D/node-data$sfx" "$D/bb-work$sfx"
   SEQ_PUBLISHER_PRIVATE_KEYS=${VKEYS[$i]} VALIDATOR_PRIVATE_KEYS=${VKEYS[$i]} COINBASE=${VADDRS[$i]} \
-  SEQ_BUILD_CHECKPOINT_IF_EMPTY=${SEQ_BUILD_CHECKPOINT_IF_EMPTY:-true} \
+  SEQ_BUILD_CHECKPOINT_IF_EMPTY=true AZTEC_ADMIN_API_KEY_HASH=$(printf %s "$ADMIN_KEY" | shasum -a 256 | cut -c1-64) \
   PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-work$sfx \
   ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY TEST_ACCOUNTS=true SPONSORED_FPC=true \
   DATA_DIRECTORY=$D/node-data$sfx BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
@@ -269,13 +272,28 @@ until [ "$(curl -s -m3 -X POST -H 'content-type: application/json' -d '{"jsonrpc
   kill -0 "$NODE_PID" 2>/dev/null || fail "Aztec's node stopped" "$D/node.log"; sleep 3
 done
 say "    block 1 is in"
+# only blocks with transactions from here on: an empty checkpoint costs the prover as much of an
+# epoch as a full one (empty-checkpoints.mjs, which also keeps a long-idle chain alive)
+if [ "$EMPTY_CHECKPOINTS" != 1 ]; then
+  ADMIN_URLS=http://127.0.0.1:8880; for (( i = 1; i < COMMITTEE; i++ )); do ADMIN_URLS="$ADMIN_URLS,http://127.0.0.1:$((8880 + i))"; done
+  node "$HERE/empty-checkpoints.mjs" "http://127.0.0.1:$NODE_PORT" "$ADMIN_URLS" "$ADMIN_KEY" > "$D/empty-checkpoints.log" 2>&1 & track $!
+  until grep -q "empty checkpoints off" "$D/empty-checkpoints.log" 2>/dev/null; do
+    kill -0 "$!" 2>/dev/null || fail "could not turn empty checkpoints off" "$D/empty-checkpoints.log"; sleep 1
+  done
+  say "    empty checkpoints off: only blocks with transactions are built and proved"
+fi
 
-# --- 5. the wallet ------------------------------------------------------------------------------
-if [ -f "$ROOT/wallet/dist/index.html" ]; then
+# --- 5. the wallet and the explorer ------------------------------------------------------------
+if [ -f "$ROOT/wallet/dist/explorer.html" ]; then
   node "$ROOT/wallet/serve.mjs" "$WALLET_PORT" > "$D/wallet.log" 2>&1 & track $!
+  node "$ROOT/wallet/serve.mjs" "$EXPLORER_PORT" explorer.html > "$D/explorer.log" 2>&1 & track $!
   sleep 1
-  say "5/5 wallet up"
-  WALLET_LINE="  wallet:   http://localhost:$WALLET_PORT/?node=http://localhost:$NODE_PORT"
+  say "5/5 wallet and explorer up"
+  # the explorer reads JAM's chain over JIP-2 from the browser; the wallet passes this on to it
+  JIP2=$(python3 -c "import json; print(json.load(open('$D/jam-l1.json'))['jip2'].replace('127.0.0.1', 'localhost'))")
+  Q="node=http://localhost:$NODE_PORT&explorer=http://localhost:$EXPLORER_PORT&jip2=$JIP2"
+  WALLET_LINE="  wallet:   http://localhost:$WALLET_PORT/?$Q
+  explorer: http://localhost:$EXPLORER_PORT/?node=http://localhost:$NODE_PORT&jip2=$JIP2"
 else
   say "5/5 wallet not built — build it once:  cd wallet && npm install && npm run build"
   WALLET_LINE="  wallet:   build it (cd wallet && npm install && npm run build), then rerun"
