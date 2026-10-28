@@ -7,11 +7,13 @@
 // in chain order (by the note hash tree's next index), and genesis.bin, the first one's start
 // snapshots (mode 0x41). With the node up, each block's last transaction's end snapshots are
 // checked against the node's block header: Aztec's own world state, not the prover's arithmetic.
+// Public execution's AVM proofs go beside them (avm-N.proof, avm-N.pi).
 //   node tools/aztec-local/capture-tx.mjs <proof store dir> <out dir> [node url]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createAztecNodeClient } from '@aztec-labs/aztec.js/node';
 import { PrivateTxBaseRollupPrivateInputs } from '@aztec-labs/stdlib/rollup';
+import { AvmCircuitInputs } from '@aztec-labs/stdlib/avm';
 import { ProvingJobResult } from '@aztec-labs/stdlib/interfaces/server';
 import { jsonParseWithSchema } from '@aztec-labs/foundation/json-rpc';
 
@@ -23,6 +25,26 @@ const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
 const snapshots = (s) => [s.noteHashTree, s.nullifierTree, s.publicDataTree].flatMap((t) => [F(t.root), F(t.nextAvailableLeafIndex)]);
 const witness = (w) => [F(w.leafIndex), ...w.siblingPath.map(F)];
 
+fs.mkdirSync(out, { recursive: true });
+
+// public execution's proofs, for #73's AVM item: avm-N.proof (the proof's fields, as bb reads them)
+// and avm-N.pi (its public inputs, msgpack, as Aztec hands them to bb), so that
+//   bb avm_verify -p avm-N.proof --avm-public-inputs avm-N.pi
+// checks each one natively before the PVM does
+const AVM = 'PUBLIC_VM';
+const avmDir = path.join(store, 'inputs', AVM);
+let avms = 0;
+for (const id of fs.existsSync(avmDir) ? fs.readdirSync(avmDir) : []) {
+  const result = path.join(store, 'outputs', AVM, `${id}.json`);
+  if (!fs.existsSync(result)) { console.log(`avm ${id}: NOT PROVEN yet`); continue; }
+  const { publicInputs } = AvmCircuitInputs.fromBuffer(fs.readFileSync(path.join(avmDir, id)));
+  const { proof } = jsonParseWithSchema(fs.readFileSync(result, 'utf-8'), ProvingJobResult).result;
+  fs.writeFileSync(path.join(out, `avm-${avms}.proof`), Buffer.concat(proof.map(F)));
+  fs.writeFileSync(path.join(out, `avm-${avms}.pi`), publicInputs.serializeWithMessagePack());
+  console.log(`avm-${avms}: proof ${proof.length} fields`);
+  avms++;
+}
+
 const dir = path.join(store, 'inputs', KIND);
 const ids = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
 const txs = ids.map((id) => {
@@ -32,7 +54,6 @@ const txs = ids.map((id) => {
   return { id, inputs, end };
 }).sort((a, b) => Number(a.inputs.hints.start.noteHashTree.nextAvailableLeafIndex) - Number(b.inputs.hints.start.noteHashTree.nextAvailableLeafIndex));
 if (!txs.length) { console.log(`no ${KIND} inputs in ${dir}`); process.exit(1); }
-fs.mkdirSync(out, { recursive: true });
 
 let failed = 0;
 txs.forEach(({ inputs, end }, n) => {
