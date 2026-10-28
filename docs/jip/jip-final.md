@@ -10,7 +10,7 @@ under an invariant stated in the Gray Paper's own terms. An Aztec-sized UltraHon
 
 **Reference implementation:** [Aztec on JAM](https://abutlabs.github.io/jam-privacy-service/) —
 Port Aztec's released software settling on a six-validator JAM testnet whose client implements these
-calls. 
+JIP-8 host calls. 
 
 ## Motivation
 
