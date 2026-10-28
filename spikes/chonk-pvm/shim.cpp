@@ -21,6 +21,12 @@
 // the CRS as for chonk_pvm_verify_crs. verdicts[i]: 1 valid, 0 its reduction failed, 4 its
 // reduction passed but the batch IPA failed (one of the batch is bad: check them apart). Returns
 // n, or -1 for a malformed input.
+//
+// chonk_pvm_verify_tx verifies one private transaction's proof, then applies its effect to Aztec's
+// trees (state.cpp) with the kernel's public inputs read from that proof, so what is inserted is
+// what was proven. Input: [u32 proof_len][proof][u32 vk_len][vk][state.cpp's hints]; the CRS as
+// for chonk_pvm_verify_crs. Writes state.cpp's output (end snapshots, fee) to `out`. Returns 1
+// applied, 0 the proof invalid, 5 the proof valid but the transition refused, -1 malformed.
 #include "barretenberg/chonk/chonk_verifier.hpp"
 #include "barretenberg/common/log.hpp"
 #include "barretenberg/common/serialize.hpp"
@@ -117,6 +123,24 @@ extern "C" int chonk_pvm_verify_batch(const uint8_t* in, size_t len, const uint8
     bool batch_ok = accumulators.empty() || ECCVMVerifier::batch_verify_accumulators(accumulators);
     for (uint32_t i : passed) verdicts[i] = batch_ok ? 1 : 4;
     return int(n);
+}
+
+extern "C" int aztec_tx_transition(const bb::fr* pis, const uint8_t* in, size_t len, uint8_t* out);
+
+extern "C" int chonk_pvm_verify_tx(const uint8_t* in, size_t len, const uint8_t* crs, size_t crs_len, uint8_t* out)
+{
+    using namespace bb;
+    // the kernel's public inputs (PrivateToRollupKernelCircuitPublicInputs), first in the proof
+    constexpr size_t KERNEL_PIS = 1282;
+    bb_log_level = LogLevel::SILENT;
+    Reader r{ in, len };
+    auto proof_bytes = r.bytes(r.u32());
+    auto vk_bytes = r.bytes(r.u32());
+    if (!r.ok || proof_bytes.size() < KERNEL_PIS * 32 || !init_crs(crs, crs_len)) return -1;
+    if (verify_with(proof_bytes, vk_bytes, 1) != 1) return 0;
+    auto pis = many_from_buffer<fr>(proof_bytes);
+    int applied = aztec_tx_transition(pis.data(), r.p, r.left, out);
+    return applied == 1 ? 1 : applied == 0 ? 5 : -1;
 }
 
 extern "C" int chonk_pvm_verify_crs(const uint8_t* in, size_t len, const uint8_t* crs, size_t crs_len, int mode)

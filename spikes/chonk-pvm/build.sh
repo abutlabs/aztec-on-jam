@@ -74,7 +74,7 @@ lower() {  # lower FILE.ll: constructors exported (ids to $O/ctors.list), then a
 }
 export -f cc lower; export SRC DEPS O R T OPT LLC_OPT HERE PLAIN_INLINE
 : > "$O/ctors.list"
-{ grep -v backing_memory "$HERE/bb-sources.txt" | sed "s|^|$SRC/|"; echo "$HERE/shim.cpp"; echo "$HERE/gk105.cpp"; echo "$HERE/rt.cpp"; } \
+{ grep -v backing_memory "$HERE/bb-sources.txt" | sed "s|^|$SRC/|"; echo "$HERE/shim.cpp"; echo "$HERE/state.cpp"; echo "$HERE/gk105.cpp"; echo "$HERE/rt.cpp"; } \
   | xargs -P 8 -I{} bash -c 'cc {} -fno-exceptions >/dev/null'
 cc "$SRC/src/barretenberg/polynomials/backing_memory.cpp" -fexceptions >/dev/null  # has a try block
 ls "$O"/ll/*.ll | xargs -P 8 -I{} bash -c 'lower {}'

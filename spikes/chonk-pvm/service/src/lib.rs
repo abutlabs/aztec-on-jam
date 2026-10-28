@@ -22,6 +22,19 @@
 //! that does not deserialize stops the refine (bb throws; the PVM has no unwinding), so a batch is
 //! built from proofs a node has already checked, as Aztec's sequencer checks each on arrival.
 //!
+//! A private transaction (#73), mode 0x83: the extrinsic is [u32 len][proof][u32 len][vk][hints]
+//! (../capture-tx.mjs), the vk must be Aztec's hiding kernel to the rollup (`TO_ROLLUP_VK`, pinned
+//! here). Refine verifies the proof, then applies its effect to Aztec's note hash, nullifier and
+//! public data trees as Aztec's private tx base rollup does (../state.cpp), the kernel's outputs
+//! read from the proof itself. Refine outputs [tag][6][verdict: 1 applied, 0 the proof invalid,
+//! 5 the transition refused, 2 malformed, 3 no CRS, 8 not the hiding kernel's vk][the start
+//! snapshots, 6 x 32][the end snapshots, 6 x 32][the fee, 32][gas u64 LE][MSMs by call 105 u64 LE].
+//! Accumulate applies an applied one only if its start snapshots are the trees it holds, then
+//! holds the end ones ("trees"); "t:" ++ tag records the verdict, 9 for a stale start. Refine sees
+//! no current state, so this check is accumulate's: two packages from one start, one applies.
+//! Mode 0x41 sets the trees once, [0x41][tag][6 x 32]: here the spike's genesis, where a service
+//! would take Aztec's genesis snapshots from its creation.
+//!
 //! bb's Grumpkin MSM goes to the proposed host call 105 where the net has it (../gk105.cpp,
 //! through `curve_calls`' probe), and runs as PVM code where not: the same blob runs on both.
 //!
@@ -36,7 +49,7 @@
 extern crate alloc;
 
 use alloc::alloc::{alloc as raw_alloc, Layout};
-use jam_pvm_common::accumulate::{accumulate_items, set_storage, solicit};
+use jam_pvm_common::accumulate::{accumulate_items, get_storage, set_storage, solicit};
 use jam_pvm_common::jam_types::*;
 use jam_pvm_common::refine::{extrinsic, gas, lookup};
 use jam_pvm_common::{declare_service, Service};
@@ -51,6 +64,11 @@ const FROM_PREIMAGE: u8 = 0x80;
 const SOLICIT: u8 = 0x40;
 const BATCH: u8 = 0x82;
 const MAX_BATCH: usize = 32;
+const TX: u8 = 0x83;
+const GENESIS: u8 = 0x41;
+const SNAPSHOTS: usize = 6 * 32;
+/// Aztec 6.0.0's hiding kernel to the rollup (1,310 public inputs: the kernel's 1,282, then its own).
+const TO_ROLLUP_VK: &[u8] = include_bytes!("../../to-rollup-hiding.vk");
 
 const fn nibble(c: u8) -> u8 {
     if c <= b'9' { c - b'0' } else { c - b'a' + 10 }
@@ -71,6 +89,7 @@ extern "C" {
     fn chonk_pvm_verify(input: *const u8, len: usize, mode: i32) -> i32;
     fn chonk_pvm_verify_crs(input: *const u8, len: usize, crs: *const u8, crs_len: usize, mode: i32) -> i32;
     fn chonk_pvm_verify_batch(input: *const u8, len: usize, crs: *const u8, crs_len: usize, verdicts: *mut u8, max: usize) -> i32;
+    fn chonk_pvm_verify_tx(input: *const u8, len: usize, crs: *const u8, crs_len: usize, out: *mut u8) -> i32;
     // bb's static constructors, called once (../build.sh: the PVM never runs .init_array).
     fn chonk_pvm_init();
     // how many of bb's Grumpkin MSMs call 105 did (../gk105.cpp)
@@ -180,12 +199,20 @@ impl Service for Spike {
         if mode == SOLICIT {
             return alloc::vec![tag, 4].into();
         }
+        if mode == GENESIS {
+            let mut out = alloc::vec![tag, 7];
+            out.extend_from_slice(p.get(2..2 + SNAPSHOTS).unwrap_or(&[]));
+            return out.into();
+        }
         let ext;
         let input = match p.get(2..) {
             Some(rest) if !rest.is_empty() => rest,
             _ => { ext = extrinsic(0).unwrap_or_default(); &ext[..] }
         };
         let before = gas();
+        if mode == TX {
+            return refine_tx(tag, input, before).into();
+        }
         if mode == BATCH {
             let mut verdicts = [0u8; MAX_BATCH];
             let n = match lookup(&CRS_HASH) {
@@ -226,7 +253,13 @@ impl Service for Spike {
         for item in accumulate_items() {
             if let AccumulateItem::WorkItem(rec) = item {
                 if let Ok(out) = rec.result {
-                    if out.0.len() == 2 && out.0[1] == 4 {
+                    if out.0.first().is_some() && out.0.get(1) == Some(&6) {
+                        accumulate_tx(&out.0);
+                    } else if out.0.len() == 2 + SNAPSHOTS && out.0[1] == 7 {
+                        if get_storage(b"trees").is_none() {
+                            set_storage(b"trees", &out.0[2..]).ok();
+                        }
+                    } else if out.0.len() == 2 && out.0[1] == 4 {
                         // mode 0x40: ask for the CRS preimage (its deposit comes from this service's balance)
                         let ok = solicit(&CRS_HASH, CRS_LEN).is_ok();
                         set_storage(b"crs:solicited", &[ok as u8]).ok();
@@ -238,4 +271,50 @@ impl Service for Spike {
         }
         None
     }
+}
+
+/// Mode 0x83's refine: the vk pinned, the proof verified, the transition applied (../shim.cpp).
+fn refine_tx(tag: u8, input: &[u8], before: u64) -> alloc::vec::Vec<u8> {
+    let verdict = |v: u8| alloc::vec![tag, 6, v];
+    let u32_at = |at: usize| input.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize);
+    let Some(proof_len) = u32_at(0) else { return verdict(2) };
+    let vk_at = 4 + proof_len;
+    let Some(vk_len) = u32_at(vk_at) else { return verdict(2) };
+    let hints_at = vk_at + 4 + vk_len;
+    if input.get(vk_at + 4..hints_at) != Some(TO_ROLLUP_VK) {
+        return verdict(8);
+    }
+    let Some(start) = input.get(hints_at..hints_at + SNAPSHOTS) else { return verdict(2) };
+    let crs = match lookup(&CRS_HASH) {
+        Some(crs) if crs.len() == CRS_LEN => crs,
+        _ => return verdict(3),
+    };
+    let mut end = [0u8; SNAPSHOTS + 32];
+    let v = unsafe {
+        chonk_pvm_init();
+        chonk_pvm_verify_tx(input.as_ptr(), input.len(), crs.as_ptr(), crs.len(), end.as_mut_ptr())
+    };
+    let used = before - gas();
+    let mut out = verdict(match v { 1 => 1, 0 => 0, 5 => 5, _ => 2 });
+    out.extend_from_slice(start);
+    out.extend_from_slice(&end);
+    out.extend_from_slice(&used.to_le_bytes());
+    out.extend_from_slice(&unsafe { chonk_gk_calls() }.to_le_bytes());
+    out
+}
+
+/// Mode 0x83's accumulate: an applied transaction moves the trees only from the ones held.
+fn accumulate_tx(out: &[u8]) {
+    let (tag, verdict) = (out[0], out.get(2).copied().unwrap_or(2));
+    let mut record = alloc::vec![verdict];
+    if verdict == 1 && out.len() >= 3 + 2 * SNAPSHOTS + 32 {
+        let (start, end) = (&out[3..3 + SNAPSHOTS], &out[3 + SNAPSHOTS..3 + 2 * SNAPSHOTS]);
+        if get_storage(b"trees").as_deref() == Some(start) {
+            set_storage(b"trees", end).ok();
+        } else {
+            record[0] = 9;
+        }
+    }
+    record.extend_from_slice(out.get(3 + SNAPSHOTS..).unwrap_or(&[]));
+    set_storage(&[b't', b':', tag], &record).ok();
 }
