@@ -19,5 +19,8 @@ check "no curve call<" "the per-tile chip was removed; the legend says it once"
 check "REVISE|TODO|FIXME|\?\?|updated 20[0-9][0-9]|Done 20[0-9][0-9]|still being wired|grows as they land|setTimeout" "developer notes stay off the public pages"
 check ">#[0-9]{2,3}<" "issue numbers stay off the public pages (link the roadmap in words)"
 check "facade" "say 'JAM sidecar' on the public pages"
+# the JIP is a final copy: no drafting notes, dates, tracker numbers or repository paths
+hits=$(grep -nE "\*Status:|README line|simulated|CI run|#[0-9]{2}\b|20[0-9]{2}-[0-9]{2}-[0-9]{2}|spikes/|crates/|should say so|should change|Change log" "$HERE/docs/jip/jip-final.md")
+if [ -n "$hits" ]; then FAIL=1; echo "STALE (the JIP carries drafting notes):"; echo "$hits" | head -5; fi
 [ $FAIL = 0 ] && echo "docs-check: clean"
 exit $FAIL
