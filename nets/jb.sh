@@ -60,6 +60,14 @@ ports_free() {
   [ -z "$held" ] || { echo "the genesis ports $GENESIS_PORT.. are in use (another net is up?): $held" >&2; exit 2; }
 }
 
+# The Unix time of timeslot 0, which `up` writes to $RUN/era. Every node runs its slots on the
+# wall clock, as JAM's do. With PolkaJam on the net that is JAM's Common Era, as PolkaJam's; an
+# all-lasair net counts from its own start, so its genesis, slot 0, is now (from the Common Era,
+# a head at slot 0 "lags" today's wall slot by millions and back-fills forever). Chain-paced
+# slots, the alternative, fall behind real time when the machine is loaded, and a service that
+# compares JAM's timeslot with a wall clock, as Aztec's rollup does, drifts apart from it.
+net_era() { if [ "$PJN" -gt 0 ]; then echo 1735732800; else date +%s; fi; }
+
 # lasair validator i, as jamboree runs it: listening on the port jamboree moved it to,
 # dialing every other validator at its genesis port with the dev account's peer id
 # JIP-2 from a lasair validator itself (JB_RPC=node, the default on an all-lasair net), or from
@@ -73,13 +81,8 @@ lasair_node() {
     pid=$("$LZ" --dev-account "$k" | awk '/^peer_id:/{print $2}')
     peers="$peers,127.0.0.1:$((GENESIS_PORT + k))@$pid"
   done
-  # pacing as jamswap's lasair6 and mixed nets: with PolkaJam on the net, wall-clock slots;
-  # alone, chain-paced from genesis slot 0 (wall-paced, a head at slot 0 "lags" today's wall
-  # slot by millions and the node back-fills forever instead of authoring), a block no sooner
-  # than 6 s after the last, polled every second: JAM's slot time (with --interval 6 alone the
-  # slot owner authored whenever its poll fell, a block about every 3.9 s)
-  local pace=(--interval 1 --block-time 6)
-  [ "$PJN" -gt 0 ] && pace=(--interval 1 --wall)
+  # wall-clock slots, as JAM's, from the net's era (net_era), polled every second
+  local pace=(--interval 1 --wall --era "$(cat "$RUN/era")")
   # on an all-lasair net, validator 0 serves JIP-2 itself from its own state (lasair#83):
   # the head, not a block behind; work-packages go over CE-133 to every lasair builder port
   local rpc=() g="" k2
@@ -128,6 +131,7 @@ case "${1:-}" in
     [ "$PJN" = 0 ] || [ -x "$PJ" ] || { echo "no PolkaJam binary at $PJ (scripts/bootstrap.sh fetches it)" >&2; exit 1; }
     [ "$LZN" = 0 ] || [ -x "$LZ" ] || { echo "no lasair binary at $LZ (dune build in ../lasair)" >&2; exit 1; }
     rm -rf "$RUN"; mkdir -p "$RUN"
+    net_era > "$RUN/era"
     "$PJ" --chain "$CHAIN" dump-spec "$SPEC" >/dev/null
     # G_R is octets 50..57 of the protocol parameters (GP 0.8.0's order: B_I B_L B_S C D E G_A G_I G_R)
     [ -n "${JB_REFINE_GAS:-}" ] && python3 - "$SPEC" "$JB_REFINE_GAS" <<'PY2'
@@ -160,7 +164,7 @@ PY2
     [ -f "$RUN/jamboree.pid" ] && kill -0 "$(cat "$RUN/jamboree.pid")" 2>/dev/null && { echo "$NET is up: nets/jb.sh down first" >&2; exit 2; }
     ports_free
     [ -x "$JB" ] || (cd "$SUB/jamboree" && cargo build --release -q)
-    RUN=$ROOT/out/$NET-headcheck; SPEC=$RUN/spec.json; rm -rf "$RUN"; mkdir -p "$RUN"
+    RUN=$ROOT/out/$NET-headcheck; SPEC=$RUN/spec.json; rm -rf "$RUN"; mkdir -p "$RUN"; net_era > "$RUN/era"
     "$PJ" --chain dev dump-spec "$SPEC" >/dev/null
     cmds=()
     [ "$PJN" -gt 0 ] && cmds+=(--cmd "polkajam[$PJN]=$PJ --chain $SPEC run --temp --pvm-backend interpreter --finality-mode grandpa --dev-validator {i} --port {port} --telemetry {telemetry}")

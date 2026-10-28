@@ -1,33 +1,115 @@
-/* The rebels' colours, as the films use them. */
-:root { --space: #05040b; --panel: #110e1f; --rule: #332b55; --ink: #f2efff; --muted: #b9b2d6;
-  --yellow: #ffe81f; --purple: #9f8fff; --good: #7ff0b0; --bad: #ff9c8f; }
+/* JAM Rebel Wallet. Dark is the rebels' night sky; light is the same palette by day. */
+:root {
+  --bg: #07060e; --card: #121022; --card-2: #19162e; --rule: #2e2850; --ink: #f3f0ff; --muted: #a9a2c9;
+  --accent: #ffe81f; --accent-ink: #1d1a00; --violet: #a597ff; --good: #6fe3a5; --bad: #ff8f80; --busy: #ffd24a;
+  --shadow: 0 20px 50px -24px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f2fb; --card: #ffffff; --card-2: #f7f5fe; --rule: #ddd8f0; --ink: #17142b; --muted: #635d80;
+    --accent: #ffd400; --accent-ink: #1d1a00; --violet: #5b48d9; --good: #138a52; --bad: #c4382a; --busy: #a86b00;
+    --shadow: 0 20px 50px -30px rgba(40, 30, 90, .35);
+    color-scheme: light;
+  }
+}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--space); color: var(--ink);
-  font: 400 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; }
-.mono { font-family: ui-monospace, Menlo, monospace; }
-header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between;
-  padding: 18px 24px 10px; border-bottom: 3px solid var(--yellow); }
-h1 { margin: 0; font-size: 26px; letter-spacing: 0.04em; } h1 span { color: var(--yellow); }
-.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-#net { color: var(--muted); font-size: 12.5px; }
-main { max-width: 980px; margin: 0 auto; padding: 18px 24px 40px; display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-section { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; min-width: 0; }
-#s-activity { grid-column: 1 / -1; }
-h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--purple); }
-.row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-input { flex: 1 1 140px; min-width: 0; background: #0a0817; color: var(--ink); border: 1px solid var(--rule);
-  border-radius: 6px; padding: 8px 10px; font-size: 13px; }
-button { background: var(--yellow); color: #201c00; border: 0; border-radius: 6px; padding: 8px 14px;
-  font-weight: 700; font-size: 13px; cursor: pointer; }
-button:disabled { opacity: 0.45; cursor: wait; }
-.addr { word-break: break-all; font-size: 12.5px; color: var(--muted); min-height: 2.4em; }
-.balance { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
-#balance { font-size: 34px; font-weight: 800; color: var(--yellow); font-variant-numeric: tabular-nums; }
-.note { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
-#senders { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); word-break: break-all; }
-#log { margin: 0; padding-left: 20px; font-size: 13px; display: grid; gap: 4px; }
-#log .t { color: var(--muted); font-size: 11.5px; margin-right: 6px; }
-footer { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--rule);
-  padding: 8px 24px; font-size: 13px; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+  font: 400 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
+button:disabled { opacity: .45; cursor: wait; }
+input { font: inherit; width: 100%; min-width: 0; background: var(--card-2); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 11px 12px; font-size: 14px; }
+input:focus { outline: 2px solid var(--violet); outline-offset: 1px; }
+
+/* --- top bar --- */
+.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between;
+  max-width: 1120px; margin: 0 auto; padding: 18px 16px 6px; }
+.brand { display: flex; gap: 12px; align-items: center; }
+.brand svg { width: 34px; height: 34px; fill: var(--accent); flex: none; }
+.brand b { display: block; font-size: 19px; letter-spacing: .02em; }
+.brand b span { color: var(--accent); }
+.brand small { color: var(--muted); font-size: 12.5px; }
+.pill { font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--rule); border-radius: 99px; padding: 6px 12px; }
+
+/* --- layout --- */
+main { max-width: 1120px; margin: 0 auto; padding: 14px 16px 64px; display: grid; gap: 18px;
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+section { background: var(--card); border: 1px solid var(--rule); border-radius: 20px; box-shadow: var(--shadow); min-width: 0; }
+
+/* --- the wallet card --- */
+.app { padding: 18px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.label { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.account { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.account > div { min-width: 0; }
+.account button { white-space: nowrap; flex: none; }
+.addr { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.balances { position: relative; display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+.bal { background: var(--card-2); border: 1px solid var(--rule); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+.bal.private { border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+#balance, #public-balance { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#balance { color: var(--accent); }
+@media (prefers-color-scheme: light) { #balance { color: var(--ink); } .brand b span { color: #9a7b00; } }
+.sym { color: var(--muted); font-size: 13px; font-weight: 600; }
+.hint { color: var(--muted); font-size: 11.5px; }
+.lock { color: var(--accent); font-size: 9px; vertical-align: 2px; }
+#refresh { position: absolute; top: 8px; right: 8px; }
+.tabs { display: flex; gap: 4px; background: var(--card-2); border: 1px solid var(--rule); border-radius: 12px; padding: 4px; overflow-x: auto; }
+.tabs button { flex: 1; background: none; color: var(--muted); padding: 8px 6px; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 0 var(--rule); }
+.panel { display: grid; gap: 12px; }
+.panel label { display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row > button { flex: 1 1 140px; }
+.go { background: var(--accent); color: var(--accent-ink); font-weight: 800; padding: 13px 16px; font-size: 15px; }
+.ghost { background: var(--card-2); color: var(--ink); border: 1px solid var(--rule); padding: 9px 13px; font-weight: 600; font-size: 13.5px; }
+.ghost.small { padding: 4px 10px; font-size: 12px; }
+.note { margin: 0; color: var(--muted); font-size: 12.5px; }
+#senders { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+
+/* --- who is doing what --- */
+.live { padding: 18px; }
+.live h2 { margin: 0 0 12px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--violet); }
+.live h2 + .lanes + h2 { margin-top: 22px; }
+.dot-live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-left: 6px; vertical-align: 1px;
+  animation: pulse 2s infinite; }
+.lanes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lanes li { display: grid; grid-template-columns: 14px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px;
+  border: 1px solid var(--rule); border-radius: 12px; background: var(--card-2); transition: border-color .3s; }
+.lanes li > div { min-width: 0; display: grid; }
+.lanes b { font-size: 14px; }
+.lanes small { color: var(--muted); font-size: 11.5px; }
+.lanes .st { font-size: 13px; overflow-wrap: anywhere; }
+.lanes time { font: 600 12px ui-monospace, Menlo, monospace; color: var(--busy); }
+.lanes i { width: 12px; height: 12px; border-radius: 50%; background: var(--rule); }
+.lanes li[data-state="busy"] { border-color: color-mix(in srgb, var(--busy) 55%, var(--rule)); }
+.lanes li[data-state="busy"] i { background: none; border: 2px solid var(--busy); border-top-color: transparent; animation: spin .9s linear infinite; }
+.lanes li[data-state="busy"] .st { color: var(--busy); }
+.lanes li[data-state="done"] i { background: var(--good); }
+.lanes li[data-state="bad"] i { background: var(--bad); }
+.lanes li[data-state="bad"] .st { color: var(--bad); }
+
+/* --- your activity --- */
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.timeline > li { border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; }
+.timeline .head { display: flex; justify-content: space-between; gap: 10px; }
+.timeline .head time { color: var(--muted); font-size: 12px; }
+.steps { list-style: none; margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--rule); display: grid; gap: 4px; }
+.steps li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; position: relative; }
+.steps li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--good); }
+.steps li[data-state="busy"]::before { background: none; border: 2px solid var(--busy); border-top-color: transparent; animation: spin .9s linear infinite; }
+.steps li[data-state="busy"] { color: var(--busy); }
+.steps li[data-state="bad"] { color: var(--bad); }
+.steps li[data-state="bad"]::before { background: var(--bad); }
+.steps em { font: 600 12px ui-monospace, Menlo, monospace; font-style: normal; color: var(--muted); white-space: nowrap; }
+
+footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--rule);
+  padding: 8px 16px; font-size: 13px; color: var(--muted); }
 #status.error { color: var(--bad); } #status.done { color: var(--good); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+[hidden] { display: none !important; }

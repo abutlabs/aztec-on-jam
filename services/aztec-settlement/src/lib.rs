@@ -97,7 +97,7 @@ struct Cfg {
     rollup: [u8; 20],
     seed: [u8; 32],
     committee: Vec<[u8; 20]>,
-    /// Unix time of JAM timeslot 0: the common era, or the net's own (a devnet paced from slot 0).
+    /// Unix time of JAM timeslot 0: the common era, or the net's own start (an all-lasair devnet).
     jam_era: u64,
 }
 

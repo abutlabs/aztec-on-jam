@@ -30,7 +30,14 @@ import { EthAddress } from '@aztec-labs/foundation/eth-address';
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const C = config.cfg, A = Object.fromEntries(Object.entries(config.addresses).map(([k, v]) => [k, v.toLowerCase()]));
 mkdirSync(config.work, { recursive: true });
-const log = (o) => appendFileSync(config.log, JSON.stringify({ t: Date.now(), ...o }) + '\n');
+// the relay's milestones, also kept in memory for jam_activity (the wallet's live view)
+const MILESTONES = ['relaying', 'submitted', 'checkpoint', 'refused', 'relayingEpochProof', 'submittedEpochProof'];
+const recent = [];
+const log = (o) => {
+  const e = { t: Date.now(), ...o };
+  appendFileSync(config.log, JSON.stringify(e) + '\n');
+  if (MILESTONES.some((k) => k in o)) { recent.push(e); if (recent.length > 500) recent.shift(); }
+};
 const b64 = (b) => Buffer.from(b).toString('base64');
 const u64le = (b, at = 0) => Buffer.from(b).readBigUInt64LE(at);
 const word = (n) => toHex(BigInt(n), { size: 32 });
@@ -62,10 +69,10 @@ async function jip2(method, ...params) {
 
 // --- JAM's head as "L1 blocks" ------------------------------------------------------------
 // L1 block n is the n-th finalized JAM block this facade saw, starting from 1 at its start. Its
-// timestamp is the JAM timeslot as Unix time: cfg's jamEra plus 6 s a slot. The era is JAM's
-// common era on a wall-clock chain (PolkaJam's dev chain), and the net's own on one paced from
-// slot 0 (nets/jb.sh's) — devnet.sh sets it, and the settlement service's clock uses the same
-// field, so the facade and the chain agree to the second.
+// timestamp is the JAM timeslot as Unix time: cfg's jamEra plus 6 s a slot. Both nets run their
+// slots on the wall clock: the era is JAM's common era on PolkaJam's dev chain and the net's own
+// start on an all-lasair jb net — devnet.sh sets it, and the settlement service's clock uses the
+// same field, so the facade, the chain and Aztec's wall-clock slots agree to the second.
 const slotEpoch = BigInt(C.jamEra ?? 1_735_732_800);
 const blocks = [{ number: 0n, hash: '0x' + '00'.repeat(32), slot: 0n, timestamp: BigInt(C.genesisTime), txs: [] }];
 let head = blocks[0];
@@ -610,10 +617,23 @@ const methods = {
   eth_maxPriorityFeePerGas: () => '0x1',
   eth_gasPrice: () => '0x1',
   eth_syncing: () => false,
+  // not Ethereum's: what the relay and Aztec's prover are doing, for the wallet's live view.
+  // Milestones after `since` (ms), JAM's finalized slot, and the prover node's epoch jobs (its
+  // admin API, with the key on-jam.sh made for this run).
+  jam_activity: async ([since] = []) => ({
+    jamSlot: String(head.slot), tips: await tips().then((t) => ({ pending: String(t.pending), proven: String(t.proven) })).catch(() => null),
+    events: recent.filter((e) => e.t > Number(since ?? 0)),
+    prover: config.prover ? await fetch(config.prover.url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.prover.key },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'prover_getJobs', params: [] }), signal: AbortSignal.timeout(1500) })
+      .then((r) => r.json()).then((r) => r.result ?? null).catch(() => null) : null,
+  }),
   debug_traceTransaction: ([h]) => trace(txs.get(h)),
   trace_transaction: ([h]) => parityTrace(txs.get(h)),
 };
+// any origin may read: the wallet's page calls jam_activity from its own port
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'POST, OPTIONS' };
 createServer(async (rq, rs) => {
+  if (rq.method === 'OPTIONS') { rs.writeHead(204, CORS); rs.end(); return; }
   let body = '';
   for await (const c of rq) body += c;
   const one = async (req) => {
@@ -628,7 +648,7 @@ createServer(async (rq, rs) => {
   };
   const parsed = JSON.parse(body);
   const out = Array.isArray(parsed) ? await Promise.all(parsed.map(one)) : await one(parsed);
-  rs.writeHead(200, { 'content-type': 'application/json' });
+  rs.writeHead(200, { 'content-type': 'application/json', ...CORS });
   rs.end(JSON.stringify(out, (_, v) => (typeof v === 'bigint' ? toHex(v) : v)));
 }).listen(config.port, '127.0.0.1');
 await poll();

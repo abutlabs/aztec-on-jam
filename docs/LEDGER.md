@@ -2147,3 +2147,49 @@ Peak proving memory about 3 GB. Fixed on the way, each found by a run:
 - the cfg's epoch-vk hash used plain SHA-256; the service compares Aztec's sha256ToField (0x00 ‖ first 31 bytes).
 Open: epochs with public execution need Aztec's AVM prover, `bb-avm`, published for Linux only;
 `azteclabs/aztec:6.0.0` (arm64) is pulled for a Docker agent on the same broker.
+
+## 2026-10-28 85 — Public transactions proved too: Aztec's AVM in Docker; JAM on the wall clock (#69)
+
+Epochs whose transactions make public calls (a token deploy, a mint, shield and unshield) now
+prove and settle. Aztec publishes its public-execution prover (`bb-avm`) for Linux only, so
+`on-jam.sh` runs Aztec's own image (`azteclabs/aztec:<npm version>`, arm64) as a second agent on
+the same broker, for `PUBLIC_VM` and `PUBLIC_TX_BASE_ROLLUP` (the base rollup verifies the AVM
+proof inside itself, so it needs the same binary). The native agent takes every other type. On
+this Mac (M1 Pro, 16 GB; Docker Desktop's VM 8 GB):
+
+| Step | Result |
+|---|---|
+| AVM proof, one transaction (Docker) | 5–51 s, about 1.1 GB |
+| Public base rollup, one transaction (Docker, about one core) | 140–330 s, peak 6.4 GB |
+| Epoch 1 (checkpoints 2–5: deploy, mint, transfer) | root rollup 100 s; JAM accepted; `tip:proven` 5 |
+| Epoch proof in JAM's refine, any epoch | 70.6–70.7M gas |
+
+Found by runs, fixed:
+- A prover node's built-in agent ignores `PROVER_AGENT_PROOF_TYPES` (Aztec's prover-client
+  creates it with no filter) and took AVM jobs it cannot prove. The prover node now runs no
+  agent (`PROVER_AGENT_COUNT=0`; it still needs Barretenberg's paths to check proofs), and the
+  native agent is its own `--prover-agent` process on :8086, as Aztec's operator docs lay out.
+- Two Docker agents at once were OOM-killed (two base rollups exceed 8 GB): one by default
+  (`AVM_AGENT_COUNT`).
+- **The chain stalled after about 20 minutes under proving load.** lasair's all-lasair net was
+  chain-paced: slots advanced block by block, and with the Mac saturated JAM's clock fell 85 s
+  behind real time. Aztec's sequencer runs on the wall clock, so its proposals reached the
+  settlement service "in the future" (reason 12, `SLOT_IN_FUTURE`) and it stopped proposing.
+  lasair gains `--era UNIX` (lasair 9b3b53e): an all-lasair net now runs its slots on the wall
+  clock from its own start, as JAM's do; `nets/jb.sh` writes the era, `devnet.sh` reads it.
+  Measured: finalized slot = wall-clock slot, lag 0, throughout an hour of proving.
+- `on-jam.sh` stops its processes last-started first (agents before the broker).
+
+## 2026-10-28 86 — The wallet: shielded payments with a live view of who does what (#74)
+
+`wallet/` rebuilt as a product: account, private and public balances, Send / Shield / Unshield /
+Receive / Token tabs, light and dark, phone width. Beside it, five lanes — this tab, Aztec's
+node, the JAM sidecar, the JAM validators, Aztec's prover — each with its state and a timer
+while it works, and a timeline per action: proved in the tab → node verified → in block N →
+settled on JAM (checkpoint, finalized) → proven (epoch proof verified on JAM). Sources: the node
+client's `sendTx` wrapped to mark where proving ends, Aztec's `getChainTips`, and the sidecar's
+new `jam_activity` (relay milestones, JAM's finalized slot, and the prover node's epoch jobs
+through its admin API with a per-run key). Cryptography is untouched: all Aztec's libraries.
+`wallet/e2e.mjs`: 10 assertions in two browsers, now including unshield 100 / shield 100 and the
+send's own timeline reaching "Settled on JAM" — PASS twice on the wall-clock net (deploy 19 s,
+mint 18 s, unshield 14 s, shield 23 s, send 34 s; proofs made in the tab).

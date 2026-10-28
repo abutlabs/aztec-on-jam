@@ -4,61 +4,94 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JAM Rebel Wallet</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305040b'/%3E%3Cpath d='M16 5l9 4v7c0 5.5-3.8 9.6-9 11-5.2-1.4-9-5.5-9-11V9z' fill='%23ffe81f'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-<header>
-  <div>
-    <h1>JAM <span>REBEL</span> WALLET</h1>
-    <p class="sub">Aztec's wallet stack — PXE, prover, token — settling on JAM</p>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l11 5v8c0 6.6-4.6 11.6-11 13.2C9.6 27.6 5 22.6 5 16V8z"/></svg>
+    <div><b>JAM <span>Rebel</span> Wallet</b><small>private payments, settled on JAM</small></div>
   </div>
-  <div id="net" class="mono">connecting…</div>
+  <div id="net" class="pill mono">connecting…</div>
 </header>
+
 <main>
-  <section id="s-account">
-    <h2>Account</h2>
-    <div id="address" class="mono addr">no account yet</div>
-    <div class="row"><button id="create">Create account</button></div>
-    <p class="note">Initializerless: usable at once, no deployment. Fees are paid by the
-      network's sponsor contract, so a new account needs no funds.</p>
-  </section>
-  <section id="s-token">
-    <h2>Token</h2>
-    <div class="row">
-      <input id="token-address" class="mono" placeholder="token address (0x…)" spellcheck="false">
-      <button id="attach">Attach</button>
-      <button id="deploy">Deploy new</button>
+  <section class="app" aria-label="Wallet">
+    <div class="account">
+      <div>
+        <div class="label">Account</div>
+        <div id="address" class="mono addr">no account yet</div>
+      </div>
+      <button id="create" class="ghost">Create account</button>
     </div>
-    <div class="balance"><span id="balance">—</span><button id="refresh">Sync</button></div>
-    <div class="row">
-      <input id="mint-amount" inputmode="numeric" placeholder="amount" value="1000">
-      <button id="mint">Mint to me, privately</button>
+
+    <div class="balances">
+      <div class="bal private">
+        <div class="label">Private <span class="lock" aria-hidden="true">●</span></div>
+        <div><span id="balance">—</span> <span class="sym">RBL</span></div>
+        <div class="hint">only you can see this</div>
+      </div>
+      <div class="bal public">
+        <div class="label">Public</div>
+        <div><span id="public-balance">—</span> <span class="sym">RBL</span></div>
+        <div class="hint">anyone can see this</div>
+      </div>
+      <button id="refresh" class="ghost small" title="Sync with the chain and read both balances">Sync</button>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="send" aria-selected="true">Send</button>
+      <button role="tab" data-tab="shield">Shield</button>
+      <button role="tab" data-tab="unshield">Unshield</button>
+      <button role="tab" data-tab="receive">Receive</button>
+      <button role="tab" data-tab="token">Token</button>
+    </nav>
+
+    <div class="panel" data-panel="send">
+      <label>To<input id="send-to" class="mono" placeholder="recipient address (0x…)" spellcheck="false"></label>
+      <label>Amount<input id="send-amount" inputmode="numeric" value="40"></label>
+      <button id="send" class="go">Send privately</button>
+      <p class="note">Proved in this tab. The chain sees no sender, recipient or amount.</p>
+    </div>
+    <div class="panel" data-panel="shield" hidden>
+      <label>Amount<input id="shield-amount" inputmode="numeric" value="100"></label>
+      <button id="shield" class="go">Shield: public → private</button>
+      <p class="note">Moves tokens out of public view into a private note only you can spend.</p>
+    </div>
+    <div class="panel" data-panel="unshield" hidden>
+      <label>Amount<input id="unshield-amount" inputmode="numeric" value="100"></label>
+      <button id="unshield" class="go">Unshield: private → public</button>
+      <p class="note">Spends a private note and credits your public balance, in the open.</p>
+    </div>
+    <div class="panel" data-panel="receive" hidden>
+      <p class="note">Share your address. To find payments from someone, register them as a sender:
+        your wallet looks for the tags they write, without scanning everything.</p>
+      <label>Sender<input id="sender-address" class="mono" placeholder="sender address (0x…)" spellcheck="false"></label>
+      <button id="add-sender" class="go">Register sender</button>
+      <ul id="senders" class="mono"></ul>
+    </div>
+    <div class="panel" data-panel="token" hidden>
+      <label>Token<input id="token-address" class="mono" placeholder="token address (0x…)" spellcheck="false"></label>
+      <div class="row"><button id="attach" class="ghost">Use this token</button><button id="deploy" class="ghost">Deploy a new token</button></div>
+      <label>Amount<input id="mint-amount" inputmode="numeric" value="1000"></label>
+      <div class="row"><button id="mint" class="go">Mint privately</button><button id="mint-public" class="ghost">Mint publicly</button></div>
+      <p class="note">Test tokens: the account that deploys a token may mint it. Fees are paid by the
+        network's sponsor, so a new account needs no funds.</p>
     </div>
   </section>
-  <section id="s-send">
-    <h2>Send privately</h2>
-    <div class="row"><input id="send-to" class="mono" placeholder="recipient address (0x…)" spellcheck="false"></div>
-    <div class="row">
-      <input id="send-amount" inputmode="numeric" placeholder="amount" value="40">
-      <button id="send">Send</button>
-    </div>
-    <p class="note">Proved in this tab by Aztec's prover. The chain sees no sender, recipient
-      or amount.</p>
-  </section>
-  <section id="s-contacts">
-    <h2>Senders</h2>
-    <div class="row">
-      <input id="sender-address" class="mono" placeholder="sender address (0x…)" spellcheck="false">
-      <button id="add-sender">Register</button>
-    </div>
-    <ul id="senders" class="mono"></ul>
-    <p class="note">Your wallet finds incoming notes by the tags registered senders write —
-      Aztec's note discovery, no scanning of everything.</p>
-  </section>
-  <section id="s-activity">
-    <h2>Activity</h2>
-    <ol id="log" reversed></ol>
+
+  <section class="live" aria-label="Who is doing what">
+    <h2>Who is doing what <span class="dot-live" aria-hidden="true"></span></h2>
+    <ol class="lanes">
+      <li id="lane-tab"><i></i><div><b>Your browser</b><small>Aztec's PXE and prover, in this tab</small><span class="st">starting</span></div><time></time></li>
+      <li id="lane-node"><i></i><div><b>Aztec node</b><small>checks your proof, builds blocks</small><span class="st">—</span></div><time></time></li>
+      <li id="lane-relay"><i></i><div><b>JAM sidecar</b><small>hands each checkpoint to JAM</small><span class="st">—</span></div><time></time></li>
+      <li id="lane-jam"><i></i><div><b>JAM validators</b><small>verify, record, finalize</small><span class="st">—</span></div><time></time></li>
+      <li id="lane-prover"><i></i><div><b>Aztec prover</b><small>proves each epoch for JAM</small><span class="st">—</span></div><time></time></li>
+    </ol>
+    <h2>Your activity</h2>
+    <ol id="log" class="timeline"></ol>
   </section>
 </main>
 <footer><span id="status">starting</span></footer>

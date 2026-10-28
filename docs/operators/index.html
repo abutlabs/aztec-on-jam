@@ -42,7 +42,8 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
     <p>One command brings up six JAM validators with the settlement service, the JAM sidecar,
       Aztec's sequencer node, Aztec's prover and the wallet. It prints each step as it finishes
       and the wallet's address at the end. Leave <code>DEVNET_NET</code> out to use PolkaJam's
-      testnet instead of lasair; <code>PROVER=0</code> skips the prover. Stop with Ctrl-C, or
+      testnet instead of lasair; <code>PROVER=0</code> skips the prover. Docker runs the
+      public-execution agent: Aztec publishes that prover for Linux only. Stop with Ctrl-C, or
       <code>tools/aztec-local/on-jam.sh down</code> from another terminal.</p>
   </section>
 
@@ -53,7 +54,9 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
       <tbody>
         <tr><td>Sequencer node</td><td class="num">--node --sequencer</td><td class="num">8080</td><td>verifies every transaction's proof, builds blocks, sends them for settlement</td></tr>
         <tr><td>Prover broker</td><td class="num">--prover-broker</td><td class="num">8084</td><td>queues proving jobs</td></tr>
-        <tr><td>Prover node + agent</td><td class="num">--prover-node --prover-agent</td><td class="num">8083</td><td>finds unproven epochs and proves them</td></tr>
+        <tr><td>Prover node</td><td class="num">--prover-node</td><td class="num">8083</td><td>finds unproven epochs, splits them into proving jobs, submits the epoch proof</td></tr>
+        <tr><td>Prover agent</td><td class="num">--prover-agent</td><td class="num">8086</td><td>proves the jobs: the rollup circuits, natively</td></tr>
+        <tr><td>Public-execution agent</td><td class="num">--prover-agent</td><td class="num">Docker</td><td>proves public execution (the AVM), in Aztec's own image</td></tr>
         <tr><td>JAM sidecar</td><td class="num">(ours)</td><td class="num">8545</td><td>stands in for Ethereum; relays blocks and proofs to JAM</td></tr>
       </tbody>
     </table></div>
@@ -68,7 +71,7 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
         <tr><td><code>ETHEREUM_HOSTS</code></td><td>the JAM sidecar, <code>http://127.0.0.1:8545</code></td></tr>
         <tr><td><code>L1_CONSENSUS_HOST_URLS</code> (blob data)</td><td>a local blob store the sequencer writes</td></tr>
         <tr><td>P2P, for the prover to find transactions</td><td>the prover reads them from the sequencer node</td></tr>
-        <tr><td>Agent hardware: 32 cores, 128 GB</td><td>one agent on a 10-core, 16 GB laptop — slow is fine, proving never blocks the chain</td></tr>
+        <tr><td>Agent hardware: 32 cores, 128 GB</td><td>two agents on a 10-core, 16 GB laptop — slow is fine, proving never blocks the chain</td></tr>
         <tr><td>Proof submission window</td><td>widened, so a slow prover is never late</td></tr>
       </tbody>
     </table></div>
@@ -83,11 +86,15 @@ DEVNET_NET=jb-lasair6 tools/aztec-local/on-jam.sh    # everything, in order</pre
         <tr><td>An empty block</td><td class="num">1 s</td></tr>
         <tr><td>A block with one transaction</td><td class="num">4 s</td></tr>
         <tr><td>One private transaction, in the rollup</td><td class="num">18 s</td></tr>
-        <tr><td>A checkpoint of blocks</td><td class="num">31–42 s</td></tr>
-        <tr><td>The epoch's final proof</td><td class="num">60–79 s</td></tr>
+        <tr><td>Public execution (the AVM), one transaction</td><td class="num">5–51 s</td></tr>
+        <tr><td>A transaction with public calls, in the rollup</td><td class="num">140–330 s</td></tr>
+        <tr><td>A checkpoint of blocks</td><td class="num">31–60 s</td></tr>
+        <tr><td>The epoch's final proof</td><td class="num">60–171 s</td></tr>
+        <tr><td>JAM checks that proof and advances the proven tip</td><td class="num">70.7M gas, 0.55 s</td></tr>
       </tbody>
     </table></div>
-    <p>Peak memory: <b>3 GB</b>. A test network's epochs are small; Aztec's 128 GB guidance is for mainnet traffic.</p>
+    <p>Peak memory: <b>3 GB</b> for the rollup proofs; about <b>6.4 GB</b> for a transaction with public calls, so the
+      public-execution agent runs one job at a time in Docker's 8 GB. A test network's epochs are small; Aztec's 128 GB guidance is for mainnet traffic.</p>
   </section>
 
   <section>

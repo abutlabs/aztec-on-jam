@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Aztec v6's released software on a JAM testnet: the settlement service on six JAM validators
 # (services/aztec-settlement/devnet.sh), our JAM sidecar (jam-l1.mjs) as the node's "Ethereum",
-# Aztec's sequencer node, Aztec's prover (broker, prover node and agent), and the wallet.
+# Aztec's sequencer node, Aztec's prover (broker, prover node, an agent, and Docker's agent for
+# public execution), and the wallet.
 #
 #   tools/aztec-local/on-jam.sh            start everything; Ctrl-C stops everything
 #   tools/aztec-local/on-jam.sh down       stop a run left behind (any terminal)
@@ -10,14 +11,18 @@
 #                           the default, polkajam, is PolkaJam's own testnet
 #   PROVER=0                skip Aztec's prover (default 1)
 #   PROVER_AGENT_COUNT      prover agents (default 1)
+#   AVM_AGENT=0             no Docker agent for public execution (default 1; needs Docker running)
+#   AVM_AGENT_COUNT         public-execution agents in it (default 1: a public transaction's rollup proof
+#                           peaks at about 6.4 GB, and two at once overflow Docker Desktop's 8 GB)
 #   PROVER_REAL_PROOFS=false  Aztec's test mode: client proofs not verified (default true)
 #   NODE_PORT               the node's port (default 8080, where Aztec's wallets look)
-# Logs: out/aztec-devnet/ — devnet.log, jam-l1.log, node.log, broker.log, prover.log, wallet.log.
+# Logs: out/aztec-devnet/ — devnet.log, jam-l1.log, node.log, broker.log, prover.log, agent.log, avm-agent.log, wallet.log.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
 NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}
-PORTS="8545 $NODE_PORT 8083 8084 8885 $WALLET_PORT 19800 42950"
+PORTS="8545 $NODE_PORT 8083 8084 8086 8885 $WALLET_PORT 19800 42950"
 RUN_PID=$ROOT/out/aztec-on-jam.pid     # the running on-jam.sh; outside $D, which each run wipes
+AVM_NAME=aztec-on-jam-avm              # the Docker container of Aztec's public-execution prover
 
 # --- down: stop a run from another terminal ---------------------------------------------------
 # The run's own trap stops exactly what it started; anything left after that (a run killed
@@ -32,6 +37,7 @@ if [ "${1:-}" = down ]; then
   pkill -f "$ROOT/services/aztec-settlement/devnet.sh" 2>/dev/null || true
   pkill -f "$ROOT/wallet/serve.mjs" 2>/dev/null || true
   NET=jb-lasair6 "$ROOT/nets/jb.sh" down >/dev/null 2>&1 || true
+  docker rm -f "$AVM_NAME" >/dev/null 2>&1 || true
   rm -f "$RUN_PID"
   # return only once the testnet and every port are actually free
   for _ in $(seq 1 30); do
@@ -62,6 +68,7 @@ if [ -f "$RUN_PID" ] && kill -0 "$(cat "$RUN_PID")" 2>/dev/null; then busy="$bus
 # a JAM testnet's validators hold UDP 40000 and up (the first validator's port)
 who=$(lsof -nP -iUDP:40000 2>/dev/null | awk 'NR==2{print $1" (pid "$2")"}' || true)
 if [ -n "$who" ]; then busy="$busy\n  a JAM testnet's validators (UDP 40000): $who — nets/demo.sh or another on-jam.sh?"; fi
+if [ -n "$(docker ps -q --filter "name=^$AVM_NAME\$" 2>/dev/null || true)" ]; then busy="$busy\n  Docker container $AVM_NAME"; fi
 if [ -n "$busy" ]; then
   printf 'on-jam.sh: something is already running:%b\n\nStop it first:\n  tools/aztec-local/on-jam.sh down     (a previous on-jam.sh)\n  nets/demo.sh down                    (the first demo)\n' "$busy" >&2
   exit 1
@@ -82,7 +89,9 @@ stop_own() {
   local rc=$?
   trap - EXIT INT TERM
   echo; echo "Aztec on JAM: stopping"
-  for p in "${pids[@]}"; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+  # last started first: agents before their broker, the node before its sidecar
+  local i; for (( i = ${#pids[@]} - 1; i >= 0; i-- )); do pkill -P "${pids[i]}" 2>/dev/null || true; kill "${pids[i]}" 2>/dev/null || true; done
+  if [ "${AVM_AGENT:-0}" = 1 ]; then docker rm -f "$AVM_NAME" >/dev/null 2>&1 || true; fi
   if [ "${DEVNET_NET:-polkajam}" != polkajam ]; then NET=$DEVNET_NET "$ROOT/nets/jb.sh" down >/dev/null 2>&1 || true; fi
   wait 2>/dev/null || true
   if [ "$(cat "$RUN_PID" 2>/dev/null)" = "$$" ]; then rm -f "$RUN_PID"; fi
@@ -90,6 +99,8 @@ stop_own() {
 }
 trap stop_own EXIT INT TERM
 if [ "$PROVER" = 1 ]; then export PROOF_SUBMISSION_EPOCHS=${PROOF_SUBMISSION_EPOCHS:-10000}; fi
+# the prover node's admin API key for this run: the sidecar reads its epoch jobs for the wallet
+ADMIN_KEY=$(openssl rand -hex 32)
 
 # --- 1. the JAM testnet and the settlement service ---------------------------------------------
 say "1/5 starting six ${DEVNET_NET:-polkajam} validators and deploying the settlement service (about 2–3 minutes)"
@@ -101,7 +112,7 @@ grep -q "devnet up" "$D/devnet.log" || fail "the JAM testnet did not start" "$D/
 say "    JAM testnet up; settlement service $(python3 -c "import json; print(json.load(open('$D/devnet.json'))['service'])") deployed"
 
 # --- 2. the JAM sidecar -------------------------------------------------------------------------
-python3 - "$D/devnet.json" "$D/jam-l1.json" "$D" "$ROOT/../jamboree/target/release/jamboree" <<'PY'
+python3 - "$D/devnet.json" "$D/jam-l1.json" "$D" "$ROOT/../jamboree/target/release/jamboree" "$PROVER" "$ADMIN_KEY" <<'PY'
 import json, sys
 d, D = json.load(open(sys.argv[1])), sys.argv[3]
 a = lambda n: "0x" + "%040x" % (0xa11ce000 + n)
@@ -110,7 +121,7 @@ names = ["registry", "rollup", "inbox", "outbox", "feeJuice", "feeJuicePortal", 
 addresses = {n: a(i + 1) for i, n in enumerate(names)} | {"multicall3": "0xca11bde05977b3631167028862be2a173976ca11"}
 cfg = d["cfg"] | {"manaLimit": str(d["cfg"]["manaLimit"])}
 json.dump(dict(port=8545, jip2=d.get("jip2", "ws://127.0.0.1:19800"), chainSpec=d["chainSpec"], service=d["service"], jamboree=sys.argv[4],
-               rootRollupVk=f"{D}/root-rollup.vk",
+               rootRollupVk=f"{D}/root-rollup.vk", prover=dict(url="http://127.0.0.1:8885", key=sys.argv[6]) if sys.argv[5] == "1" else None,
                cfg=cfg, addresses=addresses, work=f"{D}/relay", log=f"{D}/jam-l1.log"), open(sys.argv[2], "w"), indent=1)
 PY
 node "$HERE/jam-l1.mjs" "$D/jam-l1.json" > "$D/jam-l1.out" 2>&1 & track $!
@@ -135,14 +146,26 @@ until grep -q "Aztec Node started" "$D/node.log" 2>/dev/null; do
 done
 say "    Aztec node up on :$NODE_PORT"
 
-# --- 4. Aztec's prover: broker, then prover node with its agent (Aztec's operator-docs layout) ---
+# --- 4. Aztec's prover: broker, prover node and agents, each its own process (Aztec's operator-docs layout) ---
 # Where Aztec's docs say `--network mainnet`, this devnet gives every role the registry address and
 # the genesis flags (each checks the genesis and stands by on a mismatch); blobs come from the
 # sequencer's file store; the prover reads transactions from our node (P2P is off). The broker
 # keeps work for as many epochs as the proof window allows: its default (1) discards a slow
 # prover's jobs before they finish.
+# Public execution is proved by Aztec's AVM prover, bb-avm, which Aztec publishes for Linux only:
+# Aztec's own image (the release matching the npm packages) runs it as a second agent on the same
+# broker, for the AVM proof and the public base rollup that verifies it inside itself; the native
+# agent takes every other job. Without Docker, epochs whose transactions make public calls stay
+# unproven; the chain itself runs on.
+AVM_AGENT=${AVM_AGENT:-1}
+AVM_PROOF_TYPES=PUBLIC_VM,PUBLIC_TX_BASE_ROLLUP
+HOST_PROOF_TYPES=PUBLIC_CHONK_VERIFIER,PRIVATE_TX_BASE_ROLLUP,TX_MERGE_ROLLUP,BLOCK_ROOT_ROLLUP,BLOCK_ROOT_SINGLE_TX_ROLLUP,BLOCK_ROOT_NO_TXS_ROLLUP,BLOCK_MERGE_ROLLUP,CHECKPOINT_ROOT_ROLLUP,CHECKPOINT_ROOT_SINGLE_BLOCK_ROLLUP,CHECKPOINT_PADDING_ROLLUP,CHECKPOINT_MERGE_ROLLUP,ROOT_ROLLUP,INBOX_PARITY
 if [ "$PROVER" = 1 ]; then
   say "4/5 starting Aztec's prover: broker, prover node, ${PROVER_AGENT_COUNT:-1} agent(s)"
+  if [ "$AVM_AGENT" = 1 ] && ! docker info >/dev/null 2>&1; then
+    AVM_AGENT=0; say "    Docker is not running: epochs with public calls will not be proved (AVM_AGENT=0)"
+  fi
+  [ "$AVM_AGENT" = 1 ] || HOST_PROOF_TYPES=$AVM_PROOF_TYPES,$HOST_PROOF_TYPES
   mkdir -p "$D/prover-data" "$D/bb-prover" "$D/noir-work" "$D/broker-data"
   ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY \
   TEST_ACCOUNTS=true SPONSORED_FPC=true RPC_MAX_BODY_SIZE=${RPC_MAX_BODY_SIZE:-64mb} \
@@ -150,21 +173,43 @@ if [ "$PROVER" = 1 ]; then
   DATA_DIRECTORY=$D/broker-data LOG_LEVEL=${LOG_LEVEL:-info} \
     "$HERE/node_modules/.bin/aztec" start --prover-broker --port 8084 > "$D/broker.log" 2>&1 & BROKER_PID=$!; track $BROKER_PID
   for _ in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8084 && break; kill -0 "$BROKER_PID" 2>/dev/null || fail "Aztec's prover broker stopped" "$D/broker.log"; sleep 1; done
+  # the prover node runs no agent of its own (PROVER_AGENT_COUNT=0) but still checks proofs, so it
+  # has Barretenberg's and noir-execute's paths too
   PROVER_PUBLISHER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
-  PROVER_AGENT_COUNT=${PROVER_AGENT_COUNT:-1} PROVER_BROKER_HOST=http://127.0.0.1:8084 \
-  PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-prover \
-  BB_BINARY_PATH=$HERE/node_modules/@aztec-foundation/bb.js/build/arm64-macos/bb \
-  NOIR_EXECUTE_BINARY_PATH=$HOME/.nargo/bin/noir-execute NOIR_EXECUTE_WORKING_DIRECTORY=$D/noir-work \
+  AZTEC_ADMIN_API_KEY_HASH=$(printf %s "$ADMIN_KEY" | shasum -a 256 | cut -c1-64) \
+  PROVER_BROKER_HOST=http://127.0.0.1:8084 PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} PROVER_AGENT_COUNT=0 \
+  BB_WORKING_DIRECTORY=$D/bb-node BB_BINARY_PATH=$HERE/node_modules/@aztec-foundation/bb.js/build/arm64-macos/bb \
+  NOIR_EXECUTE_BINARY_PATH=$HOME/.nargo/bin/noir-execute NOIR_EXECUTE_WORKING_DIRECTORY=$D/noir-node \
   ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY P2P_ENABLED=false \
   TEST_ACCOUNTS=true SPONSORED_FPC=true TX_COLLECTION_NODE_RPC_URLS=http://127.0.0.1:$NODE_PORT \
   RPC_MAX_BODY_SIZE=${RPC_MAX_BODY_SIZE:-64mb} \
   DATA_DIRECTORY=$D/prover-data BLOB_FILE_STORE_URLS=file://$D/blobs BLOB_FILE_STORE_UPLOAD_URL=file://$D/blobs \
   ARCHIVER_POLLING_INTERVAL_MS=1000 ARCHIVER_VIEM_POLLING_INTERVAL_MS=1000 LOG_LEVEL=${LOG_LEVEL:-info} \
-    "$HERE/node_modules/.bin/aztec" start --prover-node --prover-agent --port 8083 --admin-port 8885 > "$D/prover.log" 2>&1 & PROVER_PID=$!; track $PROVER_PID
+    "$HERE/node_modules/.bin/aztec" start --prover-node --port 8083 --admin-port 8885 > "$D/prover.log" 2>&1 & PROVER_PID=$!; track $PROVER_PID
   until grep -q "Started Prover Node" "$D/prover.log" 2>/dev/null; do
     kill -0 "$PROVER_PID" 2>/dev/null || fail "Aztec's prover stopped while starting" "$D/prover.log"; sleep 2
   done
-  say "    prover up (broker :8084, prover node :8083)"
+  # the native agent, its own process: a prover node's built-in agent takes every job type (Aztec's
+  # prover-client creates it with no type filter), and the AVM's are not this binary's
+  PROVER_AGENT_COUNT=${PROVER_AGENT_COUNT:-1} PROVER_AGENT_PROOF_TYPES=$HOST_PROOF_TYPES PROVER_BROKER_HOST=http://127.0.0.1:8084 \
+  PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} BB_WORKING_DIRECTORY=$D/bb-prover \
+  BB_BINARY_PATH=$HERE/node_modules/@aztec-foundation/bb.js/build/arm64-macos/bb \
+  NOIR_EXECUTE_BINARY_PATH=$HOME/.nargo/bin/noir-execute NOIR_EXECUTE_WORKING_DIRECTORY=$D/noir-work LOG_LEVEL=${LOG_LEVEL:-info} \
+    "$HERE/node_modules/.bin/aztec" start --prover-agent --port 8086 > "$D/agent.log" 2>&1 & AGENT_PID=$!; track $AGENT_PID
+  sleep 3; kill -0 "$AGENT_PID" 2>/dev/null || fail "Aztec's prover agent stopped while starting" "$D/agent.log"
+  say "    prover up (broker :8084, prover node :8083, agent)"
+  if [ "$AVM_AGENT" = 1 ]; then
+    AVM_IMAGE=azteclabs/aztec:$(node -p "require('$HERE/node_modules/@aztec-labs/aztec/package.json').version")
+    docker image inspect "$AVM_IMAGE" >/dev/null 2>&1 || { say "    pulling $AVM_IMAGE (about 2 GB, once)"; docker pull -q "$AVM_IMAGE" >/dev/null; }
+    # the reference string the host's provers already downloaded (~/.bb-crs) is shared, not fetched again
+    mkdir -p "$HOME/.bb-crs"
+    docker run -d --rm --name "$AVM_NAME" -v "$HOME/.bb-crs:/root/.bb-crs" -e LD_PRELOAD= \
+      -e PROVER_BROKER_HOST=http://host.docker.internal:8084 -e PROVER_AGENT_PROOF_TYPES=$AVM_PROOF_TYPES \
+      -e PROVER_AGENT_COUNT=${AVM_AGENT_COUNT:-1} -e PROVER_REAL_PROOFS=${PROVER_REAL_PROOFS:-true} -e LOG_LEVEL=${LOG_LEVEL:-info} \
+      "$AVM_IMAGE" start --prover-agent >/dev/null
+    docker logs -f "$AVM_NAME" > "$D/avm-agent.log" 2>&1 & track $!
+    say "    public-execution prover up (Aztec's image, Docker)"
+  fi
 else
   say "4/5 prover skipped (PROVER=0)"
 fi

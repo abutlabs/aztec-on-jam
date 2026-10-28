@@ -24,18 +24,17 @@ else
 fi
 BUILD=$SUB/jamswap/tools/jam080/builder/target/release/jam080-build
 
-# The net first: the cfg's JAM era (Unix time of JAM timeslot 0) depends on it. PolkaJam's dev
-# chain runs at wall-clock timeslots, so its era is JAM's common era; a jb net is paced from
-# slot 0, so its era is now minus 6 s a slot, read from the running head. One timebase for the
-# service's clock and the facade's "L1 blocks".
+# The net first: the cfg's JAM era (Unix time of JAM timeslot 0) depends on it. Both run their
+# timeslots on the wall clock: PolkaJam's dev chain from JAM's common era, an all-lasair jb net
+# from its own start, which jb.sh writes to its era file. One timebase for the service's clock
+# and the facade's "L1 blocks".
 if [ "$DEVNET_NET" = polkajam ]; then
   pj_start "$O"
   JAM_ERA=1735732800
 else
   "$ROOT/nets/jb.sh" up
   cp "$ROOT/out/$DEVNET_NET/spec.json" "$O/spec.json"
-  SLOT=$("$JB" rpc --url "$RPC_URL" --chain-spec "$O/spec.json" head | awk '{for (i = 1; i < NF; i++) if ($i == "best") print $(i + 1)}' | tr -dc 0-9)
-  JAM_ERA=$(( $(date +%s) - ${SLOT:-0} * 6 ))
+  JAM_ERA=$(cat "$ROOT/out/$DEVNET_NET/era")
 fi
 GENESIS_TIME=$(date +%s)
 # PROOF_SUBMISSION_EPOCHS above about 14,600 (24.8 days) overflows Node's setTimeout in the prover

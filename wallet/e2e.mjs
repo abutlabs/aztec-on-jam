@@ -1,7 +1,8 @@
-// #65's check, in real browsers. Alice and Bob each open the wallet in a browser context of
-// their own (separate storage, as two users). Alice creates an account, deploys Aztec's Token,
-// mints 1000 privately; Bob creates an account and registers Alice as a sender; Alice sends
-// Bob 40 privately; Bob's wallet finds the note by Aztec's tagging. Every proof is a real
+// The wallet's check, in real browsers. Alice and Bob each open the wallet in a browser context
+// of their own (separate storage, as two users). Alice creates an account, deploys Aztec's Token,
+// mints 1000 privately, unshields 100 and shields it back; Bob creates an account and registers
+// Alice as a sender; Alice sends Bob 40 privately; Bob's wallet finds the note by Aztec's
+// tagging; Alice's activity shows the send settled on JAM. Every proof is a real
 // Aztec client proof made in the tab (proverEnabled), so the page must be cross-origin
 // isolated. Needs: the devnet up (tools/aztec-local/on-jam.sh), the wallet built (vite build).
 //   node e2e.mjs      (NODE_URL=http://localhost:8080, CHROME=system Chrome, PORT=19720)
@@ -17,7 +18,8 @@ const NODE_URL = process.env.NODE_URL || 'http://localhost:8080';
 const WALLET = `http://localhost:${PORT}/?node=${encodeURIComponent(NODE_URL)}`;
 
 const server = spawn(process.execPath, [path.join(HERE, 'serve.mjs'), String(PORT)], { stdio: 'inherit' });
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, defaultViewport: { width: 1000, height: 1100 } });
+// waits watch the DOM for changes: a tab in the background runs no animation frames to poll on
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, protocolTimeout: 900000, defaultViewport: { width: 1000, height: 1100 } });
 let pass = 0;
 const fail = async (msg) => { console.log(`  FAIL ${msg}`); await browser.close(); server.kill(); process.exit(1); };
 const ok = (name, cond, detail = '') => { if (!cond) return fail(`${name}${detail ? ': ' + detail : ''}`); pass++; console.log(`  ok   ${name}${detail ? ': ' + detail : ''}`); };
@@ -27,7 +29,7 @@ async function open(user) {
   page.on('pageerror', (e) => console.log(`  [${user}] pageerror: ${String(e).slice(0, 200)}`));
   page.on('console', (m) => { if (m.type() === 'error') console.log(`  [${user}] console: ${m.text().slice(0, 200)}`); });
   await page.goto(WALLET);
-  await page.waitForFunction(() => document.body.dataset.ready === '1' || document.getElementById('status').className === 'error', { timeout: 300000 });
+  await page.waitForFunction(() => document.body.dataset.ready === '1' || document.getElementById('status').className === 'error', { polling: 'mutation', timeout: 300000 });
   if (await page.$eval('#status', (e) => e.className) === 'error') await fail(`${user}: ${await page.$eval('#status', (e) => e.textContent)}`);
   console.log(`  ${user}: wallet ready (PXE in the tab)`);
   return page;
@@ -35,10 +37,15 @@ async function open(user) {
 
 /** Clicks a button and waits for the action to finish; returns the seconds the page reports. */
 async function act(page, user, button, fill = {}) {
+  // the acting user's page in front (a background tab runs no animation frames, which
+  // puppeteer's visibility wait polls on), and a button on a tab's panel: open that tab first
+  await page.bringToFront();
+  const tab = await page.$eval(button, (b) => b.closest('[data-panel]')?.dataset.panel ?? null);
+  if (tab) { await page.click(`[data-tab=${tab}]`); await page.waitForSelector(button, { visible: true }); }
   for (const [sel, v] of Object.entries(fill)) await page.$eval(sel, (e, v) => { e.value = v; }, String(v));
   await page.click(button);
-  await page.waitForFunction(() => /^(working|error)/.test(document.getElementById('status').textContent), { timeout: 10000 });
-  await page.waitForFunction(() => !document.getElementById('status').textContent.startsWith('working'), { timeout: 600000 });
+  await page.waitForFunction(() => /^(working|error)/.test(document.getElementById('status').textContent), { polling: 'mutation', timeout: 10000 });
+  await page.waitForFunction(() => !document.getElementById('status').textContent.startsWith('working'), { polling: 'mutation', timeout: 600000 });
   const s = await page.$eval('#status', (e) => e.textContent);
   console.log(`  [${user}] ${s}`);
   if (s.startsWith('error')) await fail(s);
@@ -64,6 +71,11 @@ ok('alice deployed Aztec\'s Token, fee sponsored', /^0x[0-9a-f]{64}$/.test(token
 const tMint = await act(alice, 'alice', '#mint', { '#mint-amount': 1000 });
 ok('alice minted 1000 privately', (await text(alice, '#balance')) === '1000', `${tMint}s`);
 
+const tUnshield = await act(alice, 'alice', '#unshield', { '#unshield-amount': 100 });
+ok('alice unshielded 100: private 900, public 100', (await text(alice, '#balance')) === '900' && (await text(alice, '#public-balance')) === '100', `${tUnshield}s`);
+const tShield = await act(alice, 'alice', '#shield', { '#shield-amount': 100 });
+ok('alice shielded 100 back: private 1000, public 0', (await text(alice, '#balance')) === '1000' && (await text(alice, '#public-balance')) === '0', `${tShield}s`);
+
 await act(bob, 'bob', '#add-sender', { '#sender-address': aliceAddr });
 await act(bob, 'bob', '#attach', { '#token-address': tokenAddr });
 ok('bob attached the token and registered alice as a sender', (await text(bob, '#balance')) === '0');
@@ -74,12 +86,18 @@ ok('alice sent 40 privately', (await text(alice, '#balance')) === '960', `${tSen
 await act(bob, 'bob', '#refresh');
 ok('bob found the 40 by Aztec tagging, no key shared', (await text(bob, '#balance')) === '40');
 
+// the live view: the send's own timeline reaches JAM
+await alice.waitForFunction(() => [...document.querySelectorAll('#log > li')].some((li) =>
+  /^Send 40/.test(li.querySelector('b').textContent) && /Settled on JAM: checkpoint \d+/.test(li.textContent)), { polling: 'mutation', timeout: 300000 });
+ok('alice\'s activity shows the send settled on JAM', true,
+  await alice.$eval('#log', (l) => [...l.querySelectorAll('.steps li')].slice(0, 5).map((s) => s.textContent).join(' | ')));
+
 // a reload keeps the account and the balance: the wallet's store is SQLite on OPFS
 await alice.reload();
-await alice.waitForFunction(() => document.body.dataset.ready === '1', { timeout: 120000 });
+await alice.waitForFunction(() => document.body.dataset.ready === '1', { polling: 'mutation', timeout: 120000 });
 await act(alice, 'alice', '#attach', { '#token-address': tokenAddr });
 ok('alice reloads: account and notes persist (OPFS)', (await text(alice, '#address')) === aliceAddr && (await text(alice, '#balance')) === '960');
 
-console.log(`PASS: ${pass} assertions; deploy ${tDeploy}s, mint ${tMint}s, send ${tSend}s (proofs made in the tab)`);
+console.log(`PASS: ${pass} assertions; deploy ${tDeploy}s, mint ${tMint}s, unshield ${tUnshield}s, shield ${tShield}s, send ${tSend}s (proofs made in the tab)`);
 await browser.close(); server.kill();
 process.exit(0);
