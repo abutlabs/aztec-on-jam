@@ -38,16 +38,27 @@ else
   JAM_ERA=$(( $(date +%s) - ${SLOT:-0} * 6 ))
 fi
 GENESIS_TIME=$(date +%s)
-python3 - "$HERE/cfg.bin" "$O/devnet-cfg.json" "$2" "$3" "$4" "$GENESIS_TIME" "$JAM_ERA" <<'PY'
+# PROOF_SUBMISSION_EPOCHS above about 14,600 (24.8 days) overflows Node's setTimeout in the prover
+# The epoch verifier's key: Aztec's real RootRollup vk, whose sha256 goes into cfg (#69). The
+# facade attaches the key bytes to each epoch-proof work item; accumulate checks the hash.
+VK_FILE=$O/root-rollup.vk
+(cd "$ROOT/tools/aztec-local" && node --input-type=module -e "
+import { ServerCircuitVks } from '@aztec-labs/noir-protocol-circuits-types/server/vks';
+import { writeFileSync } from 'fs';
+writeFileSync(process.argv[1], ServerCircuitVks['RootRollupArtifact'].keyAsBytes);
+" "$VK_FILE") 2>/dev/null || VK_FILE=""
+VK_HASH=$([ -n "$VK_FILE" ] && shasum -a 256 "$VK_FILE" | cut -c1-64 || echo "")
+python3 - "$HERE/cfg.bin" "$O/devnet-cfg.json" "$2" "$3" "$4" "$GENESIS_TIME" "$JAM_ERA" "${PROOF_SUBMISSION_EPOCHS:-1}" "${EPOCH_SLOTS:-4}" "$VK_HASH" <<'PY'
 import json, struct, sys
-out, js, archive, vk_tree, protocol, genesis, era = sys.argv[1:8]
-cfg = dict(genesisArchive=archive, genesisTime=int(genesis), slotSeconds=36, epochSlots=4, minFee=1000, manaLimit=2**63,
-           chainId=31337, version=1, vkTreeRoot=vk_tree, protocolContractsHash=protocol, proofSubmissionEpochs=1,
-           jamEra=int(era))
+out, js, archive, vk_tree, protocol, genesis, era, window, eslots, vk_hash = sys.argv[1:11]
+cfg = dict(genesisArchive=archive, genesisTime=int(genesis), slotSeconds=36, epochSlots=int(eslots), minFee=1000, manaLimit=2**63,
+           chainId=31337, version=1, vkTreeRoot=vk_tree, protocolContractsHash=protocol,
+           proofSubmissionEpochs=int(window),   # PROOF_SUBMISSION_EPOCHS: a slow prover's window (#69)
+           jamEra=int(era), epochVkHash="0x" + (vk_hash or "00" * 32))
 w = lambda h: bytes.fromhex(h[2:].rjust(64, "0"))
-open(out, "wb").write(w(archive) + struct.pack(">QQQ", cfg["genesisTime"], 36, 4) + (1000).to_bytes(16, "big")
+open(out, "wb").write(w(archive) + struct.pack(">QQQ", cfg["genesisTime"], 36, cfg["epochSlots"]) + (1000).to_bytes(16, "big")
                       + (2**63).to_bytes(32, "big") + (31337).to_bytes(32, "big") + (1).to_bytes(32, "big")
-                      + bytes(32) + w(vk_tree) + w(protocol) + struct.pack(">Q", 1)
+                      + w(cfg["epochVkHash"]) + w(vk_tree) + w(protocol) + struct.pack(">Q", cfg["proofSubmissionEpochs"])
                       + bytes.fromhex("00000000000000000000000000000000a11ce002")   # the facade's Rollup
                       + bytes(32) + bytes([0]) + bytes(320)                             # no committee, as the local network
                       + struct.pack(">Q", cfg["jamEra"]))

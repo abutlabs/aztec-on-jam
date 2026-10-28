@@ -17,18 +17,24 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); D=$ROOT/out/aztec-devnet
 NODE_PORT=${NODE_PORT:-8080}; PROVER=${PROVER:-1}; WALLET_PORT=${WALLET_PORT:-19720}
 PORTS="8545 $NODE_PORT 8083 8084 8885 $WALLET_PORT 19800 42950"
+RUN_PID=$ROOT/out/aztec-on-jam.pid     # the running on-jam.sh; outside $D, which each run wipes
 
-# --- down: stop whatever a previous run left -------------------------------------------------
-stop_all() {
-  if [ -f "$D/pids" ]; then xargs kill 2>/dev/null < "$D/pids" || true; fi
+# --- down: stop a run from another terminal ---------------------------------------------------
+# The run's own trap stops exactly what it started; anything left after that (a run killed
+# with -9) is cleared by name.
+if [ "${1:-}" = down ]; then
+  if [ -f "$RUN_PID" ] && kill -0 "$(cat "$RUN_PID")" 2>/dev/null; then
+    kill "$(cat "$RUN_PID")"
+    for _ in $(seq 1 30); do kill -0 "$(cat "$RUN_PID" 2>/dev/null)" 2>/dev/null || break; sleep 1; done
+  fi
   pkill -f "$HERE/node_modules/@aztec-labs/aztec/" 2>/dev/null || true
   pkill -f "$HERE/jam-l1.mjs" 2>/dev/null || true
   pkill -f "$ROOT/services/aztec-settlement/devnet.sh" 2>/dev/null || true
   pkill -f "$ROOT/wallet/serve.mjs" 2>/dev/null || true
   NET=jb-lasair6 "$ROOT/nets/jb.sh" down >/dev/null 2>&1 || true
-  rm -f "$D/pids"
-}
-if [ "${1:-}" = down ]; then stop_all; echo "Aztec on JAM: stopped"; exit 0; fi
+  rm -f "$RUN_PID"
+  echo "Aztec on JAM: stopped"; exit 0
+fi
 
 # --- Node 22+ (Aztec's packages and the sidecar need it) ---------------------------------------
 if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -lt 22 ]; then
@@ -47,6 +53,7 @@ for p in $PORTS; do
   who=$(lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1" (pid "$2")"}' || true)
   if [ -n "$who" ]; then busy="$busy\n  port $p: $who"; fi
 done
+if [ -f "$RUN_PID" ] && kill -0 "$(cat "$RUN_PID")" 2>/dev/null; then busy="$busy\n  another on-jam.sh is running (pid $(cat "$RUN_PID"))"; fi
 if pgrep -f "lasair_client|polkajam-testnet" >/dev/null 2>&1; then busy="$busy\n  a JAM testnet is already running (nets/demo.sh or another on-jam.sh?)"; fi
 if [ -n "$busy" ]; then
   printf 'on-jam.sh: something is already running:%b\n\nStop it first:\n  tools/aztec-local/on-jam.sh down     (a previous on-jam.sh)\n  nets/demo.sh down                    (the first demo)\n' "$busy" >&2
@@ -61,8 +68,20 @@ PROTOCOL_CONTRACTS_HASH=0x0f54271c52865841a77aaa66036eed901aff22fdce9f08e123ec8b
 REGISTRY=0x00000000000000000000000000000000a11ce001
 rm -rf "$D"; mkdir -p "$D/blobs" "$D/node-data" "$D/bb-work"
 pids=()
-track() { pids+=("$1"); echo "$1" >> "$D/pids"; }
-trap 'echo; echo "Aztec on JAM: stopping"; stop_all; wait 2>/dev/null || true' EXIT INT TERM
+track() { pids+=("$1"); }
+echo $$ > "$RUN_PID"
+# stop exactly what this run started, children first, then this run's testnet
+stop_own() {
+  local rc=$?
+  trap - EXIT INT TERM
+  echo; echo "Aztec on JAM: stopping"
+  for p in "${pids[@]}"; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+  if [ "${DEVNET_NET:-polkajam}" != polkajam ]; then NET=$DEVNET_NET "$ROOT/nets/jb.sh" down >/dev/null 2>&1 || true; fi
+  wait 2>/dev/null || true
+  if [ "$(cat "$RUN_PID" 2>/dev/null)" = "$$" ]; then rm -f "$RUN_PID"; fi
+  exit "$rc"
+}
+trap stop_own EXIT INT TERM
 if [ "$PROVER" = 1 ]; then export PROOF_SUBMISSION_EPOCHS=${PROOF_SUBMISSION_EPOCHS:-10000}; fi
 
 # --- 1. the JAM testnet and the settlement service ---------------------------------------------
@@ -112,12 +131,15 @@ say "    Aztec node up on :$NODE_PORT"
 # --- 4. Aztec's prover: broker, then prover node with its agent (Aztec's operator-docs layout) ---
 # Where Aztec's docs say `--network mainnet`, this devnet gives every role the registry address and
 # the genesis flags (each checks the genesis and stands by on a mismatch); blobs come from the
-# sequencer's file store; the prover reads transactions from our node (P2P is off).
+# sequencer's file store; the prover reads transactions from our node (P2P is off). The broker
+# keeps work for as many epochs as the proof window allows: its default (1) discards a slow
+# prover's jobs before they finish.
 if [ "$PROVER" = 1 ]; then
   say "4/5 starting Aztec's prover: broker, prover node, ${PROVER_AGENT_COUNT:-1} agent(s)"
   mkdir -p "$D/prover-data" "$D/bb-prover" "$D/noir-work" "$D/broker-data"
   ETHEREUM_HOSTS=http://127.0.0.1:8545 L1_CHAIN_ID=31337 REGISTRY_CONTRACT_ADDRESS=$REGISTRY \
   TEST_ACCOUNTS=true SPONSORED_FPC=true RPC_MAX_BODY_SIZE=${RPC_MAX_BODY_SIZE:-64mb} \
+  PROVER_BROKER_MAX_EPOCHS_TO_KEEP_RESULTS_FOR=${PROOF_SUBMISSION_EPOCHS:-10000} \
   DATA_DIRECTORY=$D/broker-data LOG_LEVEL=${LOG_LEVEL:-info} \
     "$HERE/node_modules/.bin/aztec" start --prover-broker --port 8084 > "$D/broker.log" 2>&1 & BROKER_PID=$!; track $BROKER_PID
   for _ in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8084 && break; kill -0 "$BROKER_PID" 2>/dev/null || fail "Aztec's prover broker stopped" "$D/broker.log"; sleep 1; done
@@ -139,6 +161,13 @@ if [ "$PROVER" = 1 ]; then
 else
   say "4/5 prover skipped (PROVER=0)"
 fi
+
+# --- ready means usable: a transaction built before block 1 is valid only in block 1 ----------
+say "    waiting for the chain's first block (about a minute)"
+until [ "$(curl -s -m3 -X POST -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"node_getBlockNumber","params":[]}' http://127.0.0.1:$NODE_PORT 2>/dev/null | grep -oE '"result":[0-9]+' | cut -d: -f2)" -ge 1 ] 2>/dev/null; do
+  kill -0 "$NODE_PID" 2>/dev/null || fail "Aztec's node stopped" "$D/node.log"; sleep 3
+done
+say "    block 1 is in"
 
 # --- 5. the wallet ------------------------------------------------------------------------------
 if [ -f "$ROOT/wallet/dist/index.html" ]; then

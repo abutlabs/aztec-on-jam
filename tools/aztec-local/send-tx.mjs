@@ -20,6 +20,8 @@ import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
 
 const node = createAztecNodeClient(process.argv[2] ?? 'http://[::1]:8080');
+// a transaction built before block 1 is valid only in block 1: wait for the chain to start
+while ((await node.getBlockNumber()) < 1) await new Promise((r) => setTimeout(r, 2000));
 const wallet = await EmbeddedWallet.create(node, { pxeConfig: { proverEnabled: true }, ephemeral: true });  // the node verifies real proofs (#67)
 const accounts = await getInitialTestAccountsData();
 await createFundedInitializerlessAccounts(wallet, accounts);

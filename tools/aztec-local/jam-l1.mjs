@@ -23,7 +23,10 @@ import * as artifacts from '@aztec-foundation/l1-artifacts';
 import { getKzg } from '@aztec-labs/blob-lib';
 import { computeAttestationsHash } from '@aztec-labs/ethereum/contracts';
 import { computeCheckpointPayloadDigest } from '@aztec-labs/stdlib/checkpoint';
-import { CheckpointHeader } from '@aztec-labs/stdlib/rollup';
+import { CheckpointHeader, RootRollupPublicInputs, EpochConstantData, FeeRecipient } from '@aztec-labs/stdlib/rollup';
+import { FinalBlobAccumulator } from '@aztec-labs/blob-lib';
+import { sha256ToField } from '@aztec-labs/foundation/crypto/sha256';
+import { BLS12Fr, BLS12Point } from '@aztec-labs/foundation/curves/bls12';
 import { Fr } from '@aztec-labs/foundation/curves/bn254';
 import { EthAddress } from '@aztec-labs/foundation/eth-address';
 
@@ -179,7 +182,11 @@ const views = {
     getCheckpoint: async ([n]) => {
       const cp = await checkpointLog(n);
       if (!cp) return undefined;
-      return { archive: cp.archive, headerHash: cp.headerHash, blobCommitmentsHash: cp.blobCommitmentsHash, outHash: cp.outHash, attestationsHash: word(0), payloadDigest: word(0),
+      // the hashes the Rollup stores at propose time, from the proposal this sidecar relayed
+      // (the prover checks the attestations against them before it submits an epoch proof)
+      const tx = [...txs.values()].find((x) => x.archive === cp.archive && !x.dropped);
+      return { archive: cp.archive, headerHash: cp.headerHash, blobCommitmentsHash: cp.blobCommitmentsHash, outHash: cp.outHash,
+        attestationsHash: tx?.attestationsHash ?? word(0), payloadDigest: tx?.payloadDigest ?? word(0),
         slotNumber: cp.slot, feeHeader: { excessMana: 0n, manaUsed: 0n, ethPerFeeAsset: 10n ** 12n, protocolFee: 0n, proverCost: 0n } };
     },
     status: async ([n]) => {
@@ -354,7 +361,11 @@ async function sendRaw(raw) {
     }
   }
   const propose = findPropose(tx);
-  if (!propose) { log({ sent: hash, to: nameOf[rec.to] ?? rec.to, note: 'not a proposal: recorded, not relayed' }); rec.status = 1; rec.blockNumber = head.number; rec.blockHash = head.hash; head.txs.push(hash); return hash; }
+  if (!propose) {
+    const epoch = findEpochProof(tx);
+    if (epoch) { rec.tag = tagCounter++ % 256; await relayEpochProof(rec, epoch); return hash; }
+    log({ sent: hash, to: nameOf[rec.to] ?? rec.to, note: 'not a proposal: recorded, not relayed' }); rec.status = 1; rec.blockNumber = head.number; rec.blockHash = head.hash; head.txs.push(hash); return hash;
+  }
   rec.tag = tagCounter++ % 256;
   rec.propose = propose;
   const [pa, attestations] = propose.args;
@@ -393,6 +404,7 @@ async function relayPropose(rec, propose, tx) {
   const commitments = Buffer.from(hexToBytes(blobsInput)).subarray(1);
   const kzg = getKzg();
   const items = blobs.map((b, i) => { const c = commitments.subarray(48 * i, 48 * i + 48); return Buffer.concat([c, Buffer.from(kzg.computeBlobKzgProof(b, c))]); });
+  rec.commitments = blobs.map((_, i) => Buffer.from(commitments.subarray(48 * i, 48 * i + 48)));
   // the committee's signatures, which refine checks against cfg's committee (#54)
   const u16 = (n) => Buffer.from([n & 0xff, n >> 8]);
   const idx = Buffer.from(hexToBytes(attestations.signatureIndices)), so = Buffer.from(hexToBytes(attestations.signaturesOrAddresses));
@@ -412,6 +424,72 @@ async function relayPropose(rec, propose, tx) {
   p.on('close', (code) => log({ submitted: rec.hash, tag: rec.tag, blobs: blobs.length, code, out: out.slice(-300) }));
   log({ relaying: rec.hash, tag: rec.tag, slot: String(h.slotNumber), blobs: blobs.length });
 }
+function findEpochProof(tx) {
+  const tryRollup = (data) => { try { const d = decodeFunctionData({ abi: artifacts.RollupAbi, data }); return d.functionName === 'submitEpochRootProof' ? d : undefined; } catch { return undefined; } };
+  if (tx.to?.toLowerCase() === A.rollup) return tryRollup(tx.data);
+  if (tx.to?.toLowerCase() === A.multicall3) {
+    const mc = decodeFunctionData({ abi: MULTICALL3, data: tx.data });
+    for (const c of mc.args[0]) if (c.target.toLowerCase() === A.rollup) { const d = tryRollup(c.callData); if (d) return d; }
+  }
+  return undefined;
+}
+
+// EpochProofLib.submitEpochRootProof becomes work-item kind 2: [2][tag][start u64][end u64]
+// [vk_len u16][vk][113 × 32 public inputs][proof_len u32][proof][batched blob opening 192].
+// The service's refine verifies the root rollup proof against these public inputs and the
+// opening; accumulate compares them with its stored checkpoints and advances the proven tip.
+// The 113 are assembled exactly as Ethereum's getEpochProofPublicInputs() does, with Aztec's
+// own classes; the blob-commitments hash is rebuilt from the commitments this facade computed
+// when it relayed each checkpoint (sha256(0x01, C_0), then sha256(v, checkpoint-start, C_i)).
+async function relayEpochProof(rec, decoded) {
+  const [args] = decoded.args;
+  const start = BigInt(args.start), end = BigInt(args.end);
+  const pia = args.args;
+  const headers = args.headers.map((h) => CheckpointHeader.fromViem(h));
+  const headerHashes = headers.map((h) => h.hash());
+  // the epoch's relayed checkpoints, in slot order, for the commitments-hash chain
+  const relayed = [...txs.values()]
+    .filter((r) => r.propose && !r.dropped && headerHashes.some((hh) => hh.toString() === r.headerHash))
+    .sort((x, y) => (x.slot < y.slot ? -1 : 1));
+  let vHash, firstBlob = true;
+  for (const r of relayed) {
+    (r.commitments ?? []).forEach((c, j) => {
+      vHash = firstBlob ? sha256ToField([true, c]) : sha256ToField([vHash, j === 0, c]);
+      firstBlob = false;
+    });
+  }
+  const blobInputs = Buffer.from(hexToBytes(args.blobInputs));          // versioned hash 32, z 32, y 32, C 48, Q 48
+  const batched = new FinalBlobAccumulator(vHash ?? Fr.ZERO, Fr.fromBuffer(blobInputs.subarray(32, 64)),
+    BLS12Fr.fromBuffer(blobInputs.subarray(64, 96)), BLS12Point.decompress(blobInputs.subarray(96, 144)));
+  const pad = (xs, n, empty) => [...xs, ...Array(n - xs.length).fill(0).map(empty)];
+  const pubs = new RootRollupPublicInputs(
+    Fr.fromString(pia.previousArchive), Fr.fromString(pia.endArchive), Fr.fromString(pia.outHash),
+    Fr.fromString(pia.previousInboxRollingHash), Fr.fromString(pia.endInboxRollingHash),
+    pad(headerHashes, 32, () => Fr.ZERO),
+    pad(args.provenCheckpointFees.map((f) => new FeeRecipient(EthAddress.fromString(f.coinbase), new Fr(BigInt(f.fees)))), 32, () => new FeeRecipient(EthAddress.ZERO, Fr.ZERO)),
+    new EpochConstantData(new Fr(BigInt(C.chainId)), new Fr(BigInt(C.version)), Fr.fromString(C.vkTreeRoot), Fr.fromString(C.protocolContractsHash), new Fr(BigInt(pia.proverId))),
+    batched,
+  ).toFields();
+  if (pubs.length !== 113) throw new Error(`${pubs.length} epoch public inputs`);
+  const vk = readFileSync(config.rootRollupVk);
+  const proof = Buffer.from(hexToBytes(args.proof));
+  const u16 = (n) => Buffer.from([n & 0xff, n >> 8]);
+  const u64 = (n) => Buffer.from(new BigUint64Array([n]).buffer);
+  const u32 = (n) => { const x = Buffer.alloc(4); x.writeUInt32LE(n); return x; };
+  const payload = Buffer.concat([Buffer.from([2, rec.tag]), u64(start), u64(end), u16(vk.length), vk,
+    ...pubs.map((f) => f.toBuffer()), u32(proof.length), proof, blobInputs]);
+  const dir = `${config.work}/${rec.hash}`;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(`${dir}/payload.bin`, payload);
+  const argv = ['rpc', '--url', config.jip2, '--chain-spec', config.chainSpec, 'submit', String(config.service), `@${dir}/payload.bin`];
+  const p = spawn(config.jamboree, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (out += d));
+  p.on('close', (code) => log({ submittedEpochProof: rec.hash, tag: rec.tag, epoch: [String(start), String(end)], code, out: out.slice(-300) }));
+  rec.status = 1; rec.blockNumber = head.number; rec.blockHash = head.hash; head.txs.push(rec.hash);
+  log({ relayingEpochProof: rec.hash, tag: rec.tag, start: String(start), end: String(end), checkpoints: relayed.length, proofBytes: proof.length });
+}
+
 const MULTICALL3 = [{ type: 'function', name: 'aggregate3', stateMutability: 'payable', inputs: [{ name: 'calls', type: 'tuple[]', components: [{ name: 'target', type: 'address' }, { name: 'allowFailure', type: 'bool' }, { name: 'callData', type: 'bytes' }] }],
   outputs: [{ name: 'returnData', type: 'tuple[]', components: [{ name: 'success', type: 'bool' }, { name: 'returnData', type: 'bytes' }] }] }];
 
