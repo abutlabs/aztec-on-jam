@@ -8,6 +8,13 @@
 //! Refine outputs [tag][verdict: 1 valid, 0 invalid, 2 malformed][gas the verifier used, u64 LE]
 //! [bb's Grumpkin MSMs done by call 105, u64 LE]; accumulate stores it at "v:" ++ tag.
 //!
+//! The CRS as a preimage (#73): with mode's bit 0x80 set, the extrinsic carries only the proof and
+//! vk ([u32 len][proof][u32 len][vk], ../pv.py) and the CRS comes from the service's own preimage,
+//! `CRS_HASH`, in bb's in-memory form (../crs_raw.cpp): fetched once by the chain, not 2 MiB in
+//! every item, and copied rather than parsed. Its hash is fixed here, so no other CRS can stand in.
+//! A work item of mode 0x40 asks accumulate to solicit that preimage; anyone may then provide it.
+//! Without it, a 0x80 item's verdict is 3: the CRS is not available yet.
+//!
 //! bb's Grumpkin MSM goes to the proposed host call 105 where the net has it (../gk105.cpp,
 //! through `curve_calls`' probe), and runs as PVM code where not: the same blob runs on both.
 //!
@@ -22,15 +29,38 @@
 extern crate alloc;
 
 use alloc::alloc::{alloc as raw_alloc, Layout};
-use jam_pvm_common::accumulate::{accumulate_items, set_storage};
+use jam_pvm_common::accumulate::{accumulate_items, set_storage, solicit};
 use jam_pvm_common::jam_types::*;
-use jam_pvm_common::refine::{extrinsic, gas};
+use jam_pvm_common::refine::{extrinsic, gas, lookup};
 use jam_pvm_common::{declare_service, Service};
 
 polkavm_derive::min_stack_size!(8 * 1024 * 1024);
 
+/// blake2b-256 of the CRS in bb's in-memory form: 1 BN254 point, the G2 point and 2^15 Grumpkin
+/// points (../crs_raw.cpp from bb 6.0.0's CRS files, 2,097,352 octets).
+const CRS_HASH: [u8; 32] = hex32("d4d4d86aec1285ed609d2651b761d25ae0fc72a5ec11dbb11e3e6cf740621196");
+const CRS_LEN: usize = 2_097_352;
+const FROM_PREIMAGE: u8 = 0x80;
+const SOLICIT: u8 = 0x40;
+
+const fn nibble(c: u8) -> u8 {
+    if c <= b'9' { c - b'0' } else { c - b'a' + 10 }
+}
+
+const fn hex32(s: &str) -> [u8; 32] {
+    let b = s.as_bytes();
+    let mut out = [0u8; 32];
+    let mut i = 0;
+    while i < 32 {
+        out[i] = nibble(b[2 * i]) << 4 | nibble(b[2 * i + 1]);
+        i += 1;
+    }
+    out
+}
+
 extern "C" {
     fn chonk_pvm_verify(input: *const u8, len: usize, mode: i32) -> i32;
+    fn chonk_pvm_verify_crs(input: *const u8, len: usize, crs: *const u8, crs_len: usize, mode: i32) -> i32;
     // bb's static constructors, called once (../build.sh: the PVM never runs .init_array).
     fn chonk_pvm_init();
     // how many of bb's Grumpkin MSMs call 105 did (../gk105.cpp)
@@ -137,16 +167,29 @@ impl Service for Spike {
     fn refine(_core: CoreIndex, _item: usize, _service: ServiceId, payload: WorkPayload, _pkg: WorkPackageHash) -> WorkOutput {
         let p = payload.take();
         let (mode, tag) = (p.first().copied().unwrap_or(0), p.get(1).copied().unwrap_or(0));
+        if mode == SOLICIT {
+            return alloc::vec![tag, 4].into();
+        }
         let ext;
         let input = match p.get(2..) {
             Some(rest) if !rest.is_empty() => rest,
             _ => { ext = extrinsic(0).unwrap_or_default(); &ext[..] }
         };
         let before = gas();
-        unsafe { chonk_pvm_init() };
-        let v = unsafe { chonk_pvm_verify(input.as_ptr(), input.len(), mode as i32) };
+        let v = if mode & FROM_PREIMAGE != 0 {
+            match lookup(&CRS_HASH) {
+                Some(crs) if crs.len() == CRS_LEN => {
+                    unsafe { chonk_pvm_init() };
+                    unsafe { chonk_pvm_verify_crs(input.as_ptr(), input.len(), crs.as_ptr(), crs.len(), (mode & 1) as i32) }
+                }
+                _ => 3,
+            }
+        } else {
+            unsafe { chonk_pvm_init() };
+            unsafe { chonk_pvm_verify(input.as_ptr(), input.len(), mode as i32) }
+        };
         let used = before - gas();
-        let mut out = alloc::vec![tag, match v { 1 => 1, 0 => 0, _ => 2 }];
+        let mut out = alloc::vec![tag, match v { 1 => 1, 0 => 0, 3 => 3, _ => 2 }];
         out.extend_from_slice(&used.to_le_bytes());
         out.extend_from_slice(&unsafe { chonk_gk_calls() }.to_le_bytes());
         out.into()
@@ -156,7 +199,11 @@ impl Service for Spike {
         for item in accumulate_items() {
             if let AccumulateItem::WorkItem(rec) = item {
                 if let Ok(out) = rec.result {
-                    if let Some(&tag) = out.0.first() {
+                    if out.0.len() == 2 && out.0[1] == 4 {
+                        // mode 0x40: ask for the CRS preimage (its deposit comes from this service's balance)
+                        let ok = solicit(&CRS_HASH, CRS_LEN).is_ok();
+                        set_storage(b"crs:solicited", &[ok as u8]).ok();
+                    } else if let Some(&tag) = out.0.first() {
                         set_storage(&[b'v', b':', tag], &out.0[1..]).ok();
                     }
                 }

@@ -125,6 +125,32 @@ extrinsic, because a package itself is held to 200 KiB.
   AMM payload is refused by Oink's public-input check (312M gas, no verdict) — the right VK
   travels with the extrinsic, nothing is pinned on chain.
 
+## The CRS as the service's preimage (#73, 2026-10-28)
+
+The 2^15 Grumpkin points (with the BN254 point and G2) are the service's own preimage, in bb's
+in-memory form (`crs_raw.cpp`, written by bb itself: each point read with bb's `from_buffer`,
+its bytes copied out; 2,097,352 octets, blake2b `d4d4d86a…`). Its hash is fixed in the service's
+code, so no other CRS can stand in. One work item (mode 0x40) has accumulate solicit it, `jamboree
+rpc provide` hands it to the chain once, and refine reads it with `historical_lookup` and copies
+the points instead of parsing them (`chonk_pvm_verify_crs` in `shim.cpp`). Each proof's
+extrinsic is its proof and vk alone. Natively the verdicts are the same either way (`native_shim`
+with and without `crs.raw`; the flipped proof is rejected).
+
+On six lasair validators (`on-lasair.sh`, finalized each):
+
+| Work-item | Verdict | Verifier gas | Before (CRS in the extrinsic) | Extrinsic |
+|---|---|---|---|---|
+| Transfer proof, ×2 | VALID | 3,263,329,969 | 3,456,104,321 | 84 KB (was 2.18 MB) |
+| One proof octet flipped | INVALID | 432,728,272 | 625,503,052 | 84 KB |
+| The 7-layer storage proof | VALID | 3,536,573,652 | 3,729,308,707 | 132 KB |
+
+**193M gas a proof saved** (the points' parsing), and 2 MB less data per proof: a package of
+two proofs now carries 0.2 MB of extrinsics, not 4.4 MB.
+
+Found on the way, a lasair bug: refine's `historical_lookup` found nothing but a service's code.
+A guarantor and an auditor ran refine over an empty service account; the lookup now reads the
+state at the package's lookup anchor (lasair 690e223, with a test).
+
 ## Not measured here
 
 - The reduction with its BN254 work (KZG batch-mul, pairings) routed to calls 101 and 102. bb

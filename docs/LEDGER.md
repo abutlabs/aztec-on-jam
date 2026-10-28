@@ -2245,3 +2245,18 @@ transports [@libp2p/tcp]"). npm had resolved the nested `@multiformats/multiaddr
 Aztec's image (`azteclabs/aztec:6.0.0`) has 12.3.1 in every nested copy; `tools/aztec-local`
 now overrides to 12.3.1. Noise left: while the parent checkpoint is still in flight, a pipelining
 proposer's simulation is answered `Rollup__InvalidArchive` and retried a moment later.
+
+## 2026-10-28 89 — Path B: the CRS as the verifier service's preimage (#73, step 1)
+
+Aztec's client-proof verifier service (`spikes/chonk-pvm`) no longer takes the 2 MB Grumpkin
+CRS in every work item: it is the service's own preimage, solicited once in accumulate and
+provided once (`jamboree rpc provide`), held in bb's in-memory form so refine copies the points
+instead of parsing them. On six lasair validators: transfer proofs VALID at 3.26B gas (3.46B
+before), the tampered proof INVALID, the 7-layer storage proof VALID at 3.54B (3.73B); each
+extrinsic 84–132 KB instead of 2.2 MB. Details and the table in `spikes/chonk-pvm/RESULTS.md`.
+
+A lasair bug found and fixed (lasair 690e223, gate green 49/0): refine's `historical_lookup`
+returned none for every preimage but a service's code, because the guarantor and the auditor
+ran refine over an empty service account. It now reads Lambda over the state at the lookup
+anchor. jamboree gains `rpc provide` (local commit 2f84717 on its `lasair` branch, for Aodh to
+push: the fork is public).
