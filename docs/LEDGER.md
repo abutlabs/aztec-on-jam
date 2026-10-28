@@ -2201,10 +2201,13 @@ Alice makes a token and mints privately, Bob opens his wallet, Alice sends Bob 4
 validators verify and finalize it, Bob finds his 40, Aztec's prover proves the epoch and JAM
 verifies it; then the closing card (clone, one command). No title card. Each stage is its own
 screencast, sped up by how long it waits (2× to 40×), so every wait stays on screen with its
-timer running. The intro's crawl and the closing card moved with it (`wallet/film/`). First take:
-65 s, `docs/images/demo.gif` 2.3 MB. A second take (scrolled so the send's own timeline is in
-frame through "Settled on JAM" and "Proven") was stopped by the machine running low on memory
-during the epoch proof; it is re-recorded when the machine allows.
+timer running, and each result is then held 2.5 s at real speed. The settle and proven stages
+scroll so the send's own timeline is in frame: proved in the tab 11.2 s, node verified 3.0 s, in
+block 4 after 14.1 s, settled on JAM (checkpoint 4) after 48.8 s, proven (epoch proof verified on
+JAM) after 11 min 43 s. The intro's crawl and the closing card moved with it (`wallet/film/`).
+`docs/images/demo.gif` 61.5 s, 2.5 MB (fourth take: the second was stopped by low memory, so Bob's
+tab now closes before the epoch-proof wait; the third timed out a minute before its proof at 25
+minutes, now 60; in the third the result flashed past at 80×, hence the hold).
 
 The first proof of concept is retired: kept whole on the branch `archive/first-demo`. Removed from
 main: the Python wallet, the e2e and explorer scripts, the indexer, `nets/demo.sh`, the Docker nets

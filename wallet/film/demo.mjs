@@ -47,15 +47,19 @@ async function act(page, button, fill = {}) {
   if (s.startsWith('error')) await fail(s);
 }
 
-/** One stage: the page in front, captioned, filmed while `body` runs, played `speed` times as fast. */
+/** One stage: the page in front, captioned, filmed while `body` runs, played `speed` times as
+ *  fast; then its result held for a beat at real speed, however fast the wait before it played. */
 async function stage(name, page, text, speed, body) {
   await page.bringToFront();
   await caption(page, text);
   await film.cast(name, page);
   await body();
-  await new Promise((r) => setTimeout(r, 1500));   // a beat on the result
   await film.stop(name);
   film.centre(name, speed);
+  await film.cast(`${name}-result`, page);
+  await new Promise((r) => setTimeout(r, 2500));
+  await film.stop(`${name}-result`);
+  film.centre(`${name}-result`, 1);
 }
 
 /** Scrolls so the JAM validators' and prover's lanes and the newest activity share the frame. */
@@ -95,9 +99,11 @@ await stage('bob-receive', bob, 'Bob finds the 40 with his own key; the chain sh
   await act(bob, '#refresh');
   if ((await bob.$eval('#balance', (e) => e.textContent)) !== '40') await fail('Bob does not see 40');
 });
+// Bob's part is done: his tab (a PXE and a prover) closes, to spare the memory the epoch proof needs
+await bob.close();
 await toJam(alice);
-await stage('alice-proven', alice, 'Aztec’s prover proves the whole epoch; JAM verifies that proof too', 40, async () => {
-  await until(alice, proven, 1_500_000, 'Send 40');
+await stage('alice-proven', alice, 'Aztec’s prover proves the whole epoch; JAM verifies that proof too', 80, async () => {
+  await until(alice, proven, 3_600_000, 'Send 40');
 });
 
 await film.titles('end');
